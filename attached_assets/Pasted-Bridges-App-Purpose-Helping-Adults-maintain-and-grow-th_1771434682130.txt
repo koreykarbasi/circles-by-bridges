@@ -1,0 +1,133 @@
+Bridges App
+Purpose:
+Helping Adults maintain and grow the relationships they care about
+To help users maintain authentic relationships by organizing people into “emotional proximity” circles (based on Dunbar’s social brain theory) and delivering timely prompts, reminders, and nudges to keep bonds strong.
+Core Concept: Dunbar's Circles Framework
+Circle 1 (5 people): Closest people (daily/weekly contact: partner, best friend, parents)
+Circle 2 (10): Trusted confidants (weekly/monthly)
+Circle 3 (35): Strong acquaintances (monthly/seasonal contact)
+Circle 4 *Not in MVP* (100): Broader social network (rare, but relevant touchpoints)
+
+Main functionality:
+Reminds you of your friends birthdays
+Reminds you when you haven't spoken to someone
+Reminds you to text people with intentional prompts
+Reminds you to call people with intentional Prompts
+Helps you set up hangouts by sending surveys to your friends
+Helps you set up hangouts by recommending activities
+Helps you set up hangouts by recommending dates and sending calendar invites
+AI: access to messages, checks how long ago you talked to someone
+AI: enter contacts into circles
+AI: Based on interests and messages suggest text, call conversations starters, and activities to do while you hang out.
+
+UXUI:
+3 main pages selected from bottom of the app
+1. Main Home Page
+Graphic of 3 circles stacked inside eachother with a bunch of little profile pic circles in them
+Below the circles graphic is the “Social Health Checklist” Most important tasks/reminders. This generates Main “Social Health” notifications as well mentioned later.
+example: "Upcoming first and second circle birthdays"
+"Haven't contacted someone for a long time"
+These suggestions can be snoozed or marked complete
+2. Circles Page
+Can see circles as sub pages and can add and subtract people from them
+Connect to contacts for quicker adding of people into circles
+Adding People in each circle
+Quick add:
+Name
+Shared interests
+Last time you spoke or hung out
+Optional Reminders (recurring or not)
+3. Suggestions Page
+People to Call/text
+Select a circle to receive suggestions on who to contact. This generates ‘Suggestion’ notifications as well.
+Select a circle and based on last interacted with and shared interests, makes a suggestion on who to call/text and what to text
+People you haven't seen in a while
+Set up a friend date with one.
+Send a survey?
+Add others to the survey and all meet each other?
+
+UX & Feel
+Clean, minimal, calming UI (think Notion + Headspace vibe).
+In the same purple theme as BuildmyBridges.com
+Friendly but respectful tone in notifications.
+
+Push Notifications (one of the main functions of the app)
+1. Reminders
+Birthdays, special notes, etc.
+“Social Health Notifications”
+
+2. Suggestions
+People to call and text based on last interacted with, interests, and circle level.
+More prompt examples will be mentioned in the prompt section below but here’s some examples.
+Prompt Examples:
+“Ask how their marathon training is going 🏃‍♂️”
+“They started a new job in June—check in!”
+“It’s been a while since you talked to Maya. Want to send a voice note?”
+Reminders, Suggestions and Notifications based on Circles:
+Circle 1:
+Birthday reminders (1 month, 2 weeks, 5 days before & Day of).
+Prompts like: “Tell X what you appreciate about them today” or “Plan something big for their birthday.”
+Nudge: “Check in weekly with Y.”
+Circle 2:
+Birthday reminders (2 weeks, 1 day before).
+Prompts like: “Share something you admire about Z” or “Send them a voice note.”
+Nudge: “Haven’t connected in a month, drop them a line.”
+Circle 3:
+Birthday reminders (day-of only).
+Prompts like: “Ask them how their week has been.”
+Nudge: “It’s been 3 months since you last talked—reach out?”
+
+Prompts:
+Prompts vary across circles (e.g., appreciation, admiration, curiosity questions).
+Examples:
+Circle 1/2: “Tell X what you appreciate about them.”
+Circle 1/2/3: “Tell Y something you admire about them.”
+Circle 3: “Share an article/meme related to their interests.”
+
+CIRCLE 1 (Core People: ~1–5)
+Goal: emotional intimacy, appreciation, and regular meaningful contact.
+Additional Prompts:
+“Tell [Name] something you deeply appreciate about who they are.”
+“Tell [Name] one way they’ve helped you grow.”
+“What’s something [Name] does that makes you feel safe?”
+“Send [Name] a reminder of one of your favorite shared memories.
+“Ask [Name] what’s been weighing on them lately.”
+“What’s something you admire about how [Name] handles challenges?”
+“Leave [Name] a voice note telling them why they matter to you.
+“When’s the last time you made [Name] laugh?”
+“Send them a ‘just because’ message: no reason, just love.”
+
+CIRCLE 2 (Close/Trusted Friends: ~10)
+Goal: trust, warmth, subtle acts of care, and gentle reconnection.
+Additional Prompts:
+“Tell [Name] something you admire about how they live their life.”
+“Remind [Name] of a time they made your day better.”
+“Send a message: ‘I’ve been thinking about you lately — how’ve you been?’”
+“Share something new you’ve learned or done lately and invite [Name] to join you.”
+“Tell [Name] you’re proud of them for something (big or small).”
+“Ask [Name] what’s bringing them joy right now.”
+“Plan a micro-hangout: a walk, coffee, or phone call.”
+
+CIRCLE 3 (Light Friends / Acquaintances: ~50)
+Goal: stay warm, occasionally reconnect, open the door for future depth.
+Additional Prompts:
+“Tell [Name] something you admire from afar — a quality or habit.”
+“React to their recent story/post with something thoughtful.”
+“Send [Name] a relevant article, song, or meme that reminded you of them.
+“Check in: ‘Hey, it’s been a minute — want to catch up sometime soon?’”
+“Ask what’s new in their world and actually listen.”
+
+CIRCLE 4 (Weak ties / dormant network: ~150)
+Goal: stay lightly connected and visible.
+Additional Prompts:
+“Congratulate [Name] on a recent milestone or life event.”
+“Comment meaningfully on their latest post.
+“Forward an opportunity that might interest them.”
+“Send a brief check-in once every 6–12 months.”
+
+Universal Occasional Prompts (Optional for Any Circle)
+“What’s a compliment you haven’t said out loud to [Name] yet?”
+“Which friend would love to hear a random thank-you from you today?”
+“Who’s overdue for a celebration? Send some encouragement.”
+“What’s a conversation you’ve been putting off that could bring you closer?”
+
