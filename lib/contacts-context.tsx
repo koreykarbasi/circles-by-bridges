@@ -1,13 +1,14 @@
 import React, { createContext, useContext, useState, useEffect, useMemo, useCallback, ReactNode } from "react";
 import type { Contact } from "./types";
 import { AVATAR_COLORS } from "./types";
-import * as storage from "./storage";
-import * as Crypto from "expo-crypto";
+import { apiRequest, getApiUrl } from "./query-client";
+import { fetch } from "expo/fetch";
 
 interface ContactsContextValue {
   contacts: Contact[];
   isLoading: boolean;
-  addContact: (data: Omit<Contact, "id" | "avatarColor">) => Promise<void>;
+  refreshContacts: () => Promise<void>;
+  addContact: (data: Omit<Contact, "id" | "avatarColor" | "createdAt">) => Promise<void>;
   updateContact: (contact: Contact) => Promise<void>;
   deleteContact: (id: string) => Promise<void>;
   markContacted: (id: string) => Promise<void>;
@@ -22,37 +23,58 @@ export function ContactsProvider({ children }: { children: ReactNode }) {
   const [contacts, setContacts] = useState<Contact[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
-  useEffect(() => {
-    storage.loadContacts().then((c) => {
-      setContacts(c);
+  const fetchContacts = useCallback(async () => {
+    try {
+      const baseUrl = getApiUrl();
+      const url = new URL("/api/contacts", baseUrl);
+      const res = await fetch(url.toString(), { credentials: "include" });
+      if (res.ok) {
+        const data = await res.json();
+        setContacts(data);
+      }
+    } catch (err) {
+      console.error("Failed to fetch contacts:", err);
+    } finally {
       setIsLoading(false);
-    });
+    }
   }, []);
 
-  const addContactFn = useCallback(async (data: Omit<Contact, "id" | "avatarColor">) => {
-    const newContact: Contact = {
+  useEffect(() => {
+    fetchContacts();
+  }, [fetchContacts]);
+
+  const addContactFn = useCallback(async (data: Omit<Contact, "id" | "avatarColor" | "createdAt">) => {
+    const body = {
       ...data,
-      id: Crypto.randomUUID(),
       avatarColor: AVATAR_COLORS[Math.floor(Math.random() * AVATAR_COLORS.length)],
     };
-    const updated = await storage.addContact(newContact);
-    setContacts(updated);
-  }, []);
+    await apiRequest("POST", "/api/contacts", body);
+    await fetchContacts();
+  }, [fetchContacts]);
 
   const updateContactFn = useCallback(async (contact: Contact) => {
-    const updated = await storage.updateContact(contact);
-    setContacts(updated);
-  }, []);
+    await apiRequest("PUT", `/api/contacts/${contact.id}`, {
+      name: contact.name,
+      circleLevel: contact.circleLevel,
+      interests: contact.interests,
+      birthday: contact.birthday,
+      lastContacted: contact.lastContacted,
+      notes: contact.notes,
+      phone: contact.phone,
+      avatarColor: contact.avatarColor,
+    });
+    await fetchContacts();
+  }, [fetchContacts]);
 
   const deleteContactFn = useCallback(async (id: string) => {
-    const updated = await storage.deleteContact(id);
-    setContacts(updated);
-  }, []);
+    await apiRequest("DELETE", `/api/contacts/${id}`);
+    await fetchContacts();
+  }, [fetchContacts]);
 
   const markContactedFn = useCallback(async (id: string) => {
-    const updated = await storage.markContacted(id);
-    setContacts(updated);
-  }, []);
+    await apiRequest("POST", `/api/contacts/${id}/mark-contacted`);
+    await fetchContacts();
+  }, [fetchContacts]);
 
   const getCircleContacts = useCallback(
     (level: 1 | 2 | 3) => contacts.filter((c) => c.circleLevel === level),
@@ -76,8 +98,11 @@ export function ContactsProvider({ children }: { children: ReactNode }) {
     return contacts
       .filter((c) => {
         if (!c.birthday) return false;
-        const bday = new Date(c.birthday);
-        const thisYearBday = new Date(now.getFullYear(), bday.getMonth(), bday.getDate());
+        const parts = c.birthday.split("/");
+        if (parts.length !== 2) return false;
+        const month = parseInt(parts[0], 10) - 1;
+        const day = parseInt(parts[1], 10);
+        const thisYearBday = new Date(now.getFullYear(), month, day);
         if (thisYearBday < now) {
           thisYearBday.setFullYear(thisYearBday.getFullYear() + 1);
         }
@@ -87,8 +112,10 @@ export function ContactsProvider({ children }: { children: ReactNode }) {
       .sort((a, b) => {
         const now2 = new Date();
         const getNext = (d: string) => {
-          const bday = new Date(d);
-          const next = new Date(now2.getFullYear(), bday.getMonth(), bday.getDate());
+          const parts = d.split("/");
+          const month = parseInt(parts[0], 10) - 1;
+          const day = parseInt(parts[1], 10);
+          const next = new Date(now2.getFullYear(), month, day);
           if (next < now2) next.setFullYear(next.getFullYear() + 1);
           return next.getTime();
         };
@@ -100,6 +127,7 @@ export function ContactsProvider({ children }: { children: ReactNode }) {
     () => ({
       contacts,
       isLoading,
+      refreshContacts: fetchContacts,
       addContact: addContactFn,
       updateContact: updateContactFn,
       deleteContact: deleteContactFn,
@@ -108,7 +136,7 @@ export function ContactsProvider({ children }: { children: ReactNode }) {
       getOverdueContacts,
       getUpcomingBirthdays,
     }),
-    [contacts, isLoading, addContactFn, updateContactFn, deleteContactFn, markContactedFn, getCircleContacts, getOverdueContacts, getUpcomingBirthdays],
+    [contacts, isLoading, fetchContacts, addContactFn, updateContactFn, deleteContactFn, markContactedFn, getCircleContacts, getOverdueContacts, getUpcomingBirthdays],
   );
 
   return <ContactsContext.Provider value={value}>{children}</ContactsContext.Provider>;

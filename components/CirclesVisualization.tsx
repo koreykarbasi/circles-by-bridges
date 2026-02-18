@@ -57,7 +57,7 @@ export function CirclesVisualization({ contacts }: CirclesVisualizationProps) {
               height: outerRadius * 2,
               borderRadius: outerRadius,
               borderColor: Colors.circle3 + "30",
-              backgroundColor: Colors.circle3 + "08",
+              backgroundColor: Colors.circle3 + "06",
             },
           ]}
         />

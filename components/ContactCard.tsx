@@ -16,8 +16,8 @@ interface ContactCardProps {
 }
 
 export function ContactCard({ contact, onPress, onMarkContacted, showCircleLabel }: ContactCardProps) {
-  const urgency = getContactUrgency(contact.circleLevel, contact.lastContacted);
-  const circleColor = CIRCLE_CONFIG[contact.circleLevel].color;
+  const urgency = getContactUrgency(contact.circleLevel as 1 | 2 | 3, contact.lastContacted ?? undefined);
+  const circleColor = CIRCLE_CONFIG[contact.circleLevel as 1 | 2 | 3]?.color ?? Colors.primary;
 
   return (
     <Pressable
@@ -34,7 +34,7 @@ export function ContactCard({ contact, onPress, onMarkContacted, showCircleLabel
             {contact.name}
           </Text>
           {showCircleLabel && (
-            <View style={[styles.circleBadge, { backgroundColor: circleColor + "18" }]}>
+            <View style={[styles.circleBadge, { backgroundColor: circleColor + "20" }]}>
               <Text style={[styles.circleBadgeText, { color: circleColor }]}>
                 {contact.circleLevel === 1 ? "Core" : contact.circleLevel === 2 ? "Close" : "Acq."}
               </Text>
@@ -56,7 +56,7 @@ export function ContactCard({ contact, onPress, onMarkContacted, showCircleLabel
             ]}
           />
           <Text style={styles.lastContacted}>
-            {formatLastContacted(contact.lastContacted)}
+            {formatLastContacted(contact.lastContacted ?? undefined)}
           </Text>
           {contact.interests.length > 0 && (
             <Text style={styles.interests} numberOfLines={1}>
@@ -77,7 +77,7 @@ export function ContactCard({ contact, onPress, onMarkContacted, showCircleLabel
             pressed && { opacity: 0.5 },
           ]}
         >
-          <Ionicons name="checkmark-circle-outline" size={26} color={Colors.primary} />
+          <Ionicons name="checkmark-circle-outline" size={26} color={Colors.primaryLight} />
         </Pressable>
       )}
     </Pressable>
@@ -94,7 +94,7 @@ const styles = StyleSheet.create({
     borderRadius: 14,
     marginBottom: 8,
     borderWidth: 1,
-    borderColor: Colors.borderLight,
+    borderColor: Colors.border,
   },
   pressed: {
     opacity: 0.7,

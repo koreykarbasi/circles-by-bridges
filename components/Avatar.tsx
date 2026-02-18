@@ -18,7 +18,7 @@ export function Avatar({ name, color, size = 44 }: AvatarProps) {
           width: size,
           height: size,
           borderRadius: size / 2,
-          backgroundColor: color + "20",
+          backgroundColor: color + "25",
         },
       ]}
     >

@@ -20,21 +20,6 @@ export default function CirclesScreen() {
   const config = CIRCLE_CONFIG[activeCircle];
   const webTopInset = Platform.OS === "web" ? 67 : 0;
 
-  const handleDelete = (contact: Contact) => {
-    Alert.alert(
-      "Remove Contact",
-      `Remove ${contact.name} from your circles?`,
-      [
-        { text: "Cancel", style: "cancel" },
-        {
-          text: "Remove",
-          style: "destructive",
-          onPress: () => deleteContact(contact.id),
-        },
-      ],
-    );
-  };
-
   return (
     <View style={styles.container}>
       <ScrollView
@@ -72,7 +57,7 @@ export default function CirclesScreen() {
                 }}
                 style={[
                   styles.tab,
-                  isActive && { backgroundColor: cfg.color + "15", borderColor: cfg.color + "40" },
+                  isActive && { backgroundColor: cfg.color + "18", borderColor: cfg.color + "40" },
                 ]}
               >
                 <View style={[styles.tabDot, { backgroundColor: cfg.color }]} />
@@ -161,7 +146,7 @@ const styles = StyleSheet.create({
     borderRadius: 14,
     backgroundColor: Colors.surface,
     borderWidth: 1.5,
-    borderColor: Colors.borderLight,
+    borderColor: Colors.border,
     gap: 4,
   },
   tabDot: {

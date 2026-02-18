@@ -225,6 +225,8 @@ function setupErrorHandler(app: express.Application) {
   });
 }
 
+import { seedDatabase } from "./seed";
+
 (async () => {
   setupCors(app);
   setupBodyParsing(app);
@@ -235,6 +237,8 @@ function setupErrorHandler(app: express.Application) {
   const server = await registerRoutes(app);
 
   setupErrorHandler(app);
+
+  await seedDatabase();
 
   const port = parseInt(process.env.PORT || "5000", 10);
   server.listen(

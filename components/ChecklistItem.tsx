@@ -16,7 +16,7 @@ interface ChecklistItemProps {
 export function ChecklistItem({ icon, iconColor, title, subtitle, onComplete, onSnooze }: ChecklistItemProps) {
   return (
     <View style={styles.container}>
-      <View style={[styles.iconContainer, { backgroundColor: iconColor + "15" }]}>
+      <View style={[styles.iconContainer, { backgroundColor: iconColor + "18" }]}>
         <Ionicons name={icon} size={20} color={iconColor} />
       </View>
       <View style={styles.content}>
@@ -61,7 +61,7 @@ const styles = StyleSheet.create({
     borderRadius: 14,
     marginBottom: 8,
     borderWidth: 1,
-    borderColor: Colors.borderLight,
+    borderColor: Colors.border,
   },
   iconContainer: {
     width: 36,

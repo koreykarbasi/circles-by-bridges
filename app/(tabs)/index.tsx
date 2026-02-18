@@ -12,18 +12,19 @@ import { router } from "expo-router";
 
 export default function HomeScreen() {
   const insets = useSafeAreaInsets();
-  const { contacts, getOverdueContacts, getUpcomingBirthdays, markContacted, isLoading } = useContacts();
+  const { contacts, getOverdueContacts, getUpcomingBirthdays, markContacted, isLoading, refreshContacts } = useContacts();
   const [refreshing, setRefreshing] = useState(false);
   const [dismissed, setDismissed] = useState<Set<string>>(new Set());
 
   const overdue = getOverdueContacts().filter((c) => !dismissed.has("overdue-" + c.id));
   const birthdays = getUpcomingBirthdays().filter((c) => !dismissed.has("bday-" + c.id));
 
-  const onRefresh = useCallback(() => {
+  const onRefresh = useCallback(async () => {
     setRefreshing(true);
     setDismissed(new Set());
-    setTimeout(() => setRefreshing(false), 500);
-  }, []);
+    await refreshContacts();
+    setRefreshing(false);
+  }, [refreshContacts]);
 
   const totalChecklist = overdue.length + birthdays.length;
   const webTopInset = Platform.OS === "web" ? 67 : 0;
@@ -38,7 +39,7 @@ export default function HomeScreen() {
       showsVerticalScrollIndicator={false}
       contentInsetAdjustmentBehavior="automatic"
       refreshControl={
-        <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={Colors.primary} />
+        <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={Colors.primaryLight} />
       }
     >
       <View style={styles.header}>
@@ -84,15 +85,15 @@ export default function HomeScreen() {
             icon="gift-outline"
             iconColor={Colors.accent}
             title={`${contact.name}'s birthday`}
-            subtitle={formatBirthdayCountdown(contact.birthday)}
+            subtitle={formatBirthdayCountdown(contact.birthday ?? undefined)}
             onComplete={() => setDismissed((prev) => new Set(prev).add("bday-" + contact.id))}
             onSnooze={() => setDismissed((prev) => new Set(prev).add("bday-" + contact.id))}
           />
         ))}
 
         {overdue.map((contact) => {
-          const days = getDaysSince(contact.lastContacted);
-          const circleLabel = CIRCLE_CONFIG[contact.circleLevel].label;
+          const days = getDaysSince(contact.lastContacted ?? undefined);
+          const circleLabel = CIRCLE_CONFIG[contact.circleLevel as 1 | 2 | 3]?.label ?? "Circle";
           return (
             <ChecklistItem
               key={"overdue-" + contact.id}
@@ -102,7 +103,7 @@ export default function HomeScreen() {
               subtitle={
                 days === null
                   ? `${circleLabel} - Never contacted`
-                  : `${circleLabel} - Last: ${formatLastContacted(contact.lastContacted)}`
+                  : `${circleLabel} - Last: ${formatLastContacted(contact.lastContacted ?? undefined)}`
               }
               onComplete={() => {
                 markContacted(contact.id);
@@ -167,7 +168,7 @@ const styles = StyleSheet.create({
     color: "#fff",
   },
   allGoodContainer: {
-    backgroundColor: Colors.success + "12",
+    backgroundColor: Colors.success + "15",
     borderRadius: 14,
     padding: 16,
     borderWidth: 1,

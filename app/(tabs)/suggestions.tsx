@@ -32,8 +32,8 @@ export default function SuggestionsScreen() {
       : contacts;
 
     const sorted = [...filtered].sort((a, b) => {
-      const daysA = getDaysSince(a.lastContacted) ?? 999;
-      const daysB = getDaysSince(b.lastContacted) ?? 999;
+      const daysA = getDaysSince(a.lastContacted ?? undefined) ?? 999;
+      const daysB = getDaysSince(b.lastContacted ?? undefined) ?? 999;
       return daysB - daysA;
     });
 
@@ -46,13 +46,13 @@ export default function SuggestionsScreen() {
         const type = types[Math.floor(Math.random() * types.length)];
         return {
           contact,
-          prompt: getRandomPrompt(contact.name, contact.circleLevel, contact.interests),
+          prompt: getRandomPrompt(contact.name, contact.circleLevel as 1 | 2 | 3, contact.interests),
           type,
         };
       });
   }, [contacts, filterCircle, refreshKey, completedIds]);
 
-  const handleRefreshSingle = useCallback((contactId: string) => {
+  const handleRefreshSingle = useCallback(() => {
     setRefreshKey((k) => k + 1);
   }, []);
 
@@ -118,7 +118,7 @@ export default function SuggestionsScreen() {
               }}
               style={[
                 styles.filterChip,
-                isActive && { backgroundColor: cfg.color + "15", borderColor: cfg.color + "40" },
+                isActive && { backgroundColor: cfg.color + "18", borderColor: cfg.color + "40" },
               ]}
             >
               <View style={[styles.filterDot, { backgroundColor: cfg.color }]} />
@@ -157,9 +157,9 @@ export default function SuggestionsScreen() {
             avatarColor={s.contact.avatarColor}
             prompt={s.prompt}
             type={s.type}
-            circleLevel={s.contact.circleLevel}
+            circleLevel={s.contact.circleLevel as 1 | 2 | 3}
             onDone={() => handleDone(s.contact.id)}
-            onRefresh={() => handleRefreshSingle(s.contact.id)}
+            onRefresh={() => handleRefreshSingle()}
           />
         ))
       )}
@@ -172,7 +172,7 @@ export default function SuggestionsScreen() {
           }}
           style={({ pressed }) => [styles.refreshAll, pressed && { opacity: 0.7 }]}
         >
-          <Ionicons name="refresh" size={18} color={Colors.primary} />
+          <Ionicons name="refresh" size={18} color={Colors.primaryLight} />
           <Text style={styles.refreshAllText}>New suggestions</Text>
         </Pressable>
       )}
@@ -215,11 +215,11 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     backgroundColor: Colors.surface,
     borderWidth: 1.5,
-    borderColor: Colors.borderLight,
+    borderColor: Colors.border,
     gap: 6,
   },
   filterChipActive: {
-    backgroundColor: Colors.primary + "15",
+    backgroundColor: Colors.primary + "18",
     borderColor: Colors.primary + "40",
   },
   filterDot: {
@@ -233,7 +233,7 @@ const styles = StyleSheet.create({
     color: Colors.textSecondary,
   },
   filterChipTextActive: {
-    color: Colors.primary,
+    color: Colors.primaryLight,
   },
   refreshAll: {
     flexDirection: "row",
@@ -246,6 +246,6 @@ const styles = StyleSheet.create({
   refreshAllText: {
     fontSize: 14,
     fontFamily: "Nunito_600SemiBold",
-    color: Colors.primary,
+    color: Colors.primaryLight,
   },
 });
