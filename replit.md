@@ -19,13 +19,17 @@ Bridges is a relationship management app based on Dunbar's social brain theory. 
 - `app/profile.tsx` - Profile/settings page with photo upload, replay walkthrough, logout
 - `app/add-contact.tsx` - Modal screen for adding contacts with photo picker
 - `app/edit-contact.tsx` - Modal screen for editing contacts with photo picker
+- `app/hangouts.tsx` - Hangout plans list screen
+- `app/create-hangout.tsx` - 3-step hangout creation flow (title, invitees, options)
+- `app/hangout-detail.tsx` - Hangout detail with vote tallies, share link, and finalize
 - `components/` - Reusable UI components (Avatar, ContactCard, ChecklistItem, SuggestionCard, CirclesVisualization, EmptyState, ContactsImport)
 - `lib/` - Business logic (auth-context, contacts-context, onboarding-context, query-client, storage, helpers, prompts, types)
 - `constants/colors.ts` - Theme colors
-- `shared/schema.ts` - Drizzle ORM schema (users, contacts tables)
+- `shared/schema.ts` - Drizzle ORM schema (users, contacts, hangout_plans, hangout_options, hangout_votes tables)
 - `server/routes.ts` - API routes with auth middleware
 - `server/storage.ts` - Database access layer
 - `server/seed.ts` - Demo user seeder
+- `server/templates/vote.html` - Public voting page (no auth required)
 
 ## Features
 - Email/password authentication (register, login, logout) with session cookies
@@ -38,6 +42,12 @@ Bridges is a relationship management app based on Dunbar's social brain theory. 
 - Contact management with circle assignments (Core 5, Close 10, Acquaintances 35)
 - Personalized suggestions/prompts based on circle level and interests
 - Interest-based conversation starters
+- Smart prompt tracking (prevents repeats, auto-rotates, per-card shuffle)
+- Urgency-based sorting (overdue contacts, upcoming birthdays prioritized)
+- Action type badges on suggestion cards (call/text/hangout)
+- Hangout planning with 3-step creation flow (Create, Share, Decide)
+- Shareable voting links for hangout options (public, no auth required)
+- Vote tallying with visual bars and finalize/lock-in feature
 - Mark contacts as recently contacted
 - Profile/settings page with circle stats, photo upload, and replay walkthrough option
 - User profile photo on home screen header (links to profile)
@@ -61,6 +71,14 @@ Bridges is a relationship management app based on Dunbar's social brain theory. 
 - PUT /api/contacts/:id - Update contact
 - DELETE /api/contacts/:id - Delete contact
 - PUT /api/contacts/:id/contacted - Mark as contacted
+- GET /api/hangouts - List user's hangout plans
+- POST /api/hangouts - Create hangout plan with options
+- GET /api/hangouts/:id - Get hangout detail with votes
+- PUT /api/hangouts/:id - Update/finalize hangout
+- DELETE /api/hangouts/:id - Delete hangout
+- POST /api/hangouts/:id/options - Add option to hangout
+- GET /api/vote/:shareCode - Public: get hangout for voting (no auth)
+- POST /api/vote/:shareCode - Public: cast votes (no auth)
 
 ## User Preferences
 - Dark purple theme matching BuildmyBridges.com
