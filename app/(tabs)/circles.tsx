@@ -147,6 +147,7 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.primary,
     alignItems: "center",
     justifyContent: "center",
+    zIndex: 10,
   },
   tabs: {
     flexDirection: "row",

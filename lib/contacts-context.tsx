@@ -4,6 +4,7 @@ import { AVATAR_COLORS } from "./types";
 import { Platform } from "react-native";
 import { apiRequest, getApiUrl } from "./query-client";
 import { fetch as expoFetch } from "expo/fetch";
+import { useAuth } from "./auth-context";
 
 const fetchFn = Platform.OS === "web" ? globalThis.fetch : expoFetch;
 
@@ -23,6 +24,7 @@ interface ContactsContextValue {
 const ContactsContext = createContext<ContactsContextValue | null>(null);
 
 export function ContactsProvider({ children }: { children: ReactNode }) {
+  const { user } = useAuth();
   const [contacts, setContacts] = useState<Contact[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
@@ -34,6 +36,8 @@ export function ContactsProvider({ children }: { children: ReactNode }) {
       if (res.ok) {
         const data = await res.json();
         setContacts(data);
+      } else {
+        setContacts([]);
       }
     } catch (err) {
       console.error("Failed to fetch contacts:", err);
@@ -43,8 +47,13 @@ export function ContactsProvider({ children }: { children: ReactNode }) {
   }, []);
 
   useEffect(() => {
-    fetchContacts();
-  }, [fetchContacts]);
+    if (user) {
+      fetchContacts();
+    } else {
+      setContacts([]);
+      setIsLoading(false);
+    }
+  }, [user, fetchContacts]);
 
   const addContactFn = useCallback(async (data: Omit<Contact, "id" | "avatarColor" | "createdAt">) => {
     const body = {
