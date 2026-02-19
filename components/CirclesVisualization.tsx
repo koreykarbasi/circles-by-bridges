@@ -1,4 +1,4 @@
-import React, { useEffect } from "react";
+import React, { useEffect, useMemo } from "react";
 import { View, Text, StyleSheet, Dimensions } from "react-native";
 import Animated, {
   useSharedValue,
@@ -20,6 +20,7 @@ interface CirclesVisualizationProps {
 
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
 const VIZ_SIZE = Math.min(SCREEN_WIDTH - 48, 320);
+const MAX_OUTER_SHOWN = 8;
 
 function OrbitingAvatar({
   contact,
@@ -73,15 +74,73 @@ function OrbitingAvatar({
   );
 }
 
+function OverflowBadge({
+  count,
+  radius,
+  center,
+  speed,
+  totalShown,
+}: {
+  count: number;
+  radius: number;
+  center: number;
+  speed: number;
+  totalShown: number;
+}) {
+  const rotation = useSharedValue(0);
+
+  useEffect(() => {
+    rotation.value = withRepeat(
+      withTiming(360, { duration: speed, easing: Easing.linear }),
+      -1,
+      false,
+    );
+  }, []);
+
+  const baseAngle = (360 / Math.max(totalShown + 1, 1)) * totalShown - 90;
+  const size = 26;
+
+  const animatedStyle = useAnimatedStyle(() => {
+    const angle = ((baseAngle + rotation.value) * Math.PI) / 180;
+    const x = Math.cos(angle) * radius;
+    const y = Math.sin(angle) * radius;
+    return {
+      position: "absolute" as const,
+      left: center + x - size / 2,
+      top: center + y - size / 2,
+    };
+  });
+
+  return (
+    <Animated.View style={animatedStyle}>
+      <View style={[styles.overflowBadge, { width: size, height: size, borderRadius: size / 2 }]}>
+        <Text style={styles.overflowText}>+{count}</Text>
+      </View>
+    </Animated.View>
+  );
+}
+
 export function CirclesVisualization({ contacts, user }: CirclesVisualizationProps) {
   const c1 = contacts.filter((c) => c.circleLevel === 1);
   const c2 = contacts.filter((c) => c.circleLevel === 2);
-  const c3 = contacts.filter((c) => c.circleLevel === 3);
+  const c3All = contacts.filter((c) => c.circleLevel === 3);
+
+  const c3Shown = useMemo(() => {
+    if (c3All.length <= MAX_OUTER_SHOWN) return c3All;
+    const shuffled = [...c3All].sort(() => Math.random() - 0.5);
+    return shuffled.slice(0, MAX_OUTER_SHOWN);
+  }, [c3All.length]);
+
+  const c3Overflow = c3All.length - c3Shown.length;
 
   const outerRadius = VIZ_SIZE / 2;
   const middleRadius = outerRadius * 0.68;
   const innerRadius = outerRadius * 0.38;
   const centerSize = 44;
+
+  const c1OrbitRadius = innerRadius * 0.65;
+  const c2OrbitRadius = (middleRadius + innerRadius) / 2;
+  const c3OrbitRadius = (outerRadius + middleRadius) / 2;
 
   return (
     <View style={styles.wrapper}>
@@ -123,18 +182,27 @@ export function CirclesVisualization({ contacts, user }: CirclesVisualizationPro
           ]}
         />
 
-        {c3.map((contact, i) => (
+        {c3Shown.map((contact, i) => (
           <OrbitingAvatar
             key={contact.id}
             contact={contact}
             index={i}
-            total={c3.length}
-            radius={(outerRadius + middleRadius) / 2}
-            avatarSize={28}
+            total={c3Shown.length + (c3Overflow > 0 ? 1 : 0)}
+            radius={c3OrbitRadius}
+            avatarSize={24}
             center={outerRadius}
             speed={120000}
           />
         ))}
+        {c3Overflow > 0 && (
+          <OverflowBadge
+            count={c3Overflow}
+            radius={c3OrbitRadius}
+            center={outerRadius}
+            speed={120000}
+            totalShown={c3Shown.length}
+          />
+        )}
 
         {c2.map((contact, i) => (
           <OrbitingAvatar
@@ -142,8 +210,8 @@ export function CirclesVisualization({ contacts, user }: CirclesVisualizationPro
             contact={contact}
             index={i}
             total={c2.length}
-            radius={(middleRadius + innerRadius) / 2}
-            avatarSize={28}
+            radius={c2OrbitRadius}
+            avatarSize={26}
             center={outerRadius}
             speed={90000}
           />
@@ -155,7 +223,7 @@ export function CirclesVisualization({ contacts, user }: CirclesVisualizationPro
             contact={contact}
             index={i}
             total={c1.length}
-            radius={innerRadius * 0.7}
+            radius={c1OrbitRadius}
             avatarSize={28}
             center={outerRadius}
             speed={60000}
@@ -190,7 +258,7 @@ export function CirclesVisualization({ contacts, user }: CirclesVisualizationPro
         </View>
         <View style={styles.legendItem}>
           <View style={[styles.legendDot, { backgroundColor: Colors.circle3 }]} />
-          <Text style={styles.legendText}>Acquaintances ({c3.length})</Text>
+          <Text style={styles.legendText}>Acquaintances ({c3All.length})</Text>
         </View>
       </View>
     </View>
@@ -230,6 +298,18 @@ const styles = StyleSheet.create({
     color: Colors.textTertiary,
     textAlign: "center",
     width: 100,
+  },
+  overflowBadge: {
+    backgroundColor: Colors.circle3 + "30",
+    borderWidth: 1.5,
+    borderColor: Colors.circle3 + "60",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  overflowText: {
+    fontSize: 9,
+    fontFamily: "Nunito_700Bold",
+    color: Colors.circle3,
   },
   legend: {
     flexDirection: "row",

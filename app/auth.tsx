@@ -99,6 +99,7 @@ export default function AuthScreen() {
             <Image
               source={require("@/assets/images/bridge-logo.png")}
               style={styles.logoImage}
+              tintColor={Colors.primary}
               resizeMode="contain"
             />
             <Text style={styles.appName}>Bridges</Text>
@@ -169,6 +170,7 @@ export default function AuthScreen() {
           <Image
             source={require("@/assets/images/bridge-logo.png")}
             style={styles.logoImage}
+            tintColor={Colors.primary}
             resizeMode="contain"
           />
           <Text style={styles.appName}>Bridges</Text>
@@ -338,7 +340,6 @@ const styles = StyleSheet.create({
     width: 120,
     height: 70,
     marginBottom: 16,
-    tintColor: Colors.primary,
   },
   appName: {
     fontSize: 32,

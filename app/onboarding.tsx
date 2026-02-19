@@ -251,7 +251,8 @@ function WelcomePage() {
             <View style={pageStyles.ringCenter}>
               <Image
                 source={require("@/assets/images/bridge-logo.png")}
-                style={{ width: 42, height: 26, tintColor: Colors.primary }}
+                style={{ width: 42, height: 26 }}
+                tintColor={Colors.primary}
                 resizeMode="contain"
               />
             </View>
