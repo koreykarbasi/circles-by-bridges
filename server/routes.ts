@@ -250,6 +250,240 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // ---- Hangout Plans ----
+
+  function generateShareCode(): string {
+    const chars = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789";
+    let code = "";
+    for (let i = 0; i < 8; i++) {
+      code += chars[Math.floor(Math.random() * chars.length)];
+    }
+    return code;
+  }
+
+  app.get("/api/hangouts", requireAuth, async (req, res) => {
+    try {
+      const plans = await storage.getHangoutPlansByUserId(req.session.userId!);
+      const plansWithOptions = await Promise.all(
+        plans.map(async (plan) => {
+          const options = await storage.getOptionsByPlanId(plan.id);
+          const votes = await storage.getVotesByPlanId(plan.id);
+          return {
+            ...plan,
+            options: options.map((opt) => ({
+              ...opt,
+              voteCount: votes.filter((v) => v.optionId === opt.id && v.vote).length,
+              votes: votes.filter((v) => v.optionId === opt.id),
+            })),
+          };
+        }),
+      );
+      res.json(plansWithOptions);
+    } catch (err) {
+      console.error("Error fetching hangouts:", err);
+      res.status(500).json({ message: "Failed to fetch hangouts" });
+    }
+  });
+
+  app.get("/api/hangouts/:id", requireAuth, async (req, res) => {
+    try {
+      const plan = await storage.getHangoutPlan(req.params.id);
+      if (!plan || plan.userId !== req.session.userId) {
+        return res.status(404).json({ message: "Hangout not found" });
+      }
+      const options = await storage.getOptionsByPlanId(plan.id);
+      const votes = await storage.getVotesByPlanId(plan.id);
+      res.json({
+        ...plan,
+        options: options.map((opt) => ({
+          ...opt,
+          voteCount: votes.filter((v) => v.optionId === opt.id && v.vote).length,
+          votes: votes.filter((v) => v.optionId === opt.id),
+        })),
+      });
+    } catch (err) {
+      console.error("Error fetching hangout:", err);
+      res.status(500).json({ message: "Failed to fetch hangout" });
+    }
+  });
+
+  app.post("/api/hangouts", requireAuth, async (req, res) => {
+    try {
+      const { title, description, inviteeNames, options } = req.body;
+      if (!title) {
+        return res.status(400).json({ message: "Title is required" });
+      }
+
+      let shareCode = generateShareCode();
+      let existing = await storage.getHangoutPlanByShareCode(shareCode);
+      while (existing) {
+        shareCode = generateShareCode();
+        existing = await storage.getHangoutPlanByShareCode(shareCode);
+      }
+
+      const plan = await storage.createHangoutPlan({
+        userId: req.session.userId!,
+        title,
+        description: description || null,
+        status: "active",
+        shareCode,
+        inviteeNames: inviteeNames || [],
+      });
+
+      const createdOptions = [];
+      if (options && Array.isArray(options)) {
+        for (const opt of options) {
+          const option = await storage.createHangoutOption({
+            planId: plan.id,
+            label: opt.label,
+            dateTime: opt.dateTime || null,
+            activity: opt.activity || null,
+            location: opt.location || null,
+          });
+          createdOptions.push({ ...option, voteCount: 0, votes: [] });
+        }
+      }
+
+      res.status(201).json({ ...plan, options: createdOptions });
+    } catch (err) {
+      console.error("Error creating hangout:", err);
+      res.status(500).json({ message: "Failed to create hangout" });
+    }
+  });
+
+  app.put("/api/hangouts/:id", requireAuth, async (req, res) => {
+    try {
+      const existing = await storage.getHangoutPlan(req.params.id);
+      if (!existing || existing.userId !== req.session.userId) {
+        return res.status(404).json({ message: "Hangout not found" });
+      }
+      const { title, description, status, finalizedOptionId, inviteeNames } = req.body;
+      const updateData: any = {};
+      if (title !== undefined) updateData.title = title;
+      if (description !== undefined) updateData.description = description;
+      if (status !== undefined) updateData.status = status;
+      if (finalizedOptionId !== undefined) updateData.finalizedOptionId = finalizedOptionId;
+      if (inviteeNames !== undefined) updateData.inviteeNames = inviteeNames;
+
+      const plan = await storage.updateHangoutPlan(req.params.id, updateData);
+      const options = await storage.getOptionsByPlanId(plan!.id);
+      const votes = await storage.getVotesByPlanId(plan!.id);
+      res.json({
+        ...plan,
+        options: options.map((opt) => ({
+          ...opt,
+          voteCount: votes.filter((v) => v.optionId === opt.id && v.vote).length,
+          votes: votes.filter((v) => v.optionId === opt.id),
+        })),
+      });
+    } catch (err) {
+      console.error("Error updating hangout:", err);
+      res.status(500).json({ message: "Failed to update hangout" });
+    }
+  });
+
+  app.delete("/api/hangouts/:id", requireAuth, async (req, res) => {
+    try {
+      const existing = await storage.getHangoutPlan(req.params.id);
+      if (!existing || existing.userId !== req.session.userId) {
+        return res.status(404).json({ message: "Hangout not found" });
+      }
+      await storage.deleteHangoutPlan(req.params.id);
+      res.json({ success: true });
+    } catch (err) {
+      console.error("Error deleting hangout:", err);
+      res.status(500).json({ message: "Failed to delete hangout" });
+    }
+  });
+
+  app.post("/api/hangouts/:id/options", requireAuth, async (req, res) => {
+    try {
+      const plan = await storage.getHangoutPlan(req.params.id);
+      if (!plan || plan.userId !== req.session.userId) {
+        return res.status(404).json({ message: "Hangout not found" });
+      }
+      const { label, dateTime, activity, location } = req.body;
+      if (!label) {
+        return res.status(400).json({ message: "Label is required" });
+      }
+      const option = await storage.createHangoutOption({
+        planId: plan.id,
+        label,
+        dateTime: dateTime || null,
+        activity: activity || null,
+        location: location || null,
+      });
+      res.status(201).json({ ...option, voteCount: 0, votes: [] });
+    } catch (err) {
+      console.error("Error adding option:", err);
+      res.status(500).json({ message: "Failed to add option" });
+    }
+  });
+
+  // Public voting endpoint - no auth required
+  app.get("/api/vote/:shareCode", async (req, res) => {
+    try {
+      const plan = await storage.getHangoutPlanByShareCode(req.params.shareCode);
+      if (!plan) {
+        return res.status(404).json({ message: "Hangout not found" });
+      }
+      const options = await storage.getOptionsByPlanId(plan.id);
+      const votes = await storage.getVotesByPlanId(plan.id);
+
+      const creator = await storage.getUser(plan.userId!);
+
+      res.json({
+        id: plan.id,
+        title: plan.title,
+        description: plan.description,
+        status: plan.status,
+        shareCode: plan.shareCode,
+        creatorName: creator?.username || "Someone",
+        inviteeNames: plan.inviteeNames,
+        finalizedOptionId: plan.finalizedOptionId,
+        options: options.map((opt) => ({
+          ...opt,
+          voteCount: votes.filter((v) => v.optionId === opt.id && v.vote).length,
+          votes: votes.filter((v) => v.optionId === opt.id),
+        })),
+      });
+    } catch (err) {
+      console.error("Error fetching vote page:", err);
+      res.status(500).json({ message: "Failed to fetch hangout" });
+    }
+  });
+
+  app.post("/api/vote/:shareCode", async (req, res) => {
+    try {
+      const plan = await storage.getHangoutPlanByShareCode(req.params.shareCode);
+      if (!plan) {
+        return res.status(404).json({ message: "Hangout not found" });
+      }
+      if (plan.status === "finalized") {
+        return res.status(400).json({ message: "This hangout has already been finalized" });
+      }
+      const { voterName, votes } = req.body;
+      if (!voterName || !votes || !Array.isArray(votes)) {
+        return res.status(400).json({ message: "Voter name and votes are required" });
+      }
+
+      const createdVotes = [];
+      for (const v of votes) {
+        const vote = await storage.createHangoutVote({
+          optionId: v.optionId,
+          planId: plan.id,
+          voterName,
+          vote: v.vote ?? true,
+        });
+        createdVotes.push(vote);
+      }
+      res.status(201).json(createdVotes);
+    } catch (err) {
+      console.error("Error casting votes:", err);
+      res.status(500).json({ message: "Failed to cast votes" });
+    }
+  });
+
   const httpServer = createServer(app);
   return httpServer;
 }

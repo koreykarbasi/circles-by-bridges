@@ -20,6 +20,40 @@ export interface AuthUser {
   profilePhotoUri?: string | null;
 }
 
+export interface HangoutPlan {
+  id: string;
+  userId?: string | null;
+  title: string;
+  description?: string | null;
+  status: string;
+  shareCode: string;
+  finalizedOptionId?: string | null;
+  inviteeNames: string[];
+  createdAt?: string | null;
+  updatedAt?: string | null;
+  options?: HangoutOption[];
+}
+
+export interface HangoutOption {
+  id: string;
+  planId?: string | null;
+  label: string;
+  dateTime?: string | null;
+  activity?: string | null;
+  location?: string | null;
+  votes?: HangoutVote[];
+  voteCount?: number;
+}
+
+export interface HangoutVote {
+  id: string;
+  optionId?: string | null;
+  planId?: string | null;
+  voterName: string;
+  vote: boolean;
+  createdAt?: string | null;
+}
+
 export const CIRCLE_CONFIG = {
   1: { label: "Core Circle", max: 5, color: "#FF6B8A", description: "Your closest people" },
   2: { label: "Close Friends", max: 10, color: "#9B7DFF", description: "Trusted confidants" },
