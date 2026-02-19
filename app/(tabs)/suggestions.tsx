@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useCallback } from "react";
+import React, { useState, useMemo, useCallback, useRef, useEffect } from "react";
 import { View, Text, StyleSheet, ScrollView, Pressable, Platform } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
@@ -7,8 +7,8 @@ import { useContacts } from "@/lib/contacts-context";
 import { SuggestionCard } from "@/components/SuggestionCard";
 import { EmptyState } from "@/components/EmptyState";
 import { CIRCLE_CONFIG } from "@/lib/types";
-import { getRandomPrompt } from "@/lib/prompts";
-import { getDaysSince } from "@/lib/helpers";
+import { getSmartPrompt, getNextPrompt, getActionType, resetSeenPrompts } from "@/lib/prompts";
+import { getDaysSince, getDaysUntilBirthday, formatLastContacted, formatBirthdayCountdown, getContactUrgency } from "@/lib/helpers";
 import type { Contact } from "@/lib/types";
 import { router } from "expo-router";
 import * as Haptics from "expo-haptics";
@@ -17,6 +17,57 @@ interface GeneratedSuggestion {
   contact: Contact;
   prompt: string;
   type: "call" | "text" | "hangout";
+  urgency: "overdue" | "soon" | "ok";
+  birthdayLabel?: string;
+  lastContactedLabel?: string;
+}
+
+function scoreContact(contact: Contact): number {
+  let score = 0;
+  const urgency = getContactUrgency(contact.circleLevel as 1 | 2 | 3, contact.lastContacted ?? undefined);
+  if (urgency === "overdue") score += 100;
+  else if (urgency === "soon") score += 50;
+
+  const bday = getDaysUntilBirthday(contact.birthday ?? undefined);
+  if (bday !== null && bday <= 7) score += 80;
+  else if (bday !== null && bday <= 14) score += 40;
+  else if (bday !== null && bday <= 30) score += 20;
+
+  if (contact.circleLevel === 1) score += 15;
+  else if (contact.circleLevel === 2) score += 8;
+
+  const daysSince = getDaysSince(contact.lastContacted ?? undefined);
+  if (daysSince === null) score += 30;
+  else score += Math.min(daysSince, 60);
+
+  return score;
+}
+
+function buildSuggestion(contact: Contact): GeneratedSuggestion {
+  const urgency = getContactUrgency(contact.circleLevel as 1 | 2 | 3, contact.lastContacted ?? undefined);
+  const bday = getDaysUntilBirthday(contact.birthday ?? undefined);
+  const hasBirthdaySoon = bday !== null && bday <= 14;
+  const birthdayLabel = formatBirthdayCountdown(contact.birthday ?? undefined);
+  const lastContactedLabel = formatLastContacted(contact.lastContacted ?? undefined);
+
+  const prompt = getSmartPrompt(
+    contact.id,
+    contact.name,
+    contact.circleLevel as 1 | 2 | 3,
+    contact.interests,
+    { isOverdue: urgency === "overdue", hasBirthdaySoon },
+  );
+
+  const type = getActionType(contact.circleLevel as 1 | 2 | 3, prompt);
+
+  return {
+    contact,
+    prompt,
+    type,
+    urgency,
+    birthdayLabel: hasBirthdaySoon ? birthdayLabel : undefined,
+    lastContactedLabel,
+  };
 }
 
 export default function SuggestionsScreen() {
@@ -25,36 +76,76 @@ export default function SuggestionsScreen() {
   const [filterCircle, setFilterCircle] = useState<1 | 2 | 3 | null>(null);
   const [refreshKey, setRefreshKey] = useState(0);
   const [completedIds, setCompletedIds] = useState<Set<string>>(new Set());
+  const [cardPrompts, setCardPrompts] = useState<Record<string, GeneratedSuggestion>>({});
+  const visitCount = useRef(0);
 
-  const suggestions = useMemo(() => {
+  useEffect(() => {
+    visitCount.current += 1;
+    if (visitCount.current > 1) {
+      setRefreshKey((k) => k + 1);
+    }
+  }, []);
+
+  const rankedContacts = useMemo(() => {
     const filtered = filterCircle
       ? contacts.filter((c) => c.circleLevel === filterCircle)
       : contacts;
 
-    const sorted = [...filtered].sort((a, b) => {
-      const daysA = getDaysSince(a.lastContacted ?? undefined) ?? 999;
-      const daysB = getDaysSince(b.lastContacted ?? undefined) ?? 999;
-      return daysB - daysA;
-    });
+    return [...filtered]
+      .map((c) => ({ contact: c, score: scoreContact(c) }))
+      .sort((a, b) => b.score - a.score)
+      .slice(0, 8)
+      .map((x) => x.contact);
+  }, [contacts, filterCircle]);
 
-    const top = sorted.slice(0, 8);
+  const suggestions = useMemo(() => {
+    const result: GeneratedSuggestion[] = [];
+    for (const contact of rankedContacts) {
+      if (completedIds.has(contact.id)) continue;
+      const existing = cardPrompts[contact.id];
+      if (existing && existing.contact.id === contact.id) {
+        result.push(existing);
+      } else {
+        result.push(buildSuggestion(contact));
+      }
+    }
+    return result;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [rankedContacts, completedIds, refreshKey, cardPrompts]);
 
-    return top
-      .filter((c) => !completedIds.has(c.id))
-      .map((contact): GeneratedSuggestion => {
-        const types: ("call" | "text" | "hangout")[] = ["call", "text", "hangout"];
-        const type = types[Math.floor(Math.random() * types.length)];
-        return {
-          contact,
-          prompt: getRandomPrompt(contact.name, contact.circleLevel as 1 | 2 | 3, contact.interests),
-          type,
-        };
-      });
-  }, [contacts, filterCircle, refreshKey, completedIds]);
+  const handleRefreshSingle = useCallback((contactId: string, currentPrompt: string) => {
+    const contact = contacts.find((c) => c.id === contactId);
+    if (!contact) return;
 
-  const handleRefreshSingle = useCallback(() => {
-    setRefreshKey((k) => k + 1);
-  }, []);
+    const urgency = getContactUrgency(contact.circleLevel as 1 | 2 | 3, contact.lastContacted ?? undefined);
+    const bday = getDaysUntilBirthday(contact.birthday ?? undefined);
+    const hasBirthdaySoon = bday !== null && bday <= 14;
+
+    const newPrompt = getNextPrompt(
+      contactId,
+      currentPrompt,
+      contact.name,
+      contact.circleLevel as 1 | 2 | 3,
+      contact.interests,
+      { isOverdue: urgency === "overdue", hasBirthdaySoon },
+    );
+
+    const type = getActionType(contact.circleLevel as 1 | 2 | 3, newPrompt);
+    const birthdayLabel = formatBirthdayCountdown(contact.birthday ?? undefined);
+    const lastContactedLabel = formatLastContacted(contact.lastContacted ?? undefined);
+
+    setCardPrompts((prev) => ({
+      ...prev,
+      [contactId]: {
+        contact,
+        prompt: newPrompt,
+        type,
+        urgency,
+        birthdayLabel: hasBirthdaySoon ? birthdayLabel : undefined,
+        lastContactedLabel,
+      },
+    }));
+  }, [contacts]);
 
   const handleDone = useCallback(
     (contactId: string) => {
@@ -63,6 +154,14 @@ export default function SuggestionsScreen() {
     },
     [markContacted],
   );
+
+  const handleRefreshAll = useCallback(() => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    resetSeenPrompts();
+    setCardPrompts({});
+    setRefreshKey((k) => k + 1);
+    setCompletedIds(new Set());
+  }, []);
 
   const webTopInset = Platform.OS === "web" ? 67 : 0;
 
@@ -74,7 +173,6 @@ export default function SuggestionsScreen() {
         { paddingTop: insets.top + 16 + webTopInset, paddingBottom: 100 + (Platform.OS === "web" ? 34 : 0) },
       ]}
       showsVerticalScrollIndicator={false}
-      contentInsetAdjustmentBehavior="automatic"
     >
       <Text style={styles.title}>Suggestions</Text>
       <Text style={styles.subtitle}>People who'd love to hear from you</Text>
@@ -90,6 +188,7 @@ export default function SuggestionsScreen() {
             Haptics.selectionAsync();
             setFilterCircle(null);
             setCompletedIds(new Set());
+            setCardPrompts({});
           }}
           style={[
             styles.filterChip,
@@ -115,6 +214,7 @@ export default function SuggestionsScreen() {
                 Haptics.selectionAsync();
                 setFilterCircle(level);
                 setCompletedIds(new Set());
+                setCardPrompts({});
               }}
               style={[
                 styles.filterChip,
@@ -147,7 +247,7 @@ export default function SuggestionsScreen() {
         <EmptyState
           icon="checkmark-circle-outline"
           title="All caught up!"
-          subtitle="You've completed all suggestions. Pull to refresh for new ones."
+          subtitle="You've completed all suggestions. Tap below for new ones."
         />
       ) : (
         suggestions.map((s) => (
@@ -155,27 +255,26 @@ export default function SuggestionsScreen() {
             key={s.contact.id + "-" + refreshKey}
             contactName={s.contact.name}
             avatarColor={s.contact.avatarColor}
+            photoUri={s.contact.photoUri}
             prompt={s.prompt}
             type={s.type}
             circleLevel={s.contact.circleLevel as 1 | 2 | 3}
+            urgency={s.urgency}
+            birthdayLabel={s.birthdayLabel}
+            lastContactedLabel={s.lastContactedLabel}
             onDone={() => handleDone(s.contact.id)}
-            onRefresh={() => handleRefreshSingle()}
+            onRefresh={() => handleRefreshSingle(s.contact.id, s.prompt)}
           />
         ))
       )}
 
-      {suggestions.length > 0 && (
-        <Pressable
-          onPress={() => {
-            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-            setRefreshKey((k) => k + 1);
-          }}
-          style={({ pressed }) => [styles.refreshAll, pressed && { opacity: 0.7 }]}
-        >
-          <Ionicons name="refresh" size={18} color={Colors.primaryLight} />
-          <Text style={styles.refreshAllText}>New suggestions</Text>
-        </Pressable>
-      )}
+      <Pressable
+        onPress={handleRefreshAll}
+        style={({ pressed }) => [styles.refreshAll, pressed && { opacity: 0.7 }]}
+      >
+        <Ionicons name="refresh" size={18} color={Colors.primaryLight} />
+        <Text style={styles.refreshAllText}>New suggestions</Text>
+      </Pressable>
     </ScrollView>
   );
 }
