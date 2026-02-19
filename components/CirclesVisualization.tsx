@@ -6,6 +6,7 @@ import Animated, {
   withRepeat,
   withTiming,
   Easing,
+  cancelAnimation,
 } from "react-native-reanimated";
 import { Ionicons } from "@expo/vector-icons";
 import Colors from "@/constants/colors";
@@ -29,7 +30,7 @@ function OrbitingAvatar({
   radius,
   avatarSize,
   center,
-  speed,
+  ringRotation,
 }: {
   contact: Contact;
   index: number;
@@ -37,22 +38,12 @@ function OrbitingAvatar({
   radius: number;
   avatarSize: number;
   center: number;
-  speed: number;
+  ringRotation: Animated.SharedValue<number>;
 }) {
-  const rotation = useSharedValue(0);
-
-  useEffect(() => {
-    rotation.value = withRepeat(
-      withTiming(360, { duration: speed, easing: Easing.linear }),
-      -1,
-      false,
-    );
-  }, []);
-
   const baseAngle = (360 / Math.max(total, 1)) * index - 90;
 
   const animatedStyle = useAnimatedStyle(() => {
-    const angle = ((baseAngle + rotation.value) * Math.PI) / 180;
+    const angle = ((baseAngle + ringRotation.value) * Math.PI) / 180;
     const x = Math.cos(angle) * radius;
     const y = Math.sin(angle) * radius;
     return {
@@ -78,30 +69,22 @@ function OverflowBadge({
   count,
   radius,
   center,
-  speed,
-  totalShown,
+  totalSlots,
+  slotIndex,
+  ringRotation,
 }: {
   count: number;
   radius: number;
   center: number;
-  speed: number;
-  totalShown: number;
+  totalSlots: number;
+  slotIndex: number;
+  ringRotation: Animated.SharedValue<number>;
 }) {
-  const rotation = useSharedValue(0);
-
-  useEffect(() => {
-    rotation.value = withRepeat(
-      withTiming(360, { duration: speed, easing: Easing.linear }),
-      -1,
-      false,
-    );
-  }, []);
-
-  const baseAngle = (360 / Math.max(totalShown + 1, 1)) * totalShown - 90;
+  const baseAngle = (360 / Math.max(totalSlots, 1)) * slotIndex - 90;
   const size = 26;
 
   const animatedStyle = useAnimatedStyle(() => {
-    const angle = ((baseAngle + rotation.value) * Math.PI) / 180;
+    const angle = ((baseAngle + ringRotation.value) * Math.PI) / 180;
     const x = Math.cos(angle) * radius;
     const y = Math.sin(angle) * radius;
     return {
@@ -120,6 +103,24 @@ function OverflowBadge({
   );
 }
 
+function useRingRotation(speed: number) {
+  const rotation = useSharedValue(0);
+
+  useEffect(() => {
+    rotation.value = 0;
+    rotation.value = withRepeat(
+      withTiming(360, { duration: speed, easing: Easing.linear }),
+      -1,
+      false,
+    );
+    return () => {
+      cancelAnimation(rotation);
+    };
+  }, [speed]);
+
+  return rotation;
+}
+
 export function CirclesVisualization({ contacts, user }: CirclesVisualizationProps) {
   const c1 = contacts.filter((c) => c.circleLevel === 1);
   const c2 = contacts.filter((c) => c.circleLevel === 2);
@@ -132,6 +133,7 @@ export function CirclesVisualization({ contacts, user }: CirclesVisualizationPro
   }, [c3All.length]);
 
   const c3Overflow = c3All.length - c3Shown.length;
+  const c3TotalSlots = c3Shown.length + (c3Overflow > 0 ? 1 : 0);
 
   const outerRadius = VIZ_SIZE / 2;
   const middleRadius = outerRadius * 0.68;
@@ -141,6 +143,10 @@ export function CirclesVisualization({ contacts, user }: CirclesVisualizationPro
   const c1OrbitRadius = innerRadius * 0.65;
   const c2OrbitRadius = (middleRadius + innerRadius) / 2;
   const c3OrbitRadius = (outerRadius + middleRadius) / 2;
+
+  const ring1Rotation = useRingRotation(60000);
+  const ring2Rotation = useRingRotation(90000);
+  const ring3Rotation = useRingRotation(120000);
 
   return (
     <View style={styles.wrapper}>
@@ -187,11 +193,11 @@ export function CirclesVisualization({ contacts, user }: CirclesVisualizationPro
             key={contact.id}
             contact={contact}
             index={i}
-            total={c3Shown.length + (c3Overflow > 0 ? 1 : 0)}
+            total={c3TotalSlots}
             radius={c3OrbitRadius}
             avatarSize={24}
             center={outerRadius}
-            speed={120000}
+            ringRotation={ring3Rotation}
           />
         ))}
         {c3Overflow > 0 && (
@@ -199,8 +205,9 @@ export function CirclesVisualization({ contacts, user }: CirclesVisualizationPro
             count={c3Overflow}
             radius={c3OrbitRadius}
             center={outerRadius}
-            speed={120000}
-            totalShown={c3Shown.length}
+            totalSlots={c3TotalSlots}
+            slotIndex={c3Shown.length}
+            ringRotation={ring3Rotation}
           />
         )}
 
@@ -213,7 +220,7 @@ export function CirclesVisualization({ contacts, user }: CirclesVisualizationPro
             radius={c2OrbitRadius}
             avatarSize={26}
             center={outerRadius}
-            speed={90000}
+            ringRotation={ring2Rotation}
           />
         ))}
 
@@ -226,7 +233,7 @@ export function CirclesVisualization({ contacts, user }: CirclesVisualizationPro
             radius={c1OrbitRadius}
             avatarSize={28}
             center={outerRadius}
-            speed={60000}
+            ringRotation={ring1Rotation}
           />
         ))}
 
