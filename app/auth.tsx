@@ -10,6 +10,7 @@ import {
   ActivityIndicator,
   Alert,
   Image,
+  ScrollView,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
@@ -18,19 +19,26 @@ import { useAuth } from "@/lib/auth-context";
 
 export default function AuthScreen() {
   const insets = useSafeAreaInsets();
-  const { login, register } = useAuth();
+  const { login, register, loginAsGuest } = useAuth();
   const [isLogin, setIsLogin] = useState(true);
+  const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState("");
   const [showPassword, setShowPassword] = useState(false);
+  const [guestMode, setGuestMode] = useState(false);
+  const [guestName, setGuestName] = useState("");
 
   const handleSubmit = async () => {
     setError("");
     if (!email.trim() || !password) {
       setError("Please fill in all fields");
+      return;
+    }
+    if (!isLogin && !name.trim()) {
+      setError("Please enter your name");
       return;
     }
     if (!isLogin && password !== confirmPassword) {
@@ -47,7 +55,7 @@ export default function AuthScreen() {
       if (isLogin) {
         await login(email.trim(), password);
       } else {
-        await register(email.trim(), password);
+        await register(email.trim(), password, name.trim());
       }
     } catch (err: any) {
       const msg = err?.message || "Something went wrong";
@@ -63,12 +71,100 @@ export default function AuthScreen() {
     }
   };
 
+  const handleGuestLogin = async () => {
+    setError("");
+    if (!guestName.trim()) {
+      setError("Please enter your name");
+      return;
+    }
+    setIsSubmitting(true);
+    try {
+      await loginAsGuest(guestName.trim());
+    } catch (err: any) {
+      const msg = err?.message || "Something went wrong";
+      setError(msg);
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  if (guestMode) {
+    return (
+      <KeyboardAvoidingView
+        style={[styles.container, { paddingTop: insets.top + (Platform.OS === "web" ? 67 : 0) }]}
+        behavior={Platform.OS === "ios" ? "padding" : "height"}
+      >
+        <View style={styles.content}>
+          <View style={styles.logoSection}>
+            <Image
+              source={require("@/assets/images/bridge-logo.png")}
+              style={styles.logoImage}
+              resizeMode="contain"
+            />
+            <Text style={styles.appName}>Bridges</Text>
+            <Text style={styles.tagline}>Preview as Guest</Text>
+          </View>
+
+          <View style={styles.form}>
+            {error ? (
+              <View style={styles.errorBox}>
+                <Ionicons name="alert-circle" size={16} color={Colors.danger} />
+                <Text style={styles.errorText}>{error}</Text>
+              </View>
+            ) : null}
+
+            <View style={styles.inputGroup}>
+              <Text style={styles.label}>Your Name</Text>
+              <View style={styles.inputWrapper}>
+                <Ionicons name="person-outline" size={18} color={Colors.textSecondary} style={styles.inputIcon} />
+                <TextInput
+                  style={styles.input}
+                  placeholder="Enter your name"
+                  placeholderTextColor={Colors.textTertiary}
+                  value={guestName}
+                  onChangeText={setGuestName}
+                  autoCapitalize="words"
+                  autoCorrect={false}
+                  testID="guest-name"
+                />
+              </View>
+            </View>
+
+            <TouchableOpacity
+              style={[styles.submitButton, isSubmitting && styles.submitButtonDisabled]}
+              onPress={handleGuestLogin}
+              disabled={isSubmitting}
+              testID="guest-submit"
+            >
+              {isSubmitting ? (
+                <ActivityIndicator color="#fff" />
+              ) : (
+                <Text style={styles.submitText}>Continue as Guest</Text>
+              )}
+            </TouchableOpacity>
+
+            <View style={styles.switchRow}>
+              <Text style={styles.switchText}>Want full access?</Text>
+              <TouchableOpacity onPress={() => { setGuestMode(false); setError(""); }}>
+                <Text style={styles.switchLink}>Sign In or Register</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </KeyboardAvoidingView>
+    );
+  }
+
   return (
     <KeyboardAvoidingView
       style={[styles.container, { paddingTop: insets.top + (Platform.OS === "web" ? 67 : 0) }]}
       behavior={Platform.OS === "ios" ? "padding" : "height"}
     >
-      <View style={styles.content}>
+      <ScrollView
+        contentContainerStyle={styles.scrollContent}
+        showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
+      >
         <View style={styles.logoSection}>
           <Image
             source={require("@/assets/images/bridge-logo.png")}
@@ -88,6 +184,25 @@ export default function AuthScreen() {
               <Text style={styles.errorText}>{error}</Text>
             </View>
           ) : null}
+
+          {!isLogin && (
+            <View style={styles.inputGroup}>
+              <Text style={styles.label}>Name</Text>
+              <View style={styles.inputWrapper}>
+                <Ionicons name="person-outline" size={18} color={Colors.textSecondary} style={styles.inputIcon} />
+                <TextInput
+                  style={styles.input}
+                  placeholder="Your full name"
+                  placeholderTextColor={Colors.textTertiary}
+                  value={name}
+                  onChangeText={setName}
+                  autoCapitalize="words"
+                  autoCorrect={false}
+                  testID="auth-name"
+                />
+              </View>
+            </View>
+          )}
 
           <View style={styles.inputGroup}>
             <Text style={styles.label}>Email</Text>
@@ -170,6 +285,21 @@ export default function AuthScreen() {
             </TouchableOpacity>
           </View>
 
+          <View style={styles.divider}>
+            <View style={styles.dividerLine} />
+            <Text style={styles.dividerText}>or</Text>
+            <View style={styles.dividerLine} />
+          </View>
+
+          <TouchableOpacity
+            style={styles.guestButton}
+            onPress={() => { setGuestMode(true); setError(""); }}
+            testID="guest-mode-btn"
+          >
+            <Ionicons name="eye-outline" size={18} color={Colors.primary} />
+            <Text style={styles.guestButtonText}>Continue as Guest</Text>
+          </TouchableOpacity>
+
           {isLogin && (
             <View style={styles.demoHint}>
               <Text style={styles.demoText}>
@@ -178,7 +308,7 @@ export default function AuthScreen() {
             </View>
           )}
         </View>
-      </View>
+      </ScrollView>
     </KeyboardAvoidingView>
   );
 }
@@ -188,6 +318,12 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: Colors.background,
   },
+  scrollContent: {
+    flexGrow: 1,
+    justifyContent: "center",
+    paddingHorizontal: 32,
+    paddingVertical: 40,
+  },
   content: {
     flex: 1,
     justifyContent: "center",
@@ -196,7 +332,7 @@ const styles = StyleSheet.create({
   },
   logoSection: {
     alignItems: "center",
-    marginBottom: 40,
+    marginBottom: 32,
   },
   logoImage: {
     width: 120,
@@ -299,9 +435,41 @@ const styles = StyleSheet.create({
     fontFamily: "Nunito_700Bold",
     color: Colors.primary,
   },
+  divider: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    marginVertical: 4,
+  },
+  dividerLine: {
+    flex: 1,
+    height: 1,
+    backgroundColor: Colors.border,
+  },
+  dividerText: {
+    fontSize: 13,
+    fontFamily: "Nunito_400Regular",
+    color: Colors.textTertiary,
+  },
+  guestButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    paddingVertical: 14,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: Colors.primary + "40",
+    backgroundColor: Colors.primary + "10",
+  },
+  guestButtonText: {
+    fontSize: 15,
+    fontFamily: "Nunito_600SemiBold",
+    color: Colors.primary,
+  },
   demoHint: {
     alignItems: "center",
-    marginTop: 8,
+    marginTop: 4,
     paddingVertical: 10,
     paddingHorizontal: 16,
     backgroundColor: Colors.surfaceElevated,

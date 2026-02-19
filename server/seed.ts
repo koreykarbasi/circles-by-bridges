@@ -125,6 +125,7 @@ export async function seedDatabase() {
       .values({
         email: "demo@bridges.app",
         password: hashedPassword,
+        username: "Demo User",
       })
       .returning();
 

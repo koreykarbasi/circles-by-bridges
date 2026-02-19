@@ -119,7 +119,7 @@ export default function ProfileScreen() {
               </View>
             </View>
           </Pressable>
-          <Text style={styles.userName}>{user?.email || "My Bridges"}</Text>
+          <Text style={styles.userName}>{user?.name || user?.email || "My Bridges"}</Text>
           <Text style={styles.userStat}>
             {contacts.length} {contacts.length === 1 ? "connection" : "connections"}
           </Text>

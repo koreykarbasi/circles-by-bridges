@@ -16,6 +16,7 @@ export interface Contact {
 export interface AuthUser {
   id: string;
   email: string;
+  name?: string | null;
   profilePhotoUri?: string | null;
 }
 

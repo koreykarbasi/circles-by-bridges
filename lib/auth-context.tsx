@@ -10,9 +10,11 @@ interface AuthContextValue {
   user: AuthUser | null;
   isLoading: boolean;
   login: (email: string, password: string) => Promise<void>;
-  register: (email: string, password: string) => Promise<void>;
+  register: (email: string, password: string, name?: string) => Promise<void>;
+  loginAsGuest: (name: string) => Promise<void>;
   logout: () => Promise<void>;
   updateProfilePhoto: (uri: string) => Promise<void>;
+  updateName: (name: string) => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null);
@@ -49,8 +51,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser(data);
   }, []);
 
-  const register = useCallback(async (email: string, password: string) => {
-    const res = await apiRequest("POST", "/api/auth/register", { email, password });
+  const register = useCallback(async (email: string, password: string, name?: string) => {
+    const res = await apiRequest("POST", "/api/auth/register", { email, password, name });
+    const data = await res.json();
+    setUser(data);
+  }, []);
+
+  const loginAsGuest = useCallback(async (name: string) => {
+    const res = await apiRequest("POST", "/api/auth/guest", { name });
     const data = await res.json();
     setUser(data);
   }, []);
@@ -66,9 +74,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser(data);
   }, []);
 
+  const updateName = useCallback(async (name: string) => {
+    const res = await apiRequest("PUT", "/api/auth/profile", { name });
+    const data = await res.json();
+    setUser(data);
+  }, []);
+
   const value = useMemo(
-    () => ({ user, isLoading, login, register, logout, updateProfilePhoto }),
-    [user, isLoading, login, register, logout, updateProfilePhoto],
+    () => ({ user, isLoading, login, register, loginAsGuest, logout, updateProfilePhoto, updateName }),
+    [user, isLoading, login, register, loginAsGuest, logout, updateProfilePhoto, updateName],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

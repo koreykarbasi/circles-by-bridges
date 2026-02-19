@@ -43,7 +43,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.post("/api/auth/register", async (req, res) => {
     try {
-      const { email, password } = req.body;
+      const { email, password, name } = req.body;
       if (!email || !password) {
         return res.status(400).json({ message: "Email and password are required" });
       }
@@ -59,13 +59,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
         email: email.toLowerCase().trim(),
         password: hashedPassword,
       });
+      if (name) {
+        await storage.updateUser(user.id, { username: name.trim() });
+      }
+      const updated = name ? await storage.getUser(user.id) : user;
       req.session.userId = user.id;
       req.session.save((err) => {
         if (err) {
           console.error("Session save error:", err);
           return res.status(500).json({ message: "Registration failed" });
         }
-        res.status(201).json({ id: user.id, email: user.email, profilePhotoUri: user.profilePhotoUri });
+        res.status(201).json({ id: updated!.id, email: updated!.email, name: updated!.username, profilePhotoUri: updated!.profilePhotoUri });
       });
     } catch (err) {
       console.error("Registration error:", err);
@@ -93,11 +97,39 @@ export async function registerRoutes(app: Express): Promise<Server> {
           console.error("Session save error:", err);
           return res.status(500).json({ message: "Login failed" });
         }
-        res.json({ id: user.id, email: user.email, profilePhotoUri: user.profilePhotoUri });
+        res.json({ id: user.id, email: user.email, name: user.username, profilePhotoUri: user.profilePhotoUri });
       });
     } catch (err) {
       console.error("Login error:", err);
       res.status(500).json({ message: "Login failed" });
+    }
+  });
+
+  app.post("/api/auth/guest", async (req, res) => {
+    try {
+      const { name } = req.body;
+      if (!name || !name.trim()) {
+        return res.status(400).json({ message: "Name is required" });
+      }
+      const guestEmail = `guest_${Date.now()}_${Math.random().toString(36).substr(2, 6)}@bridges.guest`;
+      const hashedPassword = await bcrypt.hash(Math.random().toString(36), 10);
+      const user = await storage.createUser({
+        email: guestEmail,
+        password: hashedPassword,
+      });
+      await storage.updateUser(user.id, { username: name.trim() });
+      const updated = await storage.getUser(user.id);
+      req.session.userId = user.id;
+      req.session.save((err) => {
+        if (err) {
+          console.error("Session save error:", err);
+          return res.status(500).json({ message: "Guest login failed" });
+        }
+        res.status(201).json({ id: updated!.id, email: updated!.email, name: updated!.username, profilePhotoUri: updated!.profilePhotoUri });
+      });
+    } catch (err) {
+      console.error("Guest login error:", err);
+      res.status(500).json({ message: "Guest login failed" });
     }
   });
 
@@ -118,17 +150,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
     if (!user) {
       return res.status(401).json({ message: "User not found" });
     }
-    res.json({ id: user.id, email: user.email, profilePhotoUri: user.profilePhotoUri });
+    res.json({ id: user.id, email: user.email, name: user.username, profilePhotoUri: user.profilePhotoUri });
   });
 
   app.put("/api/auth/profile", requireAuth, async (req, res) => {
     try {
-      const { profilePhotoUri } = req.body;
-      const user = await storage.updateUser(req.session.userId!, { profilePhotoUri });
+      const { profilePhotoUri, name } = req.body;
+      const updateData: any = {};
+      if (profilePhotoUri !== undefined) updateData.profilePhotoUri = profilePhotoUri;
+      if (name !== undefined) updateData.username = name;
+      const user = await storage.updateUser(req.session.userId!, updateData);
       if (!user) {
         return res.status(404).json({ message: "User not found" });
       }
-      res.json({ id: user.id, email: user.email, profilePhotoUri: user.profilePhotoUri });
+      res.json({ id: user.id, email: user.email, name: user.username, profilePhotoUri: user.profilePhotoUri });
     } catch (err) {
       console.error("Profile update error:", err);
       res.status(500).json({ message: "Failed to update profile" });
