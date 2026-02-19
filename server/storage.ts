@@ -1,14 +1,14 @@
 import { db } from "./db";
 import { contacts, users } from "@shared/schema";
 import type { User, InsertUser, Contact, InsertContact } from "@shared/schema";
-import { eq } from "drizzle-orm";
-import { randomUUID } from "crypto";
+import { eq, and } from "drizzle-orm";
 
 export interface IStorage {
   getUser(id: string): Promise<User | undefined>;
-  getUserByUsername(username: string): Promise<User | undefined>;
+  getUserByEmail(email: string): Promise<User | undefined>;
   createUser(user: InsertUser): Promise<User>;
-  getAllContacts(): Promise<Contact[]>;
+  updateUser(id: string, data: Partial<User>): Promise<User | undefined>;
+  getContactsByUserId(userId: string): Promise<Contact[]>;
   getContact(id: string): Promise<Contact | undefined>;
   createContact(contact: InsertContact): Promise<Contact>;
   updateContact(id: string, data: Partial<InsertContact>): Promise<Contact | undefined>;
@@ -21,8 +21,8 @@ export class DatabaseStorage implements IStorage {
     return user;
   }
 
-  async getUserByUsername(username: string): Promise<User | undefined> {
-    const [user] = await db.select().from(users).where(eq(users.username, username));
+  async getUserByEmail(email: string): Promise<User | undefined> {
+    const [user] = await db.select().from(users).where(eq(users.email, email));
     return user;
   }
 
@@ -31,8 +31,17 @@ export class DatabaseStorage implements IStorage {
     return user;
   }
 
-  async getAllContacts(): Promise<Contact[]> {
-    return db.select().from(contacts);
+  async updateUser(id: string, data: Partial<User>): Promise<User | undefined> {
+    const [user] = await db
+      .update(users)
+      .set(data)
+      .where(eq(users.id, id))
+      .returning();
+    return user;
+  }
+
+  async getContactsByUserId(userId: string): Promise<Contact[]> {
+    return db.select().from(contacts).where(eq(contacts.userId, userId));
   }
 
   async getContact(id: string): Promise<Contact | undefined> {

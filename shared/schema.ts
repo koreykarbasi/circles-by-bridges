@@ -7,14 +7,17 @@ export const users = pgTable("users", {
   id: varchar("id")
     .primaryKey()
     .default(sql`gen_random_uuid()`),
-  username: text("username").notNull().unique(),
+  email: text("email").notNull().unique(),
   password: text("password").notNull(),
+  profilePhotoUri: text("profile_photo_uri"),
+  username: text("username"),
 });
 
 export const contacts = pgTable("contacts", {
   id: varchar("id")
     .primaryKey()
     .default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").references(() => users.id),
   name: text("name").notNull(),
   circleLevel: integer("circle_level").notNull(),
   interests: text("interests").array().notNull().default(sql`'{}'::text[]`),
@@ -23,11 +26,12 @@ export const contacts = pgTable("contacts", {
   notes: text("notes"),
   phone: text("phone"),
   avatarColor: text("avatar_color").notNull(),
+  photoUri: text("photo_uri"),
   createdAt: timestamp("created_at").defaultNow(),
 });
 
 export const insertUserSchema = createInsertSchema(users).pick({
-  username: true,
+  email: true,
   password: true,
 });
 

@@ -1,5 +1,6 @@
 import { db } from "./db";
-import { contacts } from "@shared/schema";
+import { contacts, users } from "@shared/schema";
+import bcrypt from "bcryptjs";
 
 const AVATAR_COLORS = [
   "#FF6B8A", "#9B7DFF", "#4ECDC4", "#FFB84D",
@@ -109,17 +110,32 @@ const SAMPLE_CONTACTS = [
 
 export async function seedDatabase() {
   try {
-    const existing = await db.select().from(contacts);
-    if (existing.length > 0) {
-      console.log(`Database already has ${existing.length} contacts, skipping seed`);
+    const existingUsers = await db.select().from(users);
+    const demoExists = existingUsers.some((u) => u.email === "demo@bridges.app");
+
+    if (demoExists) {
+      console.log("Demo user already exists, skipping seed");
       return;
     }
 
-    console.log("Seeding database with sample contacts...");
+    console.log("Seeding database with demo user and sample contacts...");
+    const hashedPassword = await bcrypt.hash("demo123", 10);
+    const [demoUser] = await db
+      .insert(users)
+      .values({
+        email: "demo@bridges.app",
+        password: hashedPassword,
+      })
+      .returning();
+
     for (const contact of SAMPLE_CONTACTS) {
-      await db.insert(contacts).values(contact);
+      await db.insert(contacts).values({
+        ...contact,
+        userId: demoUser.id,
+      });
     }
-    console.log(`Seeded ${SAMPLE_CONTACTS.length} contacts`);
+
+    console.log(`Seeded demo user (demo@bridges.app / demo123) with ${SAMPLE_CONTACTS.length} contacts`);
   } catch (err) {
     console.error("Error seeding database:", err);
   }
