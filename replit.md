@@ -42,6 +42,7 @@ Bridges is a relationship management app based on Dunbar's social brain theory. 
 - Profile/settings page with circle stats, photo upload, and replay walkthrough option
 - User profile photo on home screen header (links to profile)
 - Demo user: demo@bridges.app / demo123 (12 seeded contacts)
+- Test user: test1@bridges.app / test123 (50 seeded contacts: 5 core, 10 close, 35 acquaintances)
 
 ## Auth Flow
 1. User completes onboarding (stored in AsyncStorage)
