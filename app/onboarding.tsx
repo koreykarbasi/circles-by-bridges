@@ -8,6 +8,7 @@ import {
   Dimensions,
   ScrollView,
   Platform,
+  Image,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons, MaterialCommunityIcons, Feather } from "@expo/vector-icons";
@@ -248,7 +249,11 @@ function WelcomePage() {
             <View style={[pageStyles.welcomeRing, pageStyles.ring2]} />
             <View style={[pageStyles.welcomeRing, pageStyles.ring1]} />
             <View style={pageStyles.ringCenter}>
-              <Ionicons name="heart" size={28} color={Colors.circle1} />
+              <Image
+                source={require("@/assets/images/bridge-logo.png")}
+                style={{ width: 42, height: 26, tintColor: Colors.primary }}
+                resizeMode="contain"
+              />
             </View>
           </View>
         </Animated.View>

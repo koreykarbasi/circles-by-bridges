@@ -1,5 +1,5 @@
 import React, { useEffect } from "react";
-import { View, Text, StyleSheet, Dimensions } from "react-native";
+import { View, Text, StyleSheet, Dimensions, Image } from "react-native";
 import Animated, {
   useSharedValue,
   useAnimatedStyle,
@@ -170,7 +170,11 @@ export function CirclesVisualization({ contacts, user }: CirclesVisualizationPro
                 style={{ width: centerSize, height: centerSize, borderRadius: centerSize / 2 }}
               />
             ) : (
-              <Ionicons name="person" size={20} color={Colors.primaryLight} />
+              <Image
+                source={require("@/assets/images/bridge-logo.png")}
+                style={{ width: 30, height: 18, tintColor: Colors.primaryLight }}
+                resizeMode="contain"
+              />
             )}
           </View>
         ) : (

@@ -9,6 +9,7 @@ import {
   Platform,
   ActivityIndicator,
   Alert,
+  Image,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
@@ -69,9 +70,11 @@ export default function AuthScreen() {
     >
       <View style={styles.content}>
         <View style={styles.logoSection}>
-          <View style={styles.logoCircle}>
-            <Ionicons name="heart-circle" size={48} color={Colors.primary} />
-          </View>
+          <Image
+            source={require("@/assets/images/bridge-logo.png")}
+            style={styles.logoImage}
+            resizeMode="contain"
+          />
           <Text style={styles.appName}>Bridges</Text>
           <Text style={styles.tagline}>
             {isLogin ? "Welcome back" : "Create your account"}
@@ -195,16 +198,11 @@ const styles = StyleSheet.create({
     alignItems: "center",
     marginBottom: 40,
   },
-  logoCircle: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
-    backgroundColor: Colors.surface,
-    alignItems: "center",
-    justifyContent: "center",
+  logoImage: {
+    width: 120,
+    height: 70,
     marginBottom: 16,
-    borderWidth: 1,
-    borderColor: Colors.border,
+    tintColor: Colors.primary,
   },
   appName: {
     fontSize: 32,
