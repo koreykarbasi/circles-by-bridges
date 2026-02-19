@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Vote - Bridges</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800&display=swap" rel="stylesheet">
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:'Nunito',sans-serif;background:#0B0718;color:#F0ECF8;min-height:100vh;display:flex;flex-direction:column;align-items:center}
+.container{max-width:440px;width:100%;padding:24px 20px 60px}
+.logo-row{display:flex;align-items:center;justify-content:center;gap:8px;margin-bottom:32px;padding-top:20px}
+.logo-text{font-size:18px;font-weight:700;color:#9B7DFF}
+.title{font-size:26px;font-weight:800;text-align:center;margin-bottom:6px}
+.subtitle{font-size:14px;color:#9B93B8;text-align:center;margin-bottom:8px}
+.creator{font-size:13px;color:#5E5580;text-align:center;margin-bottom:24px}
+.desc{font-size:14px;color:#9B93B8;line-height:1.5;text-align:center;margin-bottom:24px}
+.name-group{margin-bottom:24px}
+.name-label{font-size:13px;font-weight:600;color:#9B93B8;margin-bottom:6px}
+.name-input{width:100%;background:#151028;border:1px solid #2A2148;border-radius:12px;padding:12px 14px;font-size:15px;font-family:'Nunito',sans-serif;color:#F0ECF8;outline:none;transition:border-color .2s}
+.name-input:focus{border-color:#9B7DFF}
+.section-title{font-size:16px;font-weight:700;margin-bottom:12px}
+.option-card{background:#151028;border:1px solid #2A2148;border-radius:14px;padding:14px;margin-bottom:10px;cursor:pointer;transition:all .2s;position:relative}
+.option-card:hover{border-color:#9B7DFF40}
+.option-card.selected{border-color:#9B7DFF;background:#9B7DFF10}
+.option-card.selected::after{content:'';position:absolute;top:12px;right:12px;width:22px;height:22px;background:#9B7DFF;border-radius:11px;display:flex;align-items:center;justify-content:center}
+.option-card.selected::before{content:'✓';position:absolute;top:12px;right:16px;z-index:1;color:#fff;font-size:14px;font-weight:700}
+.option-label{font-size:15px;font-weight:700;margin-bottom:4px;padding-right:30px}
+.option-meta{display:flex;align-items:center;gap:5px;font-size:12px;color:#5E5580;margin-top:2px}
+.vote-btn{width:100%;background:#9B7DFF;color:#fff;border:none;border-radius:12px;padding:14px;font-size:15px;font-weight:700;font-family:'Nunito',sans-serif;cursor:pointer;margin-top:20px;transition:opacity .2s}
+.vote-btn:hover{opacity:.9}
+.vote-btn:disabled{opacity:.4;cursor:not-allowed}
+.success-msg{text-align:center;padding:40px 0}
+.success-msg h2{font-size:22px;font-weight:800;color:#4ADE80;margin-bottom:8px}
+.success-msg p{color:#9B93B8;font-size:14px}
+.error-msg{text-align:center;padding:40px 0;color:#FF4757}
+.finalized-banner{background:#4ADE8015;border-radius:12px;padding:12px;text-align:center;margin-bottom:16px}
+.finalized-banner span{color:#4ADE80;font-weight:700;font-size:14px}
+.result-bar{height:4px;background:#2A2148;border-radius:2px;margin-top:8px;overflow:hidden}
+.result-fill{height:4px;border-radius:2px;background:#9B7DFF;transition:width .3s}
+.vote-count{font-size:11px;color:#5E5580;margin-top:4px}
+.winner .result-fill{background:#FFB84D}
+.winner{border-color:#FFB84D60;background:#FFB84D08}
+.trophy{color:#FFB84D;margin-right:4px}
+</style>
+</head>
+<body>
+<div class="container" id="app">
+<div class="logo-row">
+<svg width="24" height="24" viewBox="0 0 100 100" fill="none"><path d="M20 70 Q50 20 80 70" stroke="#9B7DFF" stroke-width="6" fill="none"/><path d="M30 70 Q50 30 70 70" stroke="#B9A4FF" stroke-width="4" fill="none"/></svg>
+<span class="logo-text">Bridges</span>
+</div>
+<div id="loading"><p style="text-align:center;color:#9B93B8">Loading...</p></div>
+</div>
+
+<script>
+const shareCode = window.location.pathname.split('/vote/')[1];
+let planData = null;
+let selectedOptions = new Set();
+let submitted = false;
+
+async function load() {
+  try {
+    const res = await fetch(`/api/vote/${shareCode}`);
+    if (!res.ok) throw new Error('Not found');
+    planData = await res.json();
+    render();
+  } catch (e) {
+    document.getElementById('loading').innerHTML = '<div class="error-msg"><h2>Hangout not found</h2><p>This link may have expired or been removed.</p></div>';
+  }
+}
+
+function render() {
+  const app = document.getElementById('app');
+  const isFinalized = planData.status === 'finalized';
+  const maxVotes = Math.max(...planData.options.map(o => o.voteCount || 0), 1);
+
+  let html = `<div class="logo-row"><svg width="24" height="24" viewBox="0 0 100 100" fill="none"><path d="M20 70 Q50 20 80 70" stroke="#9B7DFF" stroke-width="6" fill="none"/><path d="M30 70 Q50 30 70 70" stroke="#B9A4FF" stroke-width="4" fill="none"/></svg><span class="logo-text">Bridges</span></div>`;
+
+  html += `<h1 class="title">${esc(planData.title)}</h1>`;
+  html += `<p class="creator">by ${esc(planData.creatorName)}</p>`;
+  if (planData.description) html += `<p class="desc">${esc(planData.description)}</p>`;
+
+  if (isFinalized) {
+    const winner = planData.options.find(o => o.id === planData.finalizedOptionId);
+    html += `<div class="finalized-banner"><span>Plan finalized${winner ? ': ' + esc(winner.label) : ''}</span></div>`;
+    html += `<div class="section-title">Results</div>`;
+    const sorted = [...planData.options].sort((a,b) => (b.voteCount||0) - (a.voteCount||0));
+    sorted.forEach(opt => {
+      const isWinner = opt.id === planData.finalizedOptionId;
+      const pct = maxVotes > 0 ? ((opt.voteCount||0)/maxVotes)*100 : 0;
+      html += `<div class="option-card${isWinner?' winner':''}">`;
+      html += `<div class="option-label">${isWinner?'<span class="trophy">&#x1F3C6;</span>':''}${esc(opt.label)}</div>`;
+      if(opt.dateTime) html += `<div class="option-meta">${esc(opt.dateTime)}</div>`;
+      if(opt.activity) html += `<div class="option-meta">${esc(opt.activity)}</div>`;
+      if(opt.location) html += `<div class="option-meta">${esc(opt.location)}</div>`;
+      html += `<div class="result-bar"><div class="result-fill" style="width:${pct}%"></div></div>`;
+      html += `<div class="vote-count">${opt.voteCount||0} vote${(opt.voteCount||0)!==1?'s':''}</div>`;
+      html += `</div>`;
+    });
+  } else if (submitted) {
+    html += `<div class="success-msg"><h2>Vote submitted!</h2><p>Your picks have been recorded. The organizer will finalize the plan soon.</p></div>`;
+  } else {
+    html += `<div class="name-group"><div class="name-label">Your name</div><input class="name-input" id="voterName" placeholder="Enter your name" /></div>`;
+    html += `<div class="section-title">Pick your favorites</div>`;
+    html += `<p style="font-size:12px;color:#5E5580;margin-bottom:12px">Tap all the options that work for you</p>`;
+    planData.options.forEach(opt => {
+      html += `<div class="option-card" id="opt-${opt.id}" onclick="toggle('${opt.id}')">`;
+      html += `<div class="option-label">${esc(opt.label)}</div>`;
+      if(opt.dateTime) html += `<div class="option-meta">${esc(opt.dateTime)}</div>`;
+      if(opt.activity) html += `<div class="option-meta">${esc(opt.activity)}</div>`;
+      if(opt.location) html += `<div class="option-meta">${esc(opt.location)}</div>`;
+      html += `</div>`;
+    });
+    html += `<button class="vote-btn" id="submitBtn" onclick="submit()" disabled>Submit Vote</button>`;
+  }
+
+  app.innerHTML = html;
+  updateButton();
+}
+
+function toggle(id) {
+  if (selectedOptions.has(id)) selectedOptions.delete(id);
+  else selectedOptions.add(id);
+  planData.options.forEach(opt => {
+    const el = document.getElementById('opt-'+opt.id);
+    if (el) el.className = selectedOptions.has(opt.id) ? 'option-card selected' : 'option-card';
+  });
+  updateButton();
+}
+
+function updateButton() {
+  const btn = document.getElementById('submitBtn');
+  const name = document.getElementById('voterName');
+  if (btn && name) {
+    btn.disabled = selectedOptions.size === 0 || !name.value.trim();
+  }
+}
+
+document.addEventListener('input', e => {
+  if (e.target && e.target.id === 'voterName') updateButton();
+});
+
+async function submit() {
+  const name = document.getElementById('voterName').value.trim();
+  if (!name || selectedOptions.size === 0) return;
+  const btn = document.getElementById('submitBtn');
+  btn.disabled = true;
+  btn.textContent = 'Submitting...';
+  try {
+    const votes = planData.options.map(opt => ({
+      optionId: opt.id,
+      vote: selectedOptions.has(opt.id),
+    }));
+    const res = await fetch(`/api/vote/${shareCode}`, {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ voterName: name, votes }),
+    });
+    if (!res.ok) throw new Error('Failed');
+    submitted = true;
+    render();
+  } catch(e) {
+    btn.disabled = false;
+    btn.textContent = 'Submit Vote';
+    alert('Failed to submit vote. Please try again.');
+  }
+}
+
+function esc(s) { const d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
+
+load();
+</script>
+</body>
+</html>

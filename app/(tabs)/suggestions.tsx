@@ -174,8 +174,21 @@ export default function SuggestionsScreen() {
       ]}
       showsVerticalScrollIndicator={false}
     >
-      <Text style={styles.title}>Suggestions</Text>
-      <Text style={styles.subtitle}>People who'd love to hear from you</Text>
+      <View style={styles.titleRow}>
+        <View style={{ flex: 1 }}>
+          <Text style={styles.title}>Suggestions</Text>
+          <Text style={styles.subtitle}>People who'd love to hear from you</Text>
+        </View>
+        <Pressable
+          onPress={() => {
+            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+            router.push("/hangouts");
+          }}
+          style={({ pressed }) => [styles.hangoutButton, pressed && { opacity: 0.7 }]}
+        >
+          <Ionicons name="calendar-outline" size={18} color={Colors.primaryLight} />
+        </Pressable>
+      </View>
 
       <ScrollView
         horizontal
@@ -292,12 +305,22 @@ const styles = StyleSheet.create({
     fontFamily: "Nunito_800ExtraBold",
     color: Colors.text,
   },
+  titleRow: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    justifyContent: "space-between",
+    marginBottom: 0,
+  },
   subtitle: {
     fontSize: 15,
     fontFamily: "Nunito_400Regular",
     color: Colors.textSecondary,
     marginTop: 4,
     marginBottom: 16,
+  },
+  hangoutButton: {
+    padding: 8,
+    marginTop: 4,
   },
   filterRow: {
     marginBottom: 16,

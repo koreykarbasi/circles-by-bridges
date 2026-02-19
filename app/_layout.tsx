@@ -63,6 +63,18 @@ function RootLayoutNav() {
         name="profile"
         options={{ headerShown: false, presentation: "modal" }}
       />
+      <Stack.Screen
+        name="hangouts"
+        options={{ headerShown: false, presentation: "modal" }}
+      />
+      <Stack.Screen
+        name="create-hangout"
+        options={{ headerShown: false, presentation: "modal" }}
+      />
+      <Stack.Screen
+        name="hangout-detail"
+        options={{ headerShown: false, presentation: "modal" }}
+      />
     </Stack>
   );
 }

@@ -172,9 +172,24 @@ function configureExpoAndLanding(app: express.Application) {
 
   log("Serving static Expo files with dynamic manifest routing");
 
+  const voteTemplatePath = path.resolve(
+    process.cwd(),
+    "server",
+    "templates",
+    "vote.html",
+  );
+  const votePageTemplate = fs.existsSync(voteTemplatePath)
+    ? fs.readFileSync(voteTemplatePath, "utf-8")
+    : null;
+
   app.use((req: Request, res: Response, next: NextFunction) => {
     if (req.path.startsWith("/api")) {
       return next();
+    }
+
+    if (req.path.startsWith("/vote/") && votePageTemplate) {
+      res.setHeader("Content-Type", "text/html; charset=utf-8");
+      return res.status(200).send(votePageTemplate);
     }
 
     if (req.path !== "/" && req.path !== "/manifest") {
