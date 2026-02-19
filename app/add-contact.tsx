@@ -12,7 +12,7 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
-import { router } from "expo-router";
+import { router, useLocalSearchParams } from "expo-router";
 import * as ImagePicker from "expo-image-picker";
 import Colors from "@/constants/colors";
 import { useContacts } from "@/lib/contacts-context";
@@ -23,9 +23,11 @@ import * as Haptics from "expo-haptics";
 export default function AddContactScreen() {
   const insets = useSafeAreaInsets();
   const { addContact, getCircleContacts } = useContacts();
+  const params = useLocalSearchParams<{ circle?: string }>();
+  const initialCircle = params.circle ? (parseInt(params.circle) as 1 | 2 | 3) : 1;
 
   const [name, setName] = useState("");
-  const [circleLevel, setCircleLevel] = useState<1 | 2 | 3>(1);
+  const [circleLevel, setCircleLevel] = useState<1 | 2 | 3>(initialCircle);
   const [selectedInterests, setSelectedInterests] = useState<string[]>([]);
   const [birthday, setBirthday] = useState("");
   const [notes, setNotes] = useState("");

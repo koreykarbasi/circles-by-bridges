@@ -35,7 +35,7 @@ export default function CirclesScreen() {
           <Pressable
             onPress={() => {
               Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-              router.push("/add-contact");
+              router.push({ pathname: "/add-contact", params: { circle: String(activeCircle) } });
             }}
             style={({ pressed }) => [styles.addButton, pressed && { opacity: 0.7 }]}
           >
@@ -86,19 +86,35 @@ export default function CirclesScreen() {
             title={`No one in ${config.label}`}
             subtitle={`Add up to ${config.max} people to this circle`}
             actionLabel="Add someone"
-            onAction={() => router.push("/add-contact")}
+            onAction={() => router.push({ pathname: "/add-contact", params: { circle: String(activeCircle) } })}
           />
         ) : (
-          circleContacts.map((contact) => (
-            <ContactCard
-              key={contact.id}
-              contact={contact}
-              onPress={() =>
-                router.push({ pathname: "/edit-contact", params: { id: contact.id } })
-              }
-              onMarkContacted={() => markContacted(contact.id)}
-            />
-          ))
+          <>
+            {circleContacts.map((contact) => (
+              <ContactCard
+                key={contact.id}
+                contact={contact}
+                onPress={() =>
+                  router.push({ pathname: "/edit-contact", params: { id: contact.id } })
+                }
+                onMarkContacted={() => markContacted(contact.id)}
+              />
+            ))}
+            {circleContacts.length < config.max && (
+              <Pressable
+                onPress={() => {
+                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                  router.push({ pathname: "/add-contact", params: { circle: String(activeCircle) } });
+                }}
+                style={({ pressed }) => [styles.addSomeoneButton, pressed && { opacity: 0.7 }]}
+              >
+                <View style={styles.addSomeoneIcon}>
+                  <Ionicons name="add" size={18} color={Colors.primary} />
+                </View>
+                <Text style={styles.addSomeoneText}>Add someone to {config.label}</Text>
+              </Pressable>
+            )}
+          </>
         )}
       </ScrollView>
     </View>
@@ -171,5 +187,31 @@ const styles = StyleSheet.create({
     color: Colors.textSecondary,
     marginBottom: 16,
     textAlign: "center",
+  },
+  addSomeoneButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+    borderRadius: 14,
+    borderWidth: 1.5,
+    borderColor: Colors.primary + "30",
+    borderStyle: "dashed",
+    backgroundColor: Colors.primary + "08",
+    marginTop: 8,
+  },
+  addSomeoneIcon: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: Colors.primary + "18",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  addSomeoneText: {
+    fontSize: 14,
+    fontFamily: "Nunito_600SemiBold",
+    color: Colors.primary,
   },
 });
