@@ -1,6 +1,7 @@
 import React, { useState, useCallback } from "react";
-import { View, Text, StyleSheet, ScrollView, Platform, RefreshControl } from "react-native";
+import { View, Text, StyleSheet, ScrollView, Platform, RefreshControl, Pressable } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { Ionicons } from "@expo/vector-icons";
 import Colors from "@/constants/colors";
 import { useContacts } from "@/lib/contacts-context";
 import { CirclesVisualization } from "@/components/CirclesVisualization";
@@ -43,12 +44,23 @@ export default function HomeScreen() {
       }
     >
       <View style={styles.header}>
-        <Text style={styles.greeting}>Your Bridges</Text>
-        <Text style={styles.subtitle}>
-          {contacts.length === 0
-            ? "Start by adding people to your circles"
-            : `${contacts.length} ${contacts.length === 1 ? "person" : "people"} in your circles`}
-        </Text>
+        <View style={styles.headerRow}>
+          <Pressable
+            onPress={() => router.push("/profile")}
+            hitSlop={8}
+            style={({ pressed }) => [styles.profileBtn, pressed && { opacity: 0.7 }]}
+          >
+            <Ionicons name="person" size={18} color={Colors.primaryLight} />
+          </Pressable>
+          <View style={styles.headerText}>
+            <Text style={styles.greeting}>Your Bridges</Text>
+            <Text style={styles.subtitle}>
+              {contacts.length === 0
+                ? "Start by adding people to your circles"
+                : `${contacts.length} ${contacts.length === 1 ? "person" : "people"} in your circles`}
+            </Text>
+          </View>
+        </View>
       </View>
 
       <CirclesVisualization contacts={contacts} />
@@ -128,6 +140,24 @@ const styles = StyleSheet.create({
   },
   header: {
     marginBottom: 8,
+  },
+  headerRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+  },
+  profileBtn: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    backgroundColor: Colors.primary + "20",
+    borderWidth: 1.5,
+    borderColor: Colors.primary + "40",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  headerText: {
+    flex: 1,
   },
   greeting: {
     fontSize: 28,

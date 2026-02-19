@@ -7,6 +7,7 @@ import { KeyboardProvider } from "react-native-keyboard-controller";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { queryClient } from "@/lib/query-client";
 import { ContactsProvider } from "@/lib/contacts-context";
+import { OnboardingProvider, useOnboarding } from "@/lib/onboarding-context";
 import {
   useFonts,
   Nunito_400Regular,
@@ -14,12 +15,34 @@ import {
   Nunito_700Bold,
   Nunito_800ExtraBold,
 } from "@expo-google-fonts/nunito";
+import { router } from "expo-router";
+import { View, ActivityIndicator } from "react-native";
+import Colors from "@/constants/colors";
 
 SplashScreen.preventAutoHideAsync();
 
 function RootLayoutNav() {
+  const { hasCompletedOnboarding } = useOnboarding();
+
+  useEffect(() => {
+    if (hasCompletedOnboarding === false) {
+      router.replace("/onboarding");
+    } else if (hasCompletedOnboarding === true) {
+      router.replace("/(tabs)");
+    }
+  }, [hasCompletedOnboarding]);
+
+  if (hasCompletedOnboarding === null) {
+    return (
+      <View style={{ flex: 1, backgroundColor: Colors.background, alignItems: "center", justifyContent: "center" }}>
+        <ActivityIndicator size="large" color={Colors.primary} />
+      </View>
+    );
+  }
+
   return (
     <Stack screenOptions={{ headerBackTitle: "Back" }}>
+      <Stack.Screen name="onboarding" options={{ headerShown: false, gestureEnabled: false }} />
       <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
       <Stack.Screen
         name="add-contact"
@@ -27,6 +50,10 @@ function RootLayoutNav() {
       />
       <Stack.Screen
         name="edit-contact"
+        options={{ headerShown: false, presentation: "modal" }}
+      />
+      <Stack.Screen
+        name="profile"
         options={{ headerShown: false, presentation: "modal" }}
       />
     </Stack>
@@ -53,11 +80,13 @@ export default function RootLayout() {
     <ErrorBoundary>
       <QueryClientProvider client={queryClient}>
         <ContactsProvider>
-          <GestureHandlerRootView>
-            <KeyboardProvider>
-              <RootLayoutNav />
-            </KeyboardProvider>
-          </GestureHandlerRootView>
+          <OnboardingProvider>
+            <GestureHandlerRootView>
+              <KeyboardProvider>
+                <RootLayoutNav />
+              </KeyboardProvider>
+            </GestureHandlerRootView>
+          </OnboardingProvider>
         </ContactsProvider>
       </QueryClientProvider>
     </ErrorBoundary>
