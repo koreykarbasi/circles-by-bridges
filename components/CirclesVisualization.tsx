@@ -7,6 +7,7 @@ import Animated, {
   withTiming,
   Easing,
   cancelAnimation,
+  SharedValue,
 } from "react-native-reanimated";
 import { Ionicons } from "@expo/vector-icons";
 import Colors from "@/constants/colors";
@@ -38,7 +39,7 @@ function OrbitingAvatar({
   radius: number;
   avatarSize: number;
   center: number;
-  ringRotation: Animated.SharedValue<number>;
+  ringRotation: SharedValue<number>;
 }) {
   const baseAngle = (360 / Math.max(total, 1)) * index - 90;
 
@@ -78,7 +79,7 @@ function OverflowBadge({
   center: number;
   totalSlots: number;
   slotIndex: number;
-  ringRotation: Animated.SharedValue<number>;
+  ringRotation: SharedValue<number>;
 }) {
   const baseAngle = (360 / Math.max(totalSlots, 1)) * slotIndex - 90;
   const size = 26;
