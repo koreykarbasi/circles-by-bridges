@@ -20,6 +20,7 @@ function requireAuth(req: Request, res: Response, next: NextFunction) {
 }
 
 export async function registerRoutes(app: Express): Promise<Server> {
+  app.set("trust proxy", 1);
   const PgSession = connectPgSimple(session);
   app.use(
     session({
@@ -30,10 +31,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
       secret: process.env.SESSION_SECRET || "bridges-dev-secret-change-me",
       resave: false,
       saveUninitialized: false,
+      proxy: true,
       cookie: {
         maxAge: 30 * 24 * 60 * 60 * 1000,
         httpOnly: true,
-        sameSite: "none",
+        sameSite: "none" as const,
         secure: true,
       },
     }),
@@ -58,7 +60,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
         password: hashedPassword,
       });
       req.session.userId = user.id;
-      res.status(201).json({ id: user.id, email: user.email, profilePhotoUri: user.profilePhotoUri });
+      req.session.save((err) => {
+        if (err) {
+          console.error("Session save error:", err);
+          return res.status(500).json({ message: "Registration failed" });
+        }
+        res.status(201).json({ id: user.id, email: user.email, profilePhotoUri: user.profilePhotoUri });
+      });
     } catch (err) {
       console.error("Registration error:", err);
       res.status(500).json({ message: "Registration failed" });
@@ -80,7 +88,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(401).json({ message: "Invalid email or password" });
       }
       req.session.userId = user.id;
-      res.json({ id: user.id, email: user.email, profilePhotoUri: user.profilePhotoUri });
+      req.session.save((err) => {
+        if (err) {
+          console.error("Session save error:", err);
+          return res.status(500).json({ message: "Login failed" });
+        }
+        res.json({ id: user.id, email: user.email, profilePhotoUri: user.profilePhotoUri });
+      });
     } catch (err) {
       console.error("Login error:", err);
       res.status(500).json({ message: "Login failed" });

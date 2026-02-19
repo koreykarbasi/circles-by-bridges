@@ -8,10 +8,12 @@ import {
   ScrollView,
   Platform,
   Alert,
+  Image,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
+import * as ImagePicker from "expo-image-picker";
 import Colors from "@/constants/colors";
 import { useContacts } from "@/lib/contacts-context";
 import { CIRCLE_CONFIG } from "@/lib/types";
@@ -27,7 +29,27 @@ export default function AddContactScreen() {
   const [selectedInterests, setSelectedInterests] = useState<string[]>([]);
   const [birthday, setBirthday] = useState("");
   const [notes, setNotes] = useState("");
+  const [photoUri, setPhotoUri] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+
+  const pickPhoto = async () => {
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      allowsEditing: true,
+      aspect: [1, 1],
+      quality: 0.7,
+      base64: true,
+    });
+    if (!result.canceled && result.assets[0]) {
+      const asset = result.assets[0];
+      if (asset.base64) {
+        const mimeType = asset.mimeType || "image/jpeg";
+        setPhotoUri(`data:${mimeType};base64,${asset.base64}`);
+      } else {
+        setPhotoUri(asset.uri);
+      }
+    }
+  };
 
   const toggleInterest = (interest: string) => {
     Haptics.selectionAsync();
@@ -62,6 +84,7 @@ export default function AddContactScreen() {
       birthday: birthday.trim() || undefined,
       notes: notes.trim() || undefined,
       lastContacted: undefined,
+      photoUri: photoUri || undefined,
     });
 
     router.back();
@@ -98,6 +121,21 @@ export default function AddContactScreen() {
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
       >
+        <View style={styles.photoSection}>
+          <Pressable onPress={pickPhoto} style={({ pressed }) => [styles.photoPicker, pressed && { opacity: 0.7 }]}>
+            {photoUri ? (
+              <Image source={{ uri: photoUri }} style={styles.photoImage} />
+            ) : (
+              <View style={styles.photoPlaceholder}>
+                <Ionicons name="camera-outline" size={28} color={Colors.primaryLight} />
+              </View>
+            )}
+          </Pressable>
+          <Pressable onPress={pickPhoto}>
+            <Text style={styles.photoLabel}>{photoUri ? "Change Photo" : "Add Photo"}</Text>
+          </Pressable>
+        </View>
+
         <View style={styles.inputGroup}>
           <Text style={styles.label}>Name</Text>
           <TextInput
@@ -319,6 +357,38 @@ const styles = StyleSheet.create({
   },
   interestChipTextActive: {
     color: Colors.primary,
+  },
+  photoSection: {
+    alignItems: "center",
+    marginBottom: 20,
+    gap: 8,
+  },
+  photoPicker: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    overflow: "hidden",
+  },
+  photoPlaceholder: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    backgroundColor: Colors.primary + "15",
+    borderWidth: 2,
+    borderColor: Colors.primary + "30",
+    borderStyle: "dashed",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  photoImage: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+  },
+  photoLabel: {
+    fontSize: 13,
+    fontFamily: "Nunito_600SemiBold",
+    color: Colors.primaryLight,
   },
   saveButton: {
     backgroundColor: Colors.primary,

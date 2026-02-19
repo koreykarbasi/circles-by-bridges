@@ -1,8 +1,11 @@
 import React, { createContext, useContext, useState, useEffect, useMemo, useCallback, ReactNode } from "react";
 import type { Contact } from "./types";
 import { AVATAR_COLORS } from "./types";
+import { Platform } from "react-native";
 import { apiRequest, getApiUrl } from "./query-client";
-import { fetch } from "expo/fetch";
+import { fetch as expoFetch } from "expo/fetch";
+
+const fetchFn = Platform.OS === "web" ? globalThis.fetch : expoFetch;
 
 interface ContactsContextValue {
   contacts: Contact[];

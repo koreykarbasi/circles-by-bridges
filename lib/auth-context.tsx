@@ -1,7 +1,10 @@
 import React, { createContext, useContext, useState, useEffect, useMemo, useCallback, ReactNode } from "react";
 import type { AuthUser } from "./types";
+import { Platform } from "react-native";
 import { apiRequest, getApiUrl } from "./query-client";
-import { fetch } from "expo/fetch";
+import { fetch as expoFetch } from "expo/fetch";
+
+const fetchFn = Platform.OS === "web" ? globalThis.fetch : expoFetch;
 
 interface AuthContextValue {
   user: AuthUser | null;
@@ -26,7 +29,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     try {
       const baseUrl = getApiUrl();
       const url = new URL("/api/auth/me", baseUrl);
-      const res = await fetch(url.toString(), { credentials: "include" });
+      const res = await fetchFn(url.toString(), { credentials: "include" });
       if (res.ok) {
         const data = await res.json();
         setUser(data);
