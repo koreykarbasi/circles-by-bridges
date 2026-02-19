@@ -93,6 +93,7 @@ export default function OnboardingScreen() {
         circleLevel: contact.circleLevel,
         interests: [],
         birthday: contact.birthday,
+        phone: contact.phone,
         notes: undefined,
         lastContacted: undefined,
       });

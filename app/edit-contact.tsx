@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState } from "react";
 import {
   View,
   Text,
@@ -8,15 +8,18 @@ import {
   ScrollView,
   Platform,
   Alert,
+  Image,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { router, useLocalSearchParams } from "expo-router";
+import * as ImagePicker from "expo-image-picker";
 import Colors from "@/constants/colors";
 import { useContacts } from "@/lib/contacts-context";
 import { CIRCLE_CONFIG } from "@/lib/types";
 import { AVAILABLE_INTERESTS } from "@/lib/prompts";
 import { formatLastContacted } from "@/lib/helpers";
+import { Avatar } from "@/components/Avatar";
 import * as Haptics from "expo-haptics";
 
 export default function EditContactScreen() {
@@ -27,11 +30,27 @@ export default function EditContactScreen() {
   const contact = contacts.find((c) => c.id === id);
 
   const [name, setName] = useState(contact?.name ?? "");
-  const [circleLevel, setCircleLevel] = useState<1 | 2 | 3>(contact?.circleLevel ?? 1);
+  const [circleLevel, setCircleLevel] = useState<1 | 2 | 3>((contact?.circleLevel ?? 1) as 1 | 2 | 3);
   const [selectedInterests, setSelectedInterests] = useState<string[]>(contact?.interests ?? []);
   const [birthday, setBirthday] = useState(contact?.birthday ?? "");
   const [notes, setNotes] = useState(contact?.notes ?? "");
+  const [photoUri, setPhotoUri] = useState<string | null>(contact?.photoUri ?? null);
   const [saving, setSaving] = useState(false);
+
+  const handlePickPhoto = async () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ["images"],
+      allowsEditing: true,
+      aspect: [1, 1],
+      quality: 0.7,
+      base64: true,
+    });
+    if (!result.canceled && result.assets[0]?.base64) {
+      const dataUri = `data:image/jpeg;base64,${result.assets[0].base64}`;
+      setPhotoUri(dataUri);
+    }
+  };
 
   if (!contact) {
     return (
@@ -76,6 +95,7 @@ export default function EditContactScreen() {
       interests: selectedInterests,
       birthday: birthday.trim() || undefined,
       notes: notes.trim() || undefined,
+      photoUri,
     });
 
     router.back();
@@ -135,6 +155,17 @@ export default function EditContactScreen() {
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
       >
+        <View style={styles.photoSection}>
+          <Pressable onPress={handlePickPhoto} style={({ pressed }) => [pressed && { opacity: 0.8 }]}>
+            <View style={styles.photoWrapper}>
+              <Avatar name={contact.name} color={contact.avatarColor} size={72} photoUri={photoUri} />
+              <View style={styles.photoCameraIcon}>
+                <Ionicons name="camera" size={14} color="#fff" />
+              </View>
+            </View>
+          </Pressable>
+        </View>
+
         <View style={styles.contactMeta}>
           <Text style={styles.lastContactLabel}>
             Last contacted: {formatLastContacted(contact.lastContacted)}
@@ -413,6 +444,26 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontFamily: "Nunito_700Bold",
     color: "#fff",
+  },
+  photoSection: {
+    alignItems: "center",
+    marginBottom: 20,
+  },
+  photoWrapper: {
+    position: "relative",
+  },
+  photoCameraIcon: {
+    position: "absolute",
+    bottom: 0,
+    right: 0,
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: Colors.primary,
+    alignItems: "center",
+    justifyContent: "center",
+    borderWidth: 2,
+    borderColor: Colors.background,
   },
   deleteButton: {
     flexDirection: "row",

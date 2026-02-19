@@ -1,5 +1,6 @@
 export interface Contact {
   id: string;
+  userId?: string | null;
   name: string;
   circleLevel: number;
   interests: string[];
@@ -8,7 +9,14 @@ export interface Contact {
   notes?: string | null;
   phone?: string | null;
   avatarColor: string;
+  photoUri?: string | null;
   createdAt?: string | null;
+}
+
+export interface AuthUser {
+  id: string;
+  email: string;
+  profilePhotoUri?: string | null;
 }
 
 export const CIRCLE_CONFIG = {

@@ -1,9 +1,10 @@
 import React, { useState, useCallback } from "react";
-import { View, Text, StyleSheet, ScrollView, Platform, RefreshControl, Pressable } from "react-native";
+import { View, Text, StyleSheet, ScrollView, Platform, RefreshControl, Pressable, Image } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import Colors from "@/constants/colors";
 import { useContacts } from "@/lib/contacts-context";
+import { useAuth } from "@/lib/auth-context";
 import { CirclesVisualization } from "@/components/CirclesVisualization";
 import { ChecklistItem } from "@/components/ChecklistItem";
 import { EmptyState } from "@/components/EmptyState";
@@ -13,6 +14,7 @@ import { router } from "expo-router";
 
 export default function HomeScreen() {
   const insets = useSafeAreaInsets();
+  const { user } = useAuth();
   const { contacts, getOverdueContacts, getUpcomingBirthdays, markContacted, isLoading, refreshContacts } = useContacts();
   const [refreshing, setRefreshing] = useState(false);
   const [dismissed, setDismissed] = useState<Set<string>>(new Set());
@@ -50,7 +52,11 @@ export default function HomeScreen() {
             hitSlop={8}
             style={({ pressed }) => [styles.profileBtn, pressed && { opacity: 0.7 }]}
           >
-            <Ionicons name="person" size={18} color={Colors.primaryLight} />
+            {user?.profilePhotoUri ? (
+              <Image source={{ uri: user.profilePhotoUri }} style={styles.profileImg} />
+            ) : (
+              <Ionicons name="person" size={18} color={Colors.primaryLight} />
+            )}
           </Pressable>
           <View style={styles.headerText}>
             <Text style={styles.greeting}>Your Bridges</Text>
@@ -63,7 +69,7 @@ export default function HomeScreen() {
         </View>
       </View>
 
-      <CirclesVisualization contacts={contacts} />
+      <CirclesVisualization contacts={contacts} user={user} />
 
       <View style={styles.section}>
         <View style={styles.sectionHeader}>
@@ -155,6 +161,12 @@ const styles = StyleSheet.create({
     borderColor: Colors.primary + "40",
     alignItems: "center",
     justifyContent: "center",
+    overflow: "hidden",
+  },
+  profileImg: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
   },
   headerText: {
     flex: 1,

@@ -62,6 +62,7 @@ export function ContactsProvider({ children }: { children: ReactNode }) {
       notes: contact.notes,
       phone: contact.phone,
       avatarColor: contact.avatarColor,
+      photoUri: contact.photoUri,
     });
     await fetchContacts();
   }, [fetchContacts]);

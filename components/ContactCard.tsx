@@ -27,7 +27,7 @@ export function ContactCard({ contact, onPress, onMarkContacted, showCircleLabel
         pressed && styles.pressed,
       ]}
     >
-      <Avatar name={contact.name} color={contact.avatarColor} size={48} />
+      <Avatar name={contact.name} color={contact.avatarColor} size={48} photoUri={contact.photoUri} />
       <View style={styles.info}>
         <View style={styles.nameRow}>
           <Text style={styles.name} numberOfLines={1}>

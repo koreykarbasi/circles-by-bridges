@@ -7,13 +7,16 @@ import {
   ScrollView,
   Platform,
   Alert,
+  Image,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { Ionicons, Feather, MaterialCommunityIcons } from "@expo/vector-icons";
+import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import { router } from "expo-router";
+import * as ImagePicker from "expo-image-picker";
 import Colors from "@/constants/colors";
 import { useContacts } from "@/lib/contacts-context";
 import { useOnboarding } from "@/lib/onboarding-context";
+import { useAuth } from "@/lib/auth-context";
 import { CIRCLE_CONFIG } from "@/lib/types";
 import * as Haptics from "expo-haptics";
 
@@ -21,6 +24,7 @@ export default function ProfileScreen() {
   const insets = useSafeAreaInsets();
   const { contacts } = useContacts();
   const { resetOnboarding } = useOnboarding();
+  const { user, logout, updateProfilePhoto } = useAuth();
 
   const webTopInset = Platform.OS === "web" ? 67 : 0;
   const webBottomInset = Platform.OS === "web" ? 34 : 0;
@@ -46,6 +50,44 @@ export default function ProfileScreen() {
     );
   };
 
+  const handleLogout = () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    Alert.alert(
+      "Sign Out",
+      "Are you sure you want to sign out?",
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Sign Out",
+          style: "destructive",
+          onPress: async () => {
+            await logout();
+            router.replace("/auth");
+          },
+        },
+      ],
+    );
+  };
+
+  const handlePickPhoto = async () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ["images"],
+      allowsEditing: true,
+      aspect: [1, 1],
+      quality: 0.7,
+      base64: true,
+    });
+
+    if (!result.canceled && result.assets[0]) {
+      const asset = result.assets[0];
+      if (asset.base64) {
+        const dataUri = `data:image/jpeg;base64,${asset.base64}`;
+        await updateProfilePhoto(dataUri);
+      }
+    }
+  };
+
   return (
     <View style={[styles.container]}>
       <View style={[styles.headerBar, { paddingTop: insets.top + 8 + webTopInset }]}>
@@ -65,10 +107,19 @@ export default function ProfileScreen() {
         showsVerticalScrollIndicator={false}
       >
         <View style={styles.avatarSection}>
-          <View style={styles.avatarLarge}>
-            <Ionicons name="person" size={40} color={Colors.primaryLight} />
-          </View>
-          <Text style={styles.userName}>My Bridges</Text>
+          <Pressable onPress={handlePickPhoto} style={({ pressed }) => [pressed && { opacity: 0.8 }]}>
+            <View style={styles.avatarLarge}>
+              {user?.profilePhotoUri ? (
+                <Image source={{ uri: user.profilePhotoUri }} style={styles.avatarImage} />
+              ) : (
+                <Ionicons name="person" size={40} color={Colors.primaryLight} />
+              )}
+              <View style={styles.cameraButton}>
+                <Ionicons name="camera" size={14} color="#fff" />
+              </View>
+            </View>
+          </Pressable>
+          <Text style={styles.userName}>{user?.email || "My Bridges"}</Text>
           <Text style={styles.userStat}>
             {contacts.length} {contacts.length === 1 ? "connection" : "connections"}
           </Text>
@@ -128,6 +179,23 @@ export default function ProfileScreen() {
             </View>
           </View>
         </View>
+
+        <View style={styles.section}>
+          <Text style={styles.sectionLabel}>Account</Text>
+          <Pressable
+            onPress={handleLogout}
+            style={({ pressed }) => [styles.menuItem, pressed && { opacity: 0.7 }]}
+          >
+            <View style={[styles.menuIcon, { backgroundColor: Colors.danger + "18" }]}>
+              <Ionicons name="log-out-outline" size={20} color={Colors.danger} />
+            </View>
+            <View style={styles.menuContent}>
+              <Text style={[styles.menuTitle, { color: Colors.danger }]}>Sign Out</Text>
+              <Text style={styles.menuDesc}>{user?.email}</Text>
+            </View>
+            <Ionicons name="chevron-forward" size={18} color={Colors.textTertiary} />
+          </Pressable>
+        </View>
       </ScrollView>
     </View>
   );
@@ -171,10 +239,29 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     marginBottom: 12,
+    overflow: "hidden",
+  },
+  avatarImage: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+  },
+  cameraButton: {
+    position: "absolute",
+    bottom: 0,
+    right: 0,
+    width: 26,
+    height: 26,
+    borderRadius: 13,
+    backgroundColor: Colors.primary,
+    alignItems: "center",
+    justifyContent: "center",
+    borderWidth: 2,
+    borderColor: Colors.background,
   },
   userName: {
-    fontSize: 22,
-    fontFamily: "Nunito_800ExtraBold",
+    fontSize: 18,
+    fontFamily: "Nunito_700Bold",
     color: Colors.text,
   },
   userStat: {
@@ -222,7 +309,7 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontFamily: "Nunito_700Bold",
     color: Colors.textTertiary,
-    textTransform: "uppercase",
+    textTransform: "uppercase" as const,
     letterSpacing: 1,
     marginBottom: 10,
     paddingLeft: 4,

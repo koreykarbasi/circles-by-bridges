@@ -8,6 +8,7 @@ import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { queryClient } from "@/lib/query-client";
 import { ContactsProvider } from "@/lib/contacts-context";
 import { OnboardingProvider, useOnboarding } from "@/lib/onboarding-context";
+import { AuthProvider, useAuth } from "@/lib/auth-context";
 import {
   useFonts,
   Nunito_400Regular,
@@ -22,17 +23,22 @@ import Colors from "@/constants/colors";
 SplashScreen.preventAutoHideAsync();
 
 function RootLayoutNav() {
+  const { user, isLoading: authLoading } = useAuth();
   const { hasCompletedOnboarding } = useOnboarding();
 
   useEffect(() => {
-    if (hasCompletedOnboarding === false) {
+    if (authLoading || hasCompletedOnboarding === null) return;
+
+    if (!hasCompletedOnboarding) {
       router.replace("/onboarding");
-    } else if (hasCompletedOnboarding === true) {
+    } else if (!user) {
+      router.replace("/auth");
+    } else {
       router.replace("/(tabs)");
     }
-  }, [hasCompletedOnboarding]);
+  }, [authLoading, user, hasCompletedOnboarding]);
 
-  if (hasCompletedOnboarding === null) {
+  if (authLoading || hasCompletedOnboarding === null) {
     return (
       <View style={{ flex: 1, backgroundColor: Colors.background, alignItems: "center", justifyContent: "center" }}>
         <ActivityIndicator size="large" color={Colors.primary} />
@@ -43,6 +49,7 @@ function RootLayoutNav() {
   return (
     <Stack screenOptions={{ headerBackTitle: "Back" }}>
       <Stack.Screen name="onboarding" options={{ headerShown: false, gestureEnabled: false }} />
+      <Stack.Screen name="auth" options={{ headerShown: false, gestureEnabled: false }} />
       <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
       <Stack.Screen
         name="add-contact"
@@ -79,15 +86,17 @@ export default function RootLayout() {
   return (
     <ErrorBoundary>
       <QueryClientProvider client={queryClient}>
-        <ContactsProvider>
+        <AuthProvider>
           <OnboardingProvider>
-            <GestureHandlerRootView>
-              <KeyboardProvider>
-                <RootLayoutNav />
-              </KeyboardProvider>
-            </GestureHandlerRootView>
+            <ContactsProvider>
+              <GestureHandlerRootView>
+                <KeyboardProvider>
+                  <RootLayoutNav />
+                </KeyboardProvider>
+              </GestureHandlerRootView>
+            </ContactsProvider>
           </OnboardingProvider>
-        </ContactsProvider>
+        </AuthProvider>
       </QueryClientProvider>
     </ErrorBoundary>
   );

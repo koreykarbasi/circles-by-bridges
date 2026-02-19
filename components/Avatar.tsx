@@ -1,15 +1,30 @@
 import React from "react";
-import { View, Text, StyleSheet } from "react-native";
+import { View, Text, Image, StyleSheet } from "react-native";
 import { getInitials } from "@/lib/helpers";
 
 interface AvatarProps {
   name: string;
   color: string;
   size?: number;
+  photoUri?: string | null;
 }
 
-export function Avatar({ name, color, size = 44 }: AvatarProps) {
+export function Avatar({ name, color, size = 44, photoUri }: AvatarProps) {
   const fontSize = size * 0.38;
+
+  if (photoUri) {
+    return (
+      <Image
+        source={{ uri: photoUri }}
+        style={{
+          width: size,
+          height: size,
+          borderRadius: size / 2,
+        }}
+      />
+    );
+  }
+
   return (
     <View
       style={[

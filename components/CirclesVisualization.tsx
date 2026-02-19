@@ -1,17 +1,79 @@
-import React from "react";
+import React, { useEffect } from "react";
 import { View, Text, StyleSheet, Dimensions } from "react-native";
+import Animated, {
+  useSharedValue,
+  useAnimatedStyle,
+  withRepeat,
+  withTiming,
+  Easing,
+} from "react-native-reanimated";
+import { Ionicons } from "@expo/vector-icons";
 import Colors from "@/constants/colors";
 import { Avatar } from "./Avatar";
 import type { Contact } from "@/lib/types";
+import type { AuthUser } from "@/lib/types";
 
 interface CirclesVisualizationProps {
   contacts: Contact[];
+  user?: AuthUser | null;
 }
 
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
 const VIZ_SIZE = Math.min(SCREEN_WIDTH - 48, 320);
 
-export function CirclesVisualization({ contacts }: CirclesVisualizationProps) {
+function OrbitingAvatar({
+  contact,
+  index,
+  total,
+  radius,
+  avatarSize,
+  center,
+  speed,
+}: {
+  contact: Contact;
+  index: number;
+  total: number;
+  radius: number;
+  avatarSize: number;
+  center: number;
+  speed: number;
+}) {
+  const rotation = useSharedValue(0);
+
+  useEffect(() => {
+    rotation.value = withRepeat(
+      withTiming(360, { duration: speed, easing: Easing.linear }),
+      -1,
+      false,
+    );
+  }, []);
+
+  const baseAngle = (360 / Math.max(total, 1)) * index - 90;
+
+  const animatedStyle = useAnimatedStyle(() => {
+    const angle = ((baseAngle + rotation.value) * Math.PI) / 180;
+    const x = Math.cos(angle) * radius;
+    const y = Math.sin(angle) * radius;
+    return {
+      position: "absolute" as const,
+      left: center + x - avatarSize / 2,
+      top: center + y - avatarSize / 2,
+    };
+  });
+
+  return (
+    <Animated.View style={animatedStyle}>
+      <Avatar
+        name={contact.name}
+        color={contact.avatarColor}
+        size={avatarSize}
+        photoUri={contact.photoUri}
+      />
+    </Animated.View>
+  );
+}
+
+export function CirclesVisualization({ contacts, user }: CirclesVisualizationProps) {
   const c1 = contacts.filter((c) => c.circleLevel === 1);
   const c2 = contacts.filter((c) => c.circleLevel === 2);
   const c3 = contacts.filter((c) => c.circleLevel === 3);
@@ -19,32 +81,7 @@ export function CirclesVisualization({ contacts }: CirclesVisualizationProps) {
   const outerRadius = VIZ_SIZE / 2;
   const middleRadius = outerRadius * 0.68;
   const innerRadius = outerRadius * 0.38;
-
-  const renderAvatarsInRing = (contactsList: Contact[], radius: number, avatarSize: number) => {
-    if (contactsList.length === 0) return null;
-    const count = contactsList.length;
-    const angleStep = (2 * Math.PI) / Math.max(count, 1);
-    const startAngle = -Math.PI / 2;
-
-    return contactsList.map((contact, i) => {
-      const angle = startAngle + angleStep * i;
-      const x = Math.cos(angle) * radius;
-      const y = Math.sin(angle) * radius;
-
-      return (
-        <View
-          key={contact.id}
-          style={{
-            position: "absolute",
-            left: outerRadius + x - avatarSize / 2,
-            top: outerRadius + y - avatarSize / 2,
-          }}
-        >
-          <Avatar name={contact.name} color={contact.avatarColor} size={avatarSize} />
-        </View>
-      );
-    });
-  };
+  const centerSize = 44;
 
   return (
     <View style={styles.wrapper}>
@@ -85,10 +122,58 @@ export function CirclesVisualization({ contacts }: CirclesVisualizationProps) {
             },
           ]}
         />
-        {renderAvatarsInRing(c3, (outerRadius + middleRadius) / 2, 28)}
-        {renderAvatarsInRing(c2, (middleRadius + innerRadius) / 2, 32)}
-        {renderAvatarsInRing(c1, 0, 36)}
-        {contacts.length === 0 && (
+
+        {c3.map((contact, i) => (
+          <OrbitingAvatar
+            key={contact.id}
+            contact={contact}
+            index={i}
+            total={c3.length}
+            radius={(outerRadius + middleRadius) / 2}
+            avatarSize={28}
+            center={outerRadius}
+            speed={120000}
+          />
+        ))}
+
+        {c2.map((contact, i) => (
+          <OrbitingAvatar
+            key={contact.id}
+            contact={contact}
+            index={i}
+            total={c2.length}
+            radius={(middleRadius + innerRadius) / 2}
+            avatarSize={32}
+            center={outerRadius}
+            speed={90000}
+          />
+        ))}
+
+        {c1.map((contact, i) => (
+          <OrbitingAvatar
+            key={contact.id}
+            contact={contact}
+            index={i}
+            total={c1.length}
+            radius={innerRadius * 0.55}
+            avatarSize={36}
+            center={outerRadius}
+            speed={60000}
+          />
+        ))}
+
+        {contacts.length > 0 ? (
+          <View style={[styles.centerIcon, { width: centerSize, height: centerSize, borderRadius: centerSize / 2 }]}>
+            {user?.profilePhotoUri ? (
+              <Animated.Image
+                source={{ uri: user.profilePhotoUri }}
+                style={{ width: centerSize, height: centerSize, borderRadius: centerSize / 2 }}
+              />
+            ) : (
+              <Ionicons name="person" size={20} color={Colors.primaryLight} />
+            )}
+          </View>
+        ) : (
           <View style={styles.emptyCenter}>
             <Text style={styles.emptyText}>Add people to your circles</Text>
           </View>
@@ -125,6 +210,14 @@ const styles = StyleSheet.create({
     position: "absolute",
     borderWidth: 1.5,
     borderStyle: "dashed",
+  },
+  centerIcon: {
+    backgroundColor: Colors.primary + "20",
+    borderWidth: 2,
+    borderColor: Colors.primary + "40",
+    alignItems: "center",
+    justifyContent: "center",
+    overflow: "hidden",
   },
   emptyCenter: {
     position: "absolute",
