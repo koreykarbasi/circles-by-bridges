@@ -1,0 +1,22 @@
+- label can be chosen for each friend (currently implemented)
+- based on labels, curated complements as text prompts, and hangout ideas are generated. 
+- Hangout ideas can then have an option to send a survey over text to your friend: 
+—- Copy message below;
+——— Hey “name” i think we should hang out soon. here are some ideas of things we can do and times we can do them in. take a second or 2 and pick the ones that work beat for you: Link to survey type page
+
+we will need to also add call suggestions along with text and hangout.
+
+we will have 2 different alert types. reminders and suggestions. suggestions are texts, calls, and hangouts that help u develop these friendships which we already have and have a list curated to each circle, shared interests etc. 
+reminders are things u should remember to keep ur friendships healthy. like birthdays. but they can also include text, calls and hangouts. 
+
+not only are we going to have 3 different lists of call suggestions, text suggestions, and hangout suggestions for each circle based on closeness. but also certain common labels (already implemented in the add new friends page) that can be chosen quickly when adding new friends into circles. we should add a field where they can write new labels and add them manually as well. if they add a specific label a lot, we will start curating suggestions for them. also in the add new friend page for circles, they should once again have the option to import from contacts. furthermore adding new people for each circle should be a little different as youll find in the below suggestions: example - circle 1 birthday is a mandatory field. only circle 2 has a last hangout date field. circle 3 has a “hung out in the past 6 months” field. etc. let’s really start curating and differentiating these circles, their suggestions, reminders and text, call and hangouts for each of their suggestions and reminders. 
+
+
+Home page social health checklist should have a reminders section and a suggestions section. Max 3 reminders and 2 suggestions because reminders are priority over suggestions. Also reminders and suggestions should have priority assigned to them as well so they show up in order of priority. 
+which brings me to creating a priority system for reminders and suggestions. you can cross off priority reminders to mark them as done. 
+circle 1 and 2 reminders are obviously more priority than 3. also only for circle 2, and none of the others, it should track when was the last time you hung out. notifications should be sent when it hits 3 weeks and 5 weeks, then 10 weeks then 15 weeks there should be alerts to setup hangouts - another example of priority reminders. 
+for circle 1 only, birthdays are a mandatory field. also birthday reminders for circle 1 and 2 have more priority over stuff with 3. 
+we should identify most important reminders for each circle and show them as priority in home screen. 
+for circle 3 reminders would be “have you hung out with X in the past 6 months? u can click yes or no which sets up a hangout. 
+
+suggestions page should also have an option for reminders. there, all reminders are displayed once again in priority but a much larger list obviously then the social health checklist on home page. 
