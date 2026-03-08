@@ -5,11 +5,14 @@ import { Ionicons } from "@expo/vector-icons";
 import Colors from "@/constants/colors";
 import { useContacts } from "@/lib/contacts-context";
 import { SuggestionCard } from "@/components/SuggestionCard";
+import { ReminderItem } from "@/components/ReminderItem";
 import { EmptyState } from "@/components/EmptyState";
 import { CIRCLE_CONFIG } from "@/lib/types";
 import { getSmartPrompt, getNextPrompt, getActionType, resetSeenPrompts } from "@/lib/prompts";
 import { getDaysSince, getDaysUntilBirthday, formatLastContacted, formatBirthdayCountdown, getContactUrgency } from "@/lib/helpers";
+import { generateReminders } from "@/lib/reminders";
 import type { Contact } from "@/lib/types";
+import type { Reminder } from "@/lib/reminders";
 import { router } from "expo-router";
 import * as Haptics from "expo-haptics";
 
@@ -55,7 +58,7 @@ function buildSuggestion(contact: Contact): GeneratedSuggestion {
     contact.name,
     contact.circleLevel as 1 | 2 | 3,
     contact.interests,
-    { isOverdue: urgency === "overdue", hasBirthdaySoon },
+    { isOverdue: urgency === "overdue", hasBirthdaySoon, labels: contact.labels },
   );
 
   const type = getActionType(contact.circleLevel as 1 | 2 | 3, prompt);
@@ -72,11 +75,13 @@ function buildSuggestion(contact: Contact): GeneratedSuggestion {
 
 export default function SuggestionsScreen() {
   const insets = useSafeAreaInsets();
-  const { contacts, markContacted } = useContacts();
+  const { contacts, markContacted, markHangout } = useContacts();
   const [filterCircle, setFilterCircle] = useState<1 | 2 | 3 | null>(null);
   const [refreshKey, setRefreshKey] = useState(0);
   const [completedIds, setCompletedIds] = useState<Set<string>>(new Set());
+  const [completedReminderIds, setCompletedReminderIds] = useState<Set<string>>(new Set());
   const [cardPrompts, setCardPrompts] = useState<Record<string, GeneratedSuggestion>>({});
+  const [remindersCollapsed, setRemindersCollapsed] = useState(false);
   const visitCount = useRef(0);
 
   useEffect(() => {
@@ -85,6 +90,14 @@ export default function SuggestionsScreen() {
       setRefreshKey((k) => k + 1);
     }
   }, []);
+
+  const reminders = useMemo(() => {
+    const allReminders = generateReminders(contacts);
+    const filtered = filterCircle
+      ? allReminders.filter((r) => r.circleLevel === filterCircle)
+      : allReminders;
+    return filtered.filter((r) => !completedReminderIds.has(r.id));
+  }, [contacts, filterCircle, completedReminderIds]);
 
   const rankedContacts = useMemo(() => {
     const filtered = filterCircle
@@ -127,7 +140,7 @@ export default function SuggestionsScreen() {
       contact.name,
       contact.circleLevel as 1 | 2 | 3,
       contact.interests,
-      { isOverdue: urgency === "overdue", hasBirthdaySoon },
+      { isOverdue: urgency === "overdue", hasBirthdaySoon, labels: contact.labels },
     );
 
     const type = getActionType(contact.circleLevel as 1 | 2 | 3, newPrompt);
@@ -155,12 +168,53 @@ export default function SuggestionsScreen() {
     [markContacted],
   );
 
+  const handleReminderComplete = useCallback(
+    async (reminder: Reminder) => {
+      setCompletedReminderIds((prev) => new Set(prev).add(reminder.id));
+      if (reminder.type === "hangout-overdue") {
+        await markHangout(reminder.contactId);
+      }
+      await markContacted(reminder.contactId);
+    },
+    [markContacted, markHangout],
+  );
+
+  const handleReminderYes = useCallback(
+    (reminder: Reminder) => {
+      markHangout(reminder.contactId);
+      setCompletedReminderIds((prev) => new Set(prev).add(reminder.id));
+    },
+    [markHangout],
+  );
+
+  const handleReminderNo = useCallback(
+    (reminder: Reminder) => {
+      setCompletedReminderIds((prev) => new Set(prev).add(reminder.id));
+      router.push({
+        pathname: "/create-hangout",
+        params: { contactName: reminder.contactName },
+      });
+    },
+    [],
+  );
+
+  const handlePlanHangout = useCallback(
+    (reminder: Reminder) => {
+      router.push({
+        pathname: "/create-hangout",
+        params: { contactName: reminder.contactName },
+      });
+    },
+    [],
+  );
+
   const handleRefreshAll = useCallback(() => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     resetSeenPrompts();
     setCardPrompts({});
     setRefreshKey((k) => k + 1);
     setCompletedIds(new Set());
+    setCompletedReminderIds(new Set());
   }, []);
 
   const webTopInset = Platform.OS === "web" ? 67 : 0;
@@ -201,6 +255,7 @@ export default function SuggestionsScreen() {
             Haptics.selectionAsync();
             setFilterCircle(null);
             setCompletedIds(new Set());
+            setCompletedReminderIds(new Set());
             setCardPrompts({});
           }}
           style={[
@@ -227,6 +282,7 @@ export default function SuggestionsScreen() {
                 Haptics.selectionAsync();
                 setFilterCircle(level);
                 setCompletedIds(new Set());
+                setCompletedReminderIds(new Set());
                 setCardPrompts({});
               }}
               style={[
@@ -247,6 +303,50 @@ export default function SuggestionsScreen() {
           );
         })}
       </ScrollView>
+
+      {reminders.length > 0 && (
+        <View style={styles.remindersSection}>
+          <Pressable
+            onPress={() => {
+              Haptics.selectionAsync();
+              setRemindersCollapsed((prev) => !prev);
+            }}
+            style={styles.remindersSectionHeader}
+          >
+            <View style={styles.remindersTitleRow}>
+              <Ionicons name="notifications-outline" size={18} color={Colors.warning} />
+              <Text style={styles.remindersSectionTitle}>Reminders</Text>
+              <View style={styles.remindersBadge}>
+                <Text style={styles.remindersBadgeText}>{reminders.length}</Text>
+              </View>
+            </View>
+            <Ionicons
+              name={remindersCollapsed ? "chevron-forward" : "chevron-down"}
+              size={18}
+              color={Colors.textSecondary}
+            />
+          </Pressable>
+
+          {!remindersCollapsed && (
+            <View style={styles.remindersList}>
+              {reminders.map((reminder) => (
+                <ReminderItem
+                  key={reminder.id}
+                  reminder={reminder}
+                  onComplete={() => handleReminderComplete(reminder)}
+                  onYes={reminder.type === "hangout-6month" ? () => handleReminderYes(reminder) : undefined}
+                  onNo={reminder.type === "hangout-6month" ? () => handleReminderNo(reminder) : undefined}
+                  onPlanHangout={reminder.actionType === "hangout" ? () => handlePlanHangout(reminder) : undefined}
+                />
+              ))}
+            </View>
+          )}
+        </View>
+      )}
+
+      <View style={styles.suggestionsSectionHeader}>
+        <Text style={styles.suggestionsSectionTitle}>Suggestions</Text>
+      </View>
 
       {contacts.length === 0 ? (
         <EmptyState
@@ -356,6 +456,53 @@ const styles = StyleSheet.create({
   },
   filterChipTextActive: {
     color: Colors.primaryLight,
+  },
+  remindersSection: {
+    marginBottom: 20,
+  },
+  remindersSectionHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingVertical: 10,
+    paddingHorizontal: 4,
+    marginBottom: 8,
+  },
+  remindersTitleRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+  remindersSectionTitle: {
+    fontSize: 17,
+    fontFamily: "Nunito_700Bold",
+    color: Colors.text,
+  },
+  remindersBadge: {
+    backgroundColor: Colors.warning,
+    minWidth: 22,
+    height: 22,
+    borderRadius: 11,
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 6,
+  },
+  remindersBadgeText: {
+    fontSize: 12,
+    fontFamily: "Nunito_700Bold",
+    color: "#fff",
+  },
+  remindersList: {
+    gap: 0,
+  },
+  suggestionsSectionHeader: {
+    marginBottom: 12,
+    paddingHorizontal: 4,
+  },
+  suggestionsSectionTitle: {
+    fontSize: 17,
+    fontFamily: "Nunito_700Bold",
+    color: Colors.text,
   },
   refreshAll: {
     flexDirection: "row",

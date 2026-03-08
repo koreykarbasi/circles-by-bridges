@@ -22,8 +22,8 @@ Bridges is a relationship management app based on Dunbar's social brain theory. 
 - `app/hangouts.tsx` - Hangout plans list screen
 - `app/create-hangout.tsx` - 3-step hangout creation flow (title, invitees, options)
 - `app/hangout-detail.tsx` - Hangout detail with vote tallies, share link, and finalize
-- `components/` - Reusable UI components (Avatar, ContactCard, ChecklistItem, SuggestionCard, CirclesVisualization, EmptyState, ContactsImport)
-- `lib/` - Business logic (auth-context, contacts-context, onboarding-context, query-client, storage, helpers, prompts, types)
+- `components/` - Reusable UI components (Avatar, ContactCard, ChecklistItem, SuggestionCard, CirclesVisualization, EmptyState, ContactsImport, ReminderItem)
+- `lib/` - Business logic (auth-context, contacts-context, onboarding-context, query-client, storage, helpers, prompts, reminders, types)
 - `constants/colors.ts` - Theme colors
 - `shared/schema.ts` - Drizzle ORM schema (users, contacts, hangout_plans, hangout_options, hangout_votes tables)
 - `server/routes.ts` - API routes with auth middleware
@@ -40,7 +40,17 @@ Bridges is a relationship management app based on Dunbar's social brain theory. 
 - Photo uploads for user profiles and contacts (expo-image-picker, base64 encoding)
 - Social Health Checklist (birthday reminders, overdue check-ins)
 - Contact management with circle assignments (Core 5, Close 10, Acquaintances 35)
-- Personalized suggestions/prompts based on circle level and interests
+- Contact labels (predefined + custom free-text) for relationship context
+- Birthday required for Core Circle (circle 1) contacts
+- Two distinct alert types: Reminders (priority obligations) and Suggestions (proactive outreach)
+- Priority-based reminders engine with circle-specific rules:
+  - Circle 1: Birthday reminders (highest priority), check-in overdue (>7 days)
+  - Circle 2: Birthday reminders, hangout tracking alerts at 3/5/10/15 weeks, check-in overdue (>30 days)
+  - Circle 3: "Have you hung out in 6 months?" yes/no prompt, check-in overdue (>90 days)
+- Home page: max 3 reminders + 2 suggestions, priority-ordered, cross-off to mark done
+- Suggestions tab: collapsible full reminders list + suggestions below
+- Personalized suggestions/prompts with separate call/text/hangout lists per circle
+- Label-based prompts (Childhood Friend, College Friend, Work Friend, etc.)
 - Interest-based conversation starters
 - Smart prompt tracking (prevents repeats, auto-rotates, per-card shuffle)
 - Urgency-based sorting (overdue contacts, upcoming birthdays prioritized)
@@ -53,6 +63,13 @@ Bridges is a relationship management app based on Dunbar's social brain theory. 
 - User profile photo on home screen header (links to profile)
 - Demo user: demo@bridges.app / demo123 (12 seeded contacts)
 - Test user: test1@bridges.app / test123 (50 seeded contacts: 5 core, 10 close, 35 acquaintances)
+
+## Reminders vs Suggestions
+- **Reminders**: Priority obligations to keep friendships healthy (birthdays, overdue check-ins, hangout tracking). Cross them off to mark done. Circle 1 and 2 reminders have higher priority than circle 3.
+- **Suggestions**: Proactive outreach ideas to develop friendships (text prompts, call ideas, hangout suggestions). Curated per circle level, labels, and shared interests with separate call/text/hangout lists.
+
+## Contact Schema
+- `name`, `circleLevel` (1/2/3), `interests` (text[]), `labels` (text[]), `birthday`, `lastContacted`, `lastHangout`, `notes`, `phone`, `avatarColor`, `photoUri`
 
 ## Auth Flow
 1. User completes onboarding (stored in AsyncStorage)

@@ -16,6 +16,7 @@ interface ContactsContextValue {
   updateContact: (contact: Contact) => Promise<void>;
   deleteContact: (id: string) => Promise<void>;
   markContacted: (id: string) => Promise<void>;
+  markHangout: (id: string) => Promise<void>;
   getCircleContacts: (level: 1 | 2 | 3) => Contact[];
   getOverdueContacts: () => Contact[];
   getUpcomingBirthdays: () => Contact[];
@@ -69,8 +70,10 @@ export function ContactsProvider({ children }: { children: ReactNode }) {
       name: contact.name,
       circleLevel: contact.circleLevel,
       interests: contact.interests,
+      labels: contact.labels,
       birthday: contact.birthday,
       lastContacted: contact.lastContacted,
+      lastHangout: contact.lastHangout,
       notes: contact.notes,
       phone: contact.phone,
       avatarColor: contact.avatarColor,
@@ -86,6 +89,13 @@ export function ContactsProvider({ children }: { children: ReactNode }) {
 
   const markContactedFn = useCallback(async (id: string) => {
     await apiRequest("POST", `/api/contacts/${id}/mark-contacted`);
+    await fetchContacts();
+  }, [fetchContacts]);
+
+  const markHangoutFn = useCallback(async (id: string) => {
+    await apiRequest("PUT", `/api/contacts/${id}`, {
+      lastHangout: new Date().toISOString(),
+    });
     await fetchContacts();
   }, [fetchContacts]);
 
@@ -145,11 +155,12 @@ export function ContactsProvider({ children }: { children: ReactNode }) {
       updateContact: updateContactFn,
       deleteContact: deleteContactFn,
       markContacted: markContactedFn,
+      markHangout: markHangoutFn,
       getCircleContacts,
       getOverdueContacts,
       getUpcomingBirthdays,
     }),
-    [contacts, isLoading, fetchContacts, addContactFn, updateContactFn, deleteContactFn, markContactedFn, getCircleContacts, getOverdueContacts, getUpcomingBirthdays],
+    [contacts, isLoading, fetchContacts, addContactFn, updateContactFn, deleteContactFn, markContactedFn, markHangoutFn, getCircleContacts, getOverdueContacts, getUpcomingBirthdays],
   );
 
   return <ContactsContext.Provider value={value}>{children}</ContactsContext.Provider>;

@@ -240,7 +240,7 @@ function setupErrorHandler(app: express.Application) {
   });
 }
 
-import { seedDatabase } from "./seed";
+import { seedDatabase, updateExistingContactsWithLabels } from "./seed";
 
 (async () => {
   setupCors(app);
@@ -254,6 +254,7 @@ import { seedDatabase } from "./seed";
   setupErrorHandler(app);
 
   await seedDatabase();
+  await updateExistingContactsWithLabels();
 
   const port = parseInt(process.env.PORT || "5000", 10);
   server.listen(

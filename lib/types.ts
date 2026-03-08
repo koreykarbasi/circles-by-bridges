@@ -6,6 +6,8 @@ export interface Contact {
   interests: string[];
   birthday?: string | null;
   lastContacted?: string | null;
+  lastHangout?: string | null;
+  labels: string[];
   notes?: string | null;
   phone?: string | null;
   avatarColor: string;

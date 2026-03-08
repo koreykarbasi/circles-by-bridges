@@ -20,6 +20,12 @@ import { CIRCLE_CONFIG } from "@/lib/types";
 import { AVAILABLE_INTERESTS } from "@/lib/prompts";
 import * as Haptics from "expo-haptics";
 
+const PREDEFINED_LABELS = [
+  "Childhood Friend", "College Friend", "Work Friend", "Neighbor",
+  "Family Friend", "Gym Buddy", "Travel Buddy", "Creative Partner",
+  "Mentor", "Mentee",
+];
+
 export default function AddContactScreen() {
   const insets = useSafeAreaInsets();
   const { addContact, getCircleContacts } = useContacts();
@@ -29,7 +35,10 @@ export default function AddContactScreen() {
   const [name, setName] = useState("");
   const [circleLevel, setCircleLevel] = useState<1 | 2 | 3>(initialCircle);
   const [selectedInterests, setSelectedInterests] = useState<string[]>([]);
+  const [selectedLabels, setSelectedLabels] = useState<string[]>([]);
+  const [customLabelInput, setCustomLabelInput] = useState("");
   const [birthday, setBirthday] = useState("");
+  const [birthdayError, setBirthdayError] = useState(false);
   const [notes, setNotes] = useState("");
   const [photoUri, setPhotoUri] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
@@ -60,9 +69,31 @@ export default function AddContactScreen() {
     );
   };
 
+  const toggleLabel = (label: string) => {
+    Haptics.selectionAsync();
+    setSelectedLabels((prev) =>
+      prev.includes(label) ? prev.filter((l) => l !== label) : [...prev, label],
+    );
+  };
+
+  const addCustomLabel = () => {
+    const trimmed = customLabelInput.trim();
+    if (trimmed && !selectedLabels.includes(trimmed)) {
+      Haptics.selectionAsync();
+      setSelectedLabels((prev) => [...prev, trimmed]);
+      setCustomLabelInput("");
+    }
+  };
+
   const handleSave = async () => {
     if (!name.trim()) {
       Alert.alert("Name required", "Please enter a name for your contact.");
+      return;
+    }
+
+    if (circleLevel === 1 && !birthday.trim()) {
+      setBirthdayError(true);
+      Alert.alert("Birthday required", "Birthday is required for Core Circle contacts.");
       return;
     }
 
@@ -83,6 +114,7 @@ export default function AddContactScreen() {
       name: name.trim(),
       circleLevel,
       interests: selectedInterests,
+      labels: selectedLabels,
       birthday: birthday.trim() || undefined,
       notes: notes.trim() || undefined,
       lastContacted: undefined,
@@ -215,15 +247,87 @@ export default function AddContactScreen() {
         </View>
 
         <View style={styles.inputGroup}>
-          <Text style={styles.label}>Birthday (optional)</Text>
+          <Text style={styles.label}>Labels</Text>
+          <View style={styles.interestsGrid}>
+            {PREDEFINED_LABELS.map((label) => {
+              const isSelected = selectedLabels.includes(label);
+              return (
+                <Pressable
+                  key={label}
+                  onPress={() => toggleLabel(label)}
+                  style={[
+                    styles.labelChip,
+                    isSelected && styles.labelChipActive,
+                  ]}
+                >
+                  <Text
+                    style={[
+                      styles.labelChipText,
+                      isSelected && styles.labelChipTextActive,
+                    ]}
+                  >
+                    {label}
+                  </Text>
+                </Pressable>
+              );
+            })}
+            {selectedLabels
+              .filter((l) => !PREDEFINED_LABELS.includes(l))
+              .map((label) => (
+                <Pressable
+                  key={label}
+                  onPress={() => toggleLabel(label)}
+                  style={[styles.labelChip, styles.labelChipActive]}
+                >
+                  <Text style={[styles.labelChipText, styles.labelChipTextActive]}>
+                    {label}
+                  </Text>
+                  <Ionicons name="close-circle" size={14} color={Colors.accent} style={{ marginLeft: 4 }} />
+                </Pressable>
+              ))}
+          </View>
+          <View style={styles.customLabelRow}>
+            <TextInput
+              style={[styles.input, styles.customLabelInput]}
+              placeholder="Add custom label..."
+              placeholderTextColor={Colors.textTertiary}
+              value={customLabelInput}
+              onChangeText={setCustomLabelInput}
+              onSubmitEditing={addCustomLabel}
+              returnKeyType="done"
+            />
+            <Pressable
+              onPress={addCustomLabel}
+              disabled={!customLabelInput.trim()}
+              style={({ pressed }) => [
+                styles.addLabelBtn,
+                !customLabelInput.trim() && styles.addLabelBtnDisabled,
+                pressed && { opacity: 0.7 },
+              ]}
+            >
+              <Ionicons name="add" size={20} color={!customLabelInput.trim() ? Colors.textTertiary : Colors.accent} />
+            </Pressable>
+          </View>
+        </View>
+
+        <View style={styles.inputGroup}>
+          <Text style={styles.label}>
+            Birthday{circleLevel === 1 ? " (required)" : " (optional)"}
+          </Text>
           <TextInput
-            style={styles.input}
+            style={[styles.input, birthdayError && styles.inputError]}
             placeholder="MM/DD (e.g. 03/15)"
             placeholderTextColor={Colors.textTertiary}
             value={birthday}
-            onChangeText={setBirthday}
+            onChangeText={(text) => {
+              setBirthday(text);
+              if (birthdayError) setBirthdayError(false);
+            }}
             keyboardType="numbers-and-punctuation"
           />
+          {birthdayError && (
+            <Text style={styles.errorHint}>Birthday is required for Core Circle</Text>
+          )}
         </View>
 
         <View style={styles.inputGroup}>
@@ -359,6 +463,60 @@ const styles = StyleSheet.create({
   },
   interestChipTextActive: {
     color: Colors.primary,
+  },
+  labelChip: {
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 20,
+    backgroundColor: Colors.surface,
+    borderWidth: 1,
+    borderColor: Colors.borderLight,
+    flexDirection: "row" as const,
+    alignItems: "center" as const,
+  },
+  labelChipActive: {
+    backgroundColor: Colors.accent + "15",
+    borderColor: Colors.accent + "40",
+  },
+  labelChipText: {
+    fontSize: 13,
+    fontFamily: "Nunito_600SemiBold",
+    color: Colors.textSecondary,
+  },
+  labelChipTextActive: {
+    color: Colors.accent,
+  },
+  customLabelRow: {
+    flexDirection: "row" as const,
+    alignItems: "center" as const,
+    gap: 8,
+    marginTop: 10,
+  },
+  customLabelInput: {
+    flex: 1,
+  },
+  addLabelBtn: {
+    width: 44,
+    height: 44,
+    borderRadius: 12,
+    backgroundColor: Colors.surface,
+    borderWidth: 1,
+    borderColor: Colors.accent + "40",
+    alignItems: "center" as const,
+    justifyContent: "center" as const,
+  },
+  addLabelBtnDisabled: {
+    borderColor: Colors.borderLight,
+  },
+  inputError: {
+    borderColor: Colors.danger,
+    borderWidth: 1.5,
+  },
+  errorHint: {
+    fontSize: 12,
+    fontFamily: "Nunito_600SemiBold",
+    color: Colors.danger,
+    marginTop: 6,
   },
   photoSection: {
     alignItems: "center",
