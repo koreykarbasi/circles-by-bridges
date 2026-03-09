@@ -11,6 +11,7 @@ Bridges is a relationship management app based on Dunbar's social brain theory. 
 - **State Management**: React Context (AuthProvider, ContactsProvider, OnboardingProvider) + useState
 - **Fonts**: Nunito (Google Fonts)
 - **Theme**: Dark purple palette (#0B0718 background, #9B7DFF primary)
+- **Integrations**: GitHub (code backup), Google Sheets (prompt sync)
 
 ## Project Structure
 - `app/(tabs)/` - Three main tabs: Home, Circles, Suggestions
@@ -29,7 +30,10 @@ Bridges is a relationship management app based on Dunbar's social brain theory. 
 - `server/routes.ts` - API routes with auth middleware
 - `server/storage.ts` - Database access layer
 - `server/seed.ts` - Demo user seeder
+- `server/googleSheets.ts` - Google Sheets API client (Replit connector integration)
+- `server/prompts-sync.ts` - Periodic sync of prompts from Google Sheets (every 24h)
 - `server/templates/vote.html` - Public voting page (no auth required)
+- `data/` - Runtime data (prompts-cache.json, spreadsheet-id.txt)
 
 ## Features
 - Email/password authentication (register, login, logout) with session cookies
@@ -61,8 +65,20 @@ Bridges is a relationship management app based on Dunbar's social brain theory. 
 - Mark contacts as recently contacted
 - Profile/settings page with circle stats, photo upload, and replay walkthrough option
 - User profile photo on home screen header (links to profile)
+- Google Sheets prompt sync: prompts stored in "Bridges Prompts" spreadsheet, synced every 24h
+- GitHub integration for code backup
 - Demo user: demo@bridges.app / demo123 (12 seeded contacts)
 - Test user: test1@bridges.app / test123 (50 seeded contacts: 5 core, 10 close, 35 acquaintances)
+
+## Prompts Sync System
+- All prompts are stored in a Google Sheet called "Bridges Prompts" with 14 tabs
+- Tabs: Circle 1/2/3 Call/Text/Hangout, Universal, Birthday, Overdue, Label Prompts, Interest Prompts
+- Server syncs from the sheet on startup and every 24 hours
+- New prompts added to the sheet are merged with the hardcoded baseline (additive only)
+- Manual sync available via POST /api/prompts/sync
+- Frontend loads synced data via GET /api/prompts on app startup
+- If sync fails, hardcoded prompts are used as fallback
+- Cache stored in data/prompts-cache.json, spreadsheet ID in data/spreadsheet-id.txt
 
 ## Reminders vs Suggestions
 - **Reminders**: Priority obligations to keep friendships healthy (birthdays, overdue check-ins, hangout tracking). Cross them off to mark done. Circle 1 and 2 reminders have higher priority than circle 3.
@@ -96,6 +112,8 @@ Bridges is a relationship management app based on Dunbar's social brain theory. 
 - POST /api/hangouts/:id/options - Add option to hangout
 - GET /api/vote/:shareCode - Public: get hangout for voting (no auth)
 - POST /api/vote/:shareCode - Public: cast votes (no auth)
+- GET /api/prompts - Get synced prompts data
+- POST /api/prompts/sync - Force sync from Google Sheet
 
 ## User Preferences
 - Dark purple theme matching BuildmyBridges.com

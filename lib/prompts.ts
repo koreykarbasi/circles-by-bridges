@@ -1,3 +1,60 @@
+import { getApiUrl } from "@/lib/query-client";
+
+interface SyncedPromptsData {
+  circle1Call: string[];
+  circle1Text: string[];
+  circle1Hangout: string[];
+  circle2Call: string[];
+  circle2Text: string[];
+  circle2Hangout: string[];
+  circle3Call: string[];
+  circle3Text: string[];
+  circle3Hangout: string[];
+  universal: string[];
+  birthday: string[];
+  overdue: string[];
+  labelPrompts: Record<string, string[]>;
+  interestPrompts: Record<string, string[]>;
+  lastSynced: string | null;
+}
+
+let syncedData: SyncedPromptsData | null = null;
+let syncFetchPromise: Promise<void> | null = null;
+
+export async function loadSyncedPrompts(): Promise<void> {
+  if (syncFetchPromise) return syncFetchPromise;
+  syncFetchPromise = (async () => {
+    try {
+      const url = new URL("/api/prompts", getApiUrl());
+      const resp = await fetch(url.toString(), { credentials: "include" });
+      if (resp.ok) {
+        syncedData = await resp.json();
+      }
+    } catch (e) {
+      console.log("Failed to load synced prompts, using hardcoded fallback");
+    } finally {
+      syncFetchPromise = null;
+    }
+  })();
+  return syncFetchPromise;
+}
+
+function getSyncedList(key: keyof SyncedPromptsData, fallback: string[]): string[] {
+  if (syncedData && Array.isArray(syncedData[key])) {
+    const synced = syncedData[key] as string[];
+    if (synced.length > 0) return synced;
+  }
+  return fallback;
+}
+
+function getSyncedRecord(key: "labelPrompts" | "interestPrompts", fallback: Record<string, string[]>): Record<string, string[]> {
+  if (syncedData && syncedData[key] && typeof syncedData[key] === "object") {
+    const synced = syncedData[key] as Record<string, string[]>;
+    if (Object.keys(synced).length > 0) return synced;
+  }
+  return fallback;
+}
+
 const CIRCLE_1_CALL_PROMPTS = [
   "Leave [Name] a voice note telling them why they matter to you.",
   "Call [Name] just to hear their voice - no agenda needed.",
@@ -226,19 +283,19 @@ function buildTaggedPrompts(
 
   switch (circleLevel) {
     case 1:
-      callPrompts = CIRCLE_1_CALL_PROMPTS;
-      textPrompts = CIRCLE_1_TEXT_PROMPTS;
-      hangoutPrompts = CIRCLE_1_HANGOUT_PROMPTS;
+      callPrompts = getSyncedList("circle1Call", CIRCLE_1_CALL_PROMPTS);
+      textPrompts = getSyncedList("circle1Text", CIRCLE_1_TEXT_PROMPTS);
+      hangoutPrompts = getSyncedList("circle1Hangout", CIRCLE_1_HANGOUT_PROMPTS);
       break;
     case 2:
-      callPrompts = CIRCLE_2_CALL_PROMPTS;
-      textPrompts = CIRCLE_2_TEXT_PROMPTS;
-      hangoutPrompts = CIRCLE_2_HANGOUT_PROMPTS;
+      callPrompts = getSyncedList("circle2Call", CIRCLE_2_CALL_PROMPTS);
+      textPrompts = getSyncedList("circle2Text", CIRCLE_2_TEXT_PROMPTS);
+      hangoutPrompts = getSyncedList("circle2Hangout", CIRCLE_2_HANGOUT_PROMPTS);
       break;
     case 3:
-      callPrompts = CIRCLE_3_CALL_PROMPTS;
-      textPrompts = CIRCLE_3_TEXT_PROMPTS;
-      hangoutPrompts = CIRCLE_3_HANGOUT_PROMPTS;
+      callPrompts = getSyncedList("circle3Call", CIRCLE_3_CALL_PROMPTS);
+      textPrompts = getSyncedList("circle3Text", CIRCLE_3_TEXT_PROMPTS);
+      hangoutPrompts = getSyncedList("circle3Hangout", CIRCLE_3_HANGOUT_PROMPTS);
       break;
   }
 
@@ -298,24 +355,28 @@ export function getPromptsForContact(
   const tagged = buildTaggedPrompts(circleLevel);
   const allPrompts = tagged.map((t) => t.text);
 
-  allPrompts.push(...UNIVERSAL_PROMPTS);
-  UNIVERSAL_PROMPTS.forEach((p) => taggedPromptCache.set(p, "text"));
+  const universalList = getSyncedList("universal", UNIVERSAL_PROMPTS);
+  allPrompts.push(...universalList);
+  universalList.forEach((p) => taggedPromptCache.set(p, "text"));
 
   if (options?.isOverdue) {
-    allPrompts.push(...OVERDUE_PROMPTS);
-    OVERDUE_PROMPTS.forEach((p) => taggedPromptCache.set(p, "text"));
+    const overdueList = getSyncedList("overdue", OVERDUE_PROMPTS);
+    allPrompts.push(...overdueList);
+    overdueList.forEach((p) => taggedPromptCache.set(p, "text"));
   }
 
   if (options?.hasBirthdaySoon) {
-    allPrompts.push(...BIRTHDAY_PROMPTS);
-    BIRTHDAY_PROMPTS.forEach((p) => taggedPromptCache.set(p, "text"));
+    const birthdayList = getSyncedList("birthday", BIRTHDAY_PROMPTS);
+    allPrompts.push(...birthdayList);
+    birthdayList.forEach((p) => taggedPromptCache.set(p, "text"));
   }
 
+  const activeInterestPrompts = getSyncedRecord("interestPrompts", INTEREST_PROMPTS);
   const interestPrompts: string[] = [];
   interests.forEach((interest) => {
     const key = interest.toLowerCase().trim();
-    if (INTEREST_PROMPTS[key]) {
-      INTEREST_PROMPTS[key].forEach((p) => {
+    if (activeInterestPrompts[key]) {
+      activeInterestPrompts[key].forEach((p) => {
         interestPrompts.push(p);
         if (!taggedPromptCache.has(p)) {
           const lower = p.toLowerCase();
@@ -329,11 +390,12 @@ export function getPromptsForContact(
     }
   });
 
+  const activeLabelPrompts = getSyncedRecord("labelPrompts", LABEL_PROMPTS);
   if (options?.labels) {
     options.labels.forEach((label) => {
       const key = label.toLowerCase().trim();
-      if (LABEL_PROMPTS[key]) {
-        LABEL_PROMPTS[key].forEach((p) => {
+      if (activeLabelPrompts[key]) {
+        activeLabelPrompts[key].forEach((p) => {
           allPrompts.push(p);
           if (!taggedPromptCache.has(p)) {
             const lower = p.toLowerCase();

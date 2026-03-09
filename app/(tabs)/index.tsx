@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useMemo } from "react";
+import React, { useState, useCallback, useMemo, useEffect } from "react";
 import { View, Text, StyleSheet, ScrollView, Platform, RefreshControl, Pressable, Image } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
@@ -11,7 +11,7 @@ import { EmptyState } from "@/components/EmptyState";
 import { formatLastContacted, getDaysSince, getDaysUntilBirthday } from "@/lib/helpers";
 import { CIRCLE_CONFIG } from "@/lib/types";
 import { generateReminders, Reminder } from "@/lib/reminders";
-import { getSmartPrompt, getActionType, getNextPrompt } from "@/lib/prompts";
+import { getSmartPrompt, getActionType, getNextPrompt, loadSyncedPrompts } from "@/lib/prompts";
 import { router } from "expo-router";
 
 const MAX_REMINDERS = 3;
@@ -71,6 +71,10 @@ export default function HomeScreen() {
   const [dismissedReminders, setDismissedReminders] = useState<Set<string>>(new Set());
   const [dismissedSuggestions, setDismissedSuggestions] = useState<Set<string>>(new Set());
   const [suggestionPrompts, setSuggestionPrompts] = useState<Map<string, string>>(new Map());
+
+  useEffect(() => {
+    loadSyncedPrompts();
+  }, []);
 
   const allReminders = useMemo(() => generateReminders(contacts), [contacts]);
 

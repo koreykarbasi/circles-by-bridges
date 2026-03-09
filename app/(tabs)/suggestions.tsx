@@ -8,7 +8,7 @@ import { SuggestionCard } from "@/components/SuggestionCard";
 import { ReminderItem } from "@/components/ReminderItem";
 import { EmptyState } from "@/components/EmptyState";
 import { CIRCLE_CONFIG } from "@/lib/types";
-import { getSmartPrompt, getNextPrompt, getActionType, resetSeenPrompts } from "@/lib/prompts";
+import { getSmartPrompt, getNextPrompt, getActionType, resetSeenPrompts, loadSyncedPrompts } from "@/lib/prompts";
 import { getDaysSince, getDaysUntilBirthday, formatLastContacted, formatBirthdayCountdown, getContactUrgency } from "@/lib/helpers";
 import { generateReminders } from "@/lib/reminders";
 import type { Contact } from "@/lib/types";
@@ -83,6 +83,10 @@ export default function SuggestionsScreen() {
   const [cardPrompts, setCardPrompts] = useState<Record<string, GeneratedSuggestion>>({});
   const [remindersCollapsed, setRemindersCollapsed] = useState(false);
   const visitCount = useRef(0);
+
+  useEffect(() => {
+    loadSyncedPrompts();
+  }, []);
 
   useEffect(() => {
     visitCount.current += 1;

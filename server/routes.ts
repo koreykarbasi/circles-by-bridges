@@ -5,6 +5,7 @@ import bcrypt from "bcryptjs";
 import session from "express-session";
 import connectPgSimple from "connect-pg-simple";
 import { pool } from "./db";
+import { getPrompts, syncFromSheet } from "./prompts-sync";
 
 declare module "express-session" {
   interface SessionData {
@@ -481,6 +482,26 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (err) {
       console.error("Error casting votes:", err);
       res.status(500).json({ message: "Failed to cast votes" });
+    }
+  });
+
+  app.get("/api/prompts", requireAuth, async (_req, res) => {
+    try {
+      const prompts = getPrompts();
+      res.json(prompts);
+    } catch (err) {
+      console.error("Error fetching prompts:", err);
+      res.status(500).json({ message: "Failed to fetch prompts" });
+    }
+  });
+
+  app.post("/api/prompts/sync", requireAuth, async (_req, res) => {
+    try {
+      const result = await syncFromSheet();
+      res.json(result);
+    } catch (err) {
+      console.error("Error syncing prompts:", err);
+      res.status(500).json({ message: "Failed to sync prompts" });
     }
   });
 
