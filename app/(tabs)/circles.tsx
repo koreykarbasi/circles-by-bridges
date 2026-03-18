@@ -32,15 +32,26 @@ export default function CirclesScreen() {
       >
         <View style={styles.header}>
           <Text style={styles.title}>Circles</Text>
-          <Pressable
-            onPress={() => {
-              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-              router.push({ pathname: "/add-contact", params: { circle: String(activeCircle) } });
-            }}
-            style={({ pressed }) => [styles.addButton, pressed && { opacity: 0.7 }]}
-          >
-            <Ionicons name="add" size={24} color="#fff" />
-          </Pressable>
+          <View style={styles.headerActions}>
+            <Pressable
+              onPress={() => {
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                router.push("/hangouts");
+              }}
+              style={({ pressed }) => [styles.iconButton, pressed && { opacity: 0.7 }]}
+            >
+              <Ionicons name="calendar-outline" size={22} color={Colors.primaryLight} />
+            </Pressable>
+            <Pressable
+              onPress={() => {
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+                router.push({ pathname: "/add-contact", params: { circle: String(activeCircle) } });
+              }}
+              style={({ pressed }) => [styles.addButton, pressed && { opacity: 0.7 }]}
+            >
+              <Ionicons name="add" size={24} color="#fff" />
+            </Pressable>
+          </View>
         </View>
 
         <View style={styles.tabs}>
@@ -98,6 +109,9 @@ export default function CirclesScreen() {
                   router.push({ pathname: "/edit-contact", params: { id: contact.id } })
                 }
                 onMarkContacted={() => markContacted(contact.id)}
+                onPlanHangout={() =>
+                  router.push({ pathname: "/create-hangout", params: { contactName: contact.name } })
+                }
               />
             ))}
             {circleContacts.length < config.max && (
@@ -139,6 +153,21 @@ const styles = StyleSheet.create({
     fontSize: 28,
     fontFamily: "Nunito_800ExtraBold",
     color: Colors.text,
+  },
+  headerActions: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+  iconButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: Colors.primary + "18",
+    borderWidth: 1,
+    borderColor: Colors.primary + "30",
+    alignItems: "center",
+    justifyContent: "center",
   },
   addButton: {
     width: 40,

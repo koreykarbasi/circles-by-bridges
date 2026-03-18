@@ -244,10 +244,33 @@ export default function HomeScreen() {
                 : `${contacts.length} ${contacts.length === 1 ? "person" : "people"} in your circles`}
             </Text>
           </View>
+          <Pressable
+            onPress={() => router.push("/hangouts")}
+            hitSlop={8}
+            style={({ pressed }) => [styles.hangoutHeaderBtn, pressed && { opacity: 0.7 }]}
+          >
+            <Ionicons name="calendar-outline" size={20} color={Colors.primaryLight} />
+          </Pressable>
         </View>
       </View>
 
       <CirclesVisualization contacts={contacts} user={user} />
+
+      <Pressable
+        onPress={() => router.push("/hangouts")}
+        style={({ pressed }) => [styles.hangoutBanner, pressed && { opacity: 0.8 }]}
+      >
+        <View style={styles.hangoutBannerLeft}>
+          <View style={styles.hangoutBannerIcon}>
+            <Ionicons name="calendar-outline" size={18} color={Colors.primary} />
+          </View>
+          <View>
+            <Text style={styles.hangoutBannerTitle}>Plan a hangout</Text>
+            <Text style={styles.hangoutBannerSub}>Create a survey and vote on times</Text>
+          </View>
+        </View>
+        <Ionicons name="chevron-forward" size={16} color={Colors.textTertiary} />
+      </Pressable>
 
       {contacts.length === 0 && (
         <View style={styles.section}>
@@ -414,6 +437,52 @@ const styles = StyleSheet.create({
     fontFamily: "Nunito_400Regular",
     color: Colors.textSecondary,
     marginTop: 4,
+  },
+  hangoutHeaderBtn: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    backgroundColor: Colors.primary + "18",
+    borderWidth: 1,
+    borderColor: Colors.primary + "30",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  hangoutBanner: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    backgroundColor: Colors.surface,
+    borderWidth: 1,
+    borderColor: Colors.primary + "30",
+    borderRadius: 14,
+    paddingVertical: 12,
+    paddingHorizontal: 14,
+    marginTop: 12,
+  },
+  hangoutBannerLeft: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+  },
+  hangoutBannerIcon: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: Colors.primary + "18",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  hangoutBannerTitle: {
+    fontSize: 14,
+    fontFamily: "Nunito_700Bold",
+    color: Colors.text,
+  },
+  hangoutBannerSub: {
+    fontSize: 12,
+    fontFamily: "Nunito_400Regular",
+    color: Colors.textSecondary,
+    marginTop: 1,
   },
   section: {
     marginTop: 24,

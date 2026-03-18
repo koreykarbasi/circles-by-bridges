@@ -12,10 +12,11 @@ interface ContactCardProps {
   contact: Contact;
   onPress: () => void;
   onMarkContacted?: () => void;
+  onPlanHangout?: () => void;
   showCircleLabel?: boolean;
 }
 
-export function ContactCard({ contact, onPress, onMarkContacted, showCircleLabel }: ContactCardProps) {
+export function ContactCard({ contact, onPress, onMarkContacted, onPlanHangout, showCircleLabel }: ContactCardProps) {
   const urgency = getContactUrgency(contact.circleLevel as 1 | 2 | 3, contact.lastContacted ?? undefined);
   const circleColor = CIRCLE_CONFIG[contact.circleLevel as 1 | 2 | 3]?.color ?? Colors.primary;
 
@@ -65,21 +66,38 @@ export function ContactCard({ contact, onPress, onMarkContacted, showCircleLabel
           )}
         </View>
       </View>
-      {onMarkContacted && (
-        <Pressable
-          onPress={() => {
-            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-            onMarkContacted();
-          }}
-          hitSlop={8}
-          style={({ pressed }) => [
-            styles.checkButton,
-            pressed && { opacity: 0.5 },
-          ]}
-        >
-          <Ionicons name="checkmark-circle-outline" size={26} color={Colors.primaryLight} />
-        </Pressable>
-      )}
+      <View style={styles.actions}>
+        {onPlanHangout && (
+          <Pressable
+            onPress={() => {
+              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+              onPlanHangout();
+            }}
+            hitSlop={8}
+            style={({ pressed }) => [
+              styles.actionButton,
+              pressed && { opacity: 0.5 },
+            ]}
+          >
+            <Ionicons name="calendar-outline" size={22} color={Colors.primary} />
+          </Pressable>
+        )}
+        {onMarkContacted && (
+          <Pressable
+            onPress={() => {
+              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+              onMarkContacted();
+            }}
+            hitSlop={8}
+            style={({ pressed }) => [
+              styles.actionButton,
+              pressed && { opacity: 0.5 },
+            ]}
+          >
+            <Ionicons name="checkmark-circle-outline" size={26} color={Colors.primaryLight} />
+          </Pressable>
+        )}
+      </View>
     </Pressable>
   );
 }
@@ -147,8 +165,13 @@ const styles = StyleSheet.create({
     marginLeft: 4,
     flexShrink: 1,
   },
-  checkButton: {
+  actions: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    marginLeft: 4,
+  },
+  actionButton: {
     padding: 4,
-    marginLeft: 8,
   },
 });

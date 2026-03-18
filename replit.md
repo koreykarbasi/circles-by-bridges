@@ -59,7 +59,8 @@ Bridges is a relationship management app based on Dunbar's social brain theory. 
 - Smart prompt tracking (prevents repeats, auto-rotates, per-card shuffle)
 - Urgency-based sorting (overdue contacts, upcoming birthdays prioritized)
 - Action type badges on suggestion cards (call/text/hangout)
-- Hangout planning with 3-step creation flow (Title → Invitees → Survey Builder)
+- Hangout planning accessible from: home header calendar button, home "Plan a hangout" banner, circles header button, and per-contact calendar icon on every contact card
+- Hangout 3-step creation flow (Title → Invitees → Survey Builder)
 - Survey builder: activity options (multiple or fixed), time slots, optional location, plus-one toggle, deadline
 - Shareable voting links (public, no auth) — drag-and-drop ranked-choice voting with purple gradient cards
 - Borda count scoring: rank 1 = max points, rejected = 0; bestRecommendation (bestActivity, bestTime) computed server-side
