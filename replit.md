@@ -59,9 +59,13 @@ Bridges is a relationship management app based on Dunbar's social brain theory. 
 - Smart prompt tracking (prevents repeats, auto-rotates, per-card shuffle)
 - Urgency-based sorting (overdue contacts, upcoming birthdays prioritized)
 - Action type badges on suggestion cards (call/text/hangout)
-- Hangout planning with 3-step creation flow (Create, Share, Decide)
-- Shareable voting links for hangout options (public, no auth required)
-- Vote tallying with visual bars and finalize/lock-in feature
+- Hangout planning with 3-step creation flow (Title → Invitees → Survey Builder)
+- Survey builder: activity options (multiple or fixed), time slots, optional location, plus-one toggle, deadline
+- Shareable voting links (public, no auth) — drag-and-drop ranked-choice voting with purple gradient cards
+- Borda count scoring: rank 1 = max points, rejected = 0; bestRecommendation (bestActivity, bestTime) computed server-side
+- Vote page features: reject button per card, plus-one selection (Just me / bringing guests), live results after submission
+- Calendar invite (.ics) download after hangout is finalized
+- Hangout detail: "Copy link" + "Copy message" buttons, Best picks recommendation banner, Borda score display
 - Mark contacts as recently contacted
 - Profile/settings page with circle stats, photo upload, and replay walkthrough option
 - User profile photo on home screen header (links to profile)
@@ -110,8 +114,9 @@ Bridges is a relationship management app based on Dunbar's social brain theory. 
 - PUT /api/hangouts/:id - Update/finalize hangout
 - DELETE /api/hangouts/:id - Delete hangout
 - POST /api/hangouts/:id/options - Add option to hangout
-- GET /api/vote/:shareCode - Public: get hangout for voting (no auth)
-- POST /api/vote/:shareCode - Public: cast votes (no auth)
+- GET /api/vote/:shareCode - Public: get hangout for voting (no auth), returns options with bordaScore + bestRecommendation
+- POST /api/vote/:shareCode - Public: cast votes (no auth); body: { voterName, votes:[{optionId, rank}], bringsGuests?, plusOneCount? }
+- GET /api/hangouts/:id/calendar - Download .ics calendar file (hangout must be finalized)
 - GET /api/prompts - Get synced prompts data
 - POST /api/prompts/sync - Force sync from Google Sheet
 

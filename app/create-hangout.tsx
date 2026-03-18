@@ -1,6 +1,6 @@
 import React, { useState, useCallback } from "react";
 import {
-  View, Text, StyleSheet, ScrollView, Pressable, TextInput, Platform, Alert,
+  View, Text, StyleSheet, ScrollView, Pressable, TextInput, Platform, Alert, Switch,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
@@ -8,30 +8,47 @@ import { router } from "expo-router";
 import * as Haptics from "expo-haptics";
 import Colors from "@/constants/colors";
 import { useContacts } from "@/lib/contacts-context";
-import { apiRequest } from "@/lib/query-client";
-import { queryClient } from "@/lib/query-client";
+import { apiRequest, queryClient } from "@/lib/query-client";
 import { Avatar } from "@/components/Avatar";
+
+type SurveyMode = "standard" | "fixed-activity";
 
 interface OptionDraft {
   key: string;
   label: string;
-  dateTime: string;
-  activity: string;
-  location: string;
 }
 
 export default function CreateHangoutScreen() {
   const insets = useSafeAreaInsets();
   const { contacts } = useContacts();
   const [step, setStep] = useState<1 | 2 | 3>(1);
+
+  // Step 1
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
-  const [selectedContacts, setSelectedContacts] = useState<Set<string>>(new Set());
-  const [options, setOptions] = useState<OptionDraft[]>([
-    { key: "1", label: "", dateTime: "", activity: "", location: "" },
-  ]);
-  const [submitting, setSubmitting] = useState(false);
 
+  // Step 2
+  const [selectedContacts, setSelectedContacts] = useState<Set<string>>(new Set());
+
+  // Step 3 - survey builder
+  const [surveyMode, setSurveyMode] = useState<SurveyMode>("standard");
+  const [fixedActivity, setFixedActivity] = useState("");
+  const [activityOptions, setActivityOptions] = useState<OptionDraft[]>([
+    { key: "a1", label: "" },
+    { key: "a2", label: "" },
+  ]);
+  const [timeOptions, setTimeOptions] = useState<OptionDraft[]>([
+    { key: "t1", label: "" },
+    { key: "t2", label: "" },
+  ]);
+  const [locationOptions, setLocationOptions] = useState<OptionDraft[]>([
+    { key: "l1", label: "" },
+  ]);
+  const [includeLocation, setIncludeLocation] = useState(false);
+  const [includePlusOne, setIncludePlusOne] = useState(false);
+  const [deadline, setDeadline] = useState("");
+
+  const [submitting, setSubmitting] = useState(false);
   const webTopInset = Platform.OS === "web" ? 67 : 0;
 
   const toggleContact = useCallback((id: string) => {
@@ -44,28 +61,29 @@ export default function CreateHangoutScreen() {
     });
   }, []);
 
-  const addOption = useCallback(() => {
+  const addOption = (setter: React.Dispatch<React.SetStateAction<OptionDraft[]>>, prefix: string) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    setOptions((prev) => [
-      ...prev,
-      { key: Date.now().toString(), label: "", dateTime: "", activity: "", location: "" },
-    ]);
-  }, []);
+    setter((prev) => [...prev, { key: prefix + Date.now(), label: "" }]);
+  };
 
-  const updateOption = useCallback((key: string, field: keyof OptionDraft, value: string) => {
-    setOptions((prev) =>
-      prev.map((o) => (o.key === key ? { ...o, [field]: value } : o)),
-    );
-  }, []);
+  const updateOption = (setter: React.Dispatch<React.SetStateAction<OptionDraft[]>>, key: string, value: string) => {
+    setter((prev) => prev.map((o) => (o.key === key ? { ...o, label: value } : o)));
+  };
 
-  const removeOption = useCallback((key: string) => {
+  const removeOption = (setter: React.Dispatch<React.SetStateAction<OptionDraft[]>>, key: string) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    setOptions((prev) => prev.filter((o) => o.key !== key));
-  }, []);
+    setter((prev) => prev.filter((o) => o.key !== key));
+  };
 
   const canProceedStep1 = title.trim().length > 0;
   const canProceedStep2 = selectedContacts.size > 0;
-  const canSubmit = options.some((o) => o.label.trim().length > 0);
+  const canSubmit = (() => {
+    const hasTime = timeOptions.some((o) => o.label.trim().length > 0);
+    if (surveyMode === "standard") {
+      return hasTime && activityOptions.some((o) => o.label.trim().length > 0);
+    }
+    return hasTime && fixedActivity.trim().length > 0;
+  })();
 
   const handleSubmit = async () => {
     if (submitting) return;
@@ -75,37 +93,89 @@ export default function CreateHangoutScreen() {
         .filter((c) => selectedContacts.has(c.id))
         .map((c) => c.name);
 
-      const validOptions = options
+      const options: any[] = [];
+
+      if (surveyMode === "standard") {
+        activityOptions
+          .filter((o) => o.label.trim())
+          .forEach((o) => options.push({ label: o.label.trim(), questionType: "activity" }));
+      }
+
+      timeOptions
         .filter((o) => o.label.trim())
-        .map((o) => ({
-          label: o.label.trim(),
-          dateTime: o.dateTime.trim() || null,
-          activity: o.activity.trim() || null,
-          location: o.location.trim() || null,
-        }));
+        .forEach((o) => options.push({ label: o.label.trim(), questionType: "time" }));
+
+      if (surveyMode === "fixed-activity" && includeLocation) {
+        locationOptions
+          .filter((o) => o.label.trim())
+          .forEach((o) => options.push({ label: o.label.trim(), questionType: "location" }));
+      }
 
       await apiRequest("POST", "/api/hangouts", {
         title: title.trim(),
         description: description.trim() || null,
         inviteeNames,
-        options: validOptions,
+        options,
+        surveyMode,
+        fixedActivity: surveyMode === "fixed-activity" ? fixedActivity.trim() : null,
+        deadline: deadline.trim() || null,
+        includePlusOne,
       });
 
       queryClient.invalidateQueries({ queryKey: ["/api/hangouts"] });
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       router.back();
     } catch (err) {
-      Alert.alert("Error", "Failed to create hangout. Please try again.");
+      Alert.alert("Error", "Failed to create survey. Please try again.");
     } finally {
       setSubmitting(false);
     }
   };
 
+  const renderOptionList = (
+    opts: OptionDraft[],
+    setter: React.Dispatch<React.SetStateAction<OptionDraft[]>>,
+    prefix: string,
+    placeholder: string,
+    maxOptions: number = 5,
+  ) => (
+    <>
+      {opts.map((opt, idx) => (
+        <View key={opt.key} style={styles.optionRow}>
+          <View style={styles.rankBadge}>
+            <Text style={styles.rankBadgeText}>{idx + 1}</Text>
+          </View>
+          <TextInput
+            style={styles.optionInput}
+            value={opt.label}
+            onChangeText={(v) => updateOption(setter, opt.key, v)}
+            placeholder={placeholder}
+            placeholderTextColor={Colors.textTertiary}
+          />
+          {opts.length > 1 && (
+            <Pressable onPress={() => removeOption(setter, opt.key)} hitSlop={8}>
+              <Ionicons name="close-circle" size={20} color={Colors.danger} />
+            </Pressable>
+          )}
+        </View>
+      ))}
+      {opts.length < maxOptions && (
+        <Pressable
+          onPress={() => addOption(setter, prefix)}
+          style={({ pressed }) => [styles.addOptionBtn, pressed && { opacity: 0.7 }]}
+        >
+          <Ionicons name="add-circle-outline" size={18} color={Colors.primaryLight} />
+          <Text style={styles.addOptionText}>Add option</Text>
+        </Pressable>
+      )}
+    </>
+  );
+
   const renderStep1 = () => (
     <>
       <Text style={styles.stepLabel}>Step 1 of 3</Text>
-      <Text style={styles.stepTitle}>What's the plan?</Text>
-      <Text style={styles.stepDescription}>Give your hangout a name and optional description.</Text>
+      <Text style={styles.stepTitle}>Name your hangout</Text>
+      <Text style={styles.stepDescription}>Give it a title and optional description.</Text>
 
       <View style={styles.inputGroup}>
         <Text style={styles.inputLabel}>Title</Text>
@@ -113,7 +183,7 @@ export default function CreateHangoutScreen() {
           style={styles.textInput}
           value={title}
           onChangeText={setTitle}
-          placeholder="Saturday brunch, game night..."
+          placeholder="Saturday brunch, birthday party..."
           placeholderTextColor={Colors.textTertiary}
         />
       </View>
@@ -133,16 +203,9 @@ export default function CreateHangoutScreen() {
 
       <View style={styles.bottomActions}>
         <Pressable
-          onPress={() => {
-            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-            setStep(2);
-          }}
+          onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); setStep(2); }}
           disabled={!canProceedStep1}
-          style={({ pressed }) => [
-            styles.nextButton,
-            !canProceedStep1 && styles.nextButtonDisabled,
-            pressed && { opacity: 0.8 },
-          ]}
+          style={({ pressed }) => [styles.nextButton, !canProceedStep1 && styles.nextButtonDisabled, pressed && { opacity: 0.8 }]}
         >
           <Text style={styles.nextButtonText}>Next</Text>
           <Ionicons name="arrow-forward" size={18} color="#fff" />
@@ -155,13 +218,11 @@ export default function CreateHangoutScreen() {
     <>
       <Text style={styles.stepLabel}>Step 2 of 3</Text>
       <Text style={styles.stepTitle}>Who's invited?</Text>
-      <Text style={styles.stepDescription}>Pick friends from your circles to join.</Text>
+      <Text style={styles.stepDescription}>Select friends from your circles.</Text>
 
       <View style={styles.contactsList}>
         {contacts.length === 0 ? (
-          <Text style={styles.emptyText}>
-            No contacts yet. Add some people to your circles first!
-          </Text>
+          <Text style={styles.emptyText}>No contacts yet. Add people to your circles first.</Text>
         ) : (
           contacts.map((c) => {
             const selected = selectedContacts.has(c.id);
@@ -183,24 +244,14 @@ export default function CreateHangoutScreen() {
       </View>
 
       <View style={styles.bottomActions}>
-        <Pressable
-          onPress={() => setStep(1)}
-          style={({ pressed }) => [styles.backButton, pressed && { opacity: 0.7 }]}
-        >
+        <Pressable onPress={() => setStep(1)} style={({ pressed }) => [styles.backButton, pressed && { opacity: 0.7 }]}>
           <Ionicons name="arrow-back" size={18} color={Colors.textSecondary} />
           <Text style={styles.backButtonText}>Back</Text>
         </Pressable>
         <Pressable
-          onPress={() => {
-            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-            setStep(3);
-          }}
+          onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); setStep(3); }}
           disabled={!canProceedStep2}
-          style={({ pressed }) => [
-            styles.nextButton,
-            !canProceedStep2 && styles.nextButtonDisabled,
-            pressed && { opacity: 0.8 },
-          ]}
+          style={({ pressed }) => [styles.nextButton, !canProceedStep2 && styles.nextButtonDisabled, pressed && { opacity: 0.8 }]}
         >
           <Text style={styles.nextButtonText}>Next</Text>
           <Ionicons name="arrow-forward" size={18} color="#fff" />
@@ -212,73 +263,111 @@ export default function CreateHangoutScreen() {
   const renderStep3 = () => (
     <>
       <Text style={styles.stepLabel}>Step 3 of 3</Text>
-      <Text style={styles.stepTitle}>Add options to vote on</Text>
-      <Text style={styles.stepDescription}>
-        Create options your friends can vote on. Add dates, activities, or locations.
-      </Text>
+      <Text style={styles.stepTitle}>Build the survey</Text>
+      <Text style={styles.stepDescription}>Set up what your friends will rank and vote on.</Text>
 
-      {options.map((opt, idx) => (
-        <View key={opt.key} style={styles.optionCard}>
-          <View style={styles.optionHeader}>
-            <Text style={styles.optionNumber}>Option {idx + 1}</Text>
-            {options.length > 1 && (
-              <Pressable onPress={() => removeOption(opt.key)}>
-                <Ionicons name="close-circle" size={22} color={Colors.danger} />
-              </Pressable>
-            )}
-          </View>
-          <TextInput
-            style={styles.textInput}
-            value={opt.label}
-            onChangeText={(v) => updateOption(opt.key, "label", v)}
-            placeholder="Option name (e.g. 'Saturday morning')"
-            placeholderTextColor={Colors.textTertiary}
-          />
-          <View style={styles.optionFields}>
-            <View style={styles.optionField}>
-              <Ionicons name="calendar-outline" size={14} color={Colors.textTertiary} />
-              <TextInput
-                style={styles.smallInput}
-                value={opt.dateTime}
-                onChangeText={(v) => updateOption(opt.key, "dateTime", v)}
-                placeholder="Date/time"
-                placeholderTextColor={Colors.textTertiary}
-              />
-            </View>
-            <View style={styles.optionField}>
-              <Ionicons name="sparkles-outline" size={14} color={Colors.textTertiary} />
-              <TextInput
-                style={styles.smallInput}
-                value={opt.activity}
-                onChangeText={(v) => updateOption(opt.key, "activity", v)}
-                placeholder="Activity"
-                placeholderTextColor={Colors.textTertiary}
-              />
-            </View>
-            <View style={styles.optionField}>
-              <Ionicons name="location-outline" size={14} color={Colors.textTertiary} />
-              <TextInput
-                style={styles.smallInput}
-                value={opt.location}
-                onChangeText={(v) => updateOption(opt.key, "location", v)}
-                placeholder="Location"
-                placeholderTextColor={Colors.textTertiary}
-              />
-            </View>
-          </View>
+      {/* Activity mode toggle */}
+      <View style={styles.sectionCard}>
+        <Text style={styles.sectionCardTitle}>Activity</Text>
+        <View style={styles.modeToggleRow}>
+          <Pressable
+            onPress={() => { Haptics.selectionAsync(); setSurveyMode("standard"); }}
+            style={[styles.modeToggleBtn, surveyMode === "standard" && styles.modeToggleBtnActive]}
+          >
+            <Text style={[styles.modeToggleBtnText, surveyMode === "standard" && styles.modeToggleBtnTextActive]}>
+              Multiple options
+            </Text>
+          </Pressable>
+          <Pressable
+            onPress={() => { Haptics.selectionAsync(); setSurveyMode("fixed-activity"); }}
+            style={[styles.modeToggleBtn, surveyMode === "fixed-activity" && styles.modeToggleBtnActive]}
+          >
+            <Text style={[styles.modeToggleBtnText, surveyMode === "fixed-activity" && styles.modeToggleBtnTextActive]}>
+              Fixed activity
+            </Text>
+          </Pressable>
         </View>
-      ))}
 
-      <Pressable onPress={addOption} style={({ pressed }) => [styles.addOptionButton, pressed && { opacity: 0.7 }]}>
-        <Ionicons name="add-circle-outline" size={20} color={Colors.primaryLight} />
-        <Text style={styles.addOptionText}>Add another option</Text>
-      </Pressable>
+        {surveyMode === "standard" ? (
+          <>
+            <Text style={styles.fieldHint}>Friends will rank these options (3–5 max)</Text>
+            {renderOptionList(activityOptions, setActivityOptions, "a", "e.g. Bowling, dinner, park...", 5)}
+          </>
+        ) : (
+          <>
+            <Text style={styles.fieldHint}>Activity is already decided</Text>
+            <TextInput
+              style={styles.textInput}
+              value={fixedActivity}
+              onChangeText={setFixedActivity}
+              placeholder="e.g. My birthday, Canada Day BBQ..."
+              placeholderTextColor={Colors.textTertiary}
+            />
+          </>
+        )}
+      </View>
+
+      {/* Time options */}
+      <View style={styles.sectionCard}>
+        <Text style={styles.sectionCardTitle}>When</Text>
+        <Text style={styles.fieldHint}>Add time options to vote on (date + time in one field)</Text>
+        {renderOptionList(timeOptions, setTimeOptions, "t", "e.g. Saturday June 7, 3pm", 5)}
+      </View>
+
+      {/* Location options - only for fixed activity */}
+      {surveyMode === "fixed-activity" && (
+        <View style={styles.sectionCard}>
+          <View style={styles.toggleRow}>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.sectionCardTitle}>Where (optional)</Text>
+              <Text style={styles.fieldHint}>Let friends vote on the location too</Text>
+            </View>
+            <Switch
+              value={includeLocation}
+              onValueChange={(v) => { Haptics.selectionAsync(); setIncludeLocation(v); }}
+              trackColor={{ false: Colors.border, true: Colors.primary + "60" }}
+              thumbColor={includeLocation ? Colors.primary : Colors.textTertiary}
+            />
+          </View>
+          {includeLocation && (
+            <View style={{ marginTop: 12 }}>
+              {renderOptionList(locationOptions, setLocationOptions, "l", "e.g. My place, John's house...", 5)}
+            </View>
+          )}
+        </View>
+      )}
+
+      {/* Plus one */}
+      <View style={styles.sectionCard}>
+        <View style={styles.toggleRow}>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.sectionCardTitle}>Plus one</Text>
+            <Text style={styles.fieldHint}>Ask friends if they're bringing guests</Text>
+          </View>
+          <Switch
+            value={includePlusOne}
+            onValueChange={(v) => { Haptics.selectionAsync(); setIncludePlusOne(v); }}
+            trackColor={{ false: Colors.border, true: Colors.primary + "60" }}
+            thumbColor={includePlusOne ? Colors.primary : Colors.textTertiary}
+          />
+        </View>
+      </View>
+
+      {/* Deadline */}
+      <View style={styles.sectionCard}>
+        <Text style={styles.sectionCardTitle}>Voting deadline (optional)</Text>
+        <Text style={styles.fieldHint}>Closes voting automatically after this date</Text>
+        <TextInput
+          style={[styles.textInput, { marginTop: 10 }]}
+          value={deadline}
+          onChangeText={setDeadline}
+          placeholder="e.g. June 5, 2025 or 2025-06-05"
+          placeholderTextColor={Colors.textTertiary}
+        />
+      </View>
 
       <View style={styles.bottomActions}>
-        <Pressable
-          onPress={() => setStep(2)}
-          style={({ pressed }) => [styles.backButton, pressed && { opacity: 0.7 }]}
-        >
+        <Pressable onPress={() => setStep(2)} style={({ pressed }) => [styles.backButton, pressed && { opacity: 0.7 }]}>
           <Ionicons name="arrow-back" size={18} color={Colors.textSecondary} />
           <Text style={styles.backButtonText}>Back</Text>
         </Pressable>
@@ -292,8 +381,8 @@ export default function CreateHangoutScreen() {
             pressed && { opacity: 0.8 },
           ]}
         >
-          <Ionicons name="paper-plane" size={16} color="#fff" />
-          <Text style={styles.nextButtonText}>{submitting ? "Creating..." : "Create"}</Text>
+          <Ionicons name="link-outline" size={16} color="#fff" />
+          <Text style={styles.nextButtonText}>{submitting ? "Creating..." : "Create survey"}</Text>
         </Pressable>
       </View>
     </>
@@ -311,10 +400,7 @@ export default function CreateHangoutScreen() {
 
       <View style={styles.progressBar}>
         {[1, 2, 3].map((s) => (
-          <View
-            key={s}
-            style={[styles.progressSegment, s <= step && styles.progressSegmentActive]}
-          />
+          <View key={s} style={[styles.progressSegment, s <= step && styles.progressSegmentActive]} />
         ))}
       </View>
 
@@ -333,227 +419,104 @@ export default function CreateHangoutScreen() {
 }
 
 const styles = StyleSheet.create({
-  screen: {
-    flex: 1,
-    backgroundColor: Colors.background,
-  },
+  screen: { flex: 1, backgroundColor: Colors.background },
   headerBar: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    paddingHorizontal: 16,
-    paddingBottom: 12,
-    backgroundColor: Colors.surface,
-    borderBottomWidth: 1,
-    borderBottomColor: Colors.border,
+    flexDirection: "row", alignItems: "center", justifyContent: "space-between",
+    paddingHorizontal: 16, paddingBottom: 12, backgroundColor: Colors.surface,
+    borderBottomWidth: 1, borderBottomColor: Colors.border,
   },
-  closeButton: {
-    padding: 4,
-  },
-  headerTitle: {
-    fontSize: 17,
-    fontFamily: "Nunito_700Bold",
-    color: Colors.text,
-  },
-  progressBar: {
-    flexDirection: "row",
-    gap: 4,
-    paddingHorizontal: 20,
-    paddingVertical: 12,
-  },
-  progressSegment: {
-    flex: 1,
-    height: 3,
-    borderRadius: 2,
-    backgroundColor: Colors.border,
-  },
-  progressSegmentActive: {
-    backgroundColor: Colors.primary,
-  },
-  scrollContainer: {
-    flex: 1,
-  },
-  scrollContent: {
-    paddingHorizontal: 20,
-    paddingTop: 8,
-  },
+  closeButton: { padding: 4 },
+  headerTitle: { fontSize: 17, fontFamily: "Nunito_700Bold", color: Colors.text },
+  progressBar: { flexDirection: "row", gap: 4, paddingHorizontal: 20, paddingVertical: 12 },
+  progressSegment: { flex: 1, height: 3, borderRadius: 2, backgroundColor: Colors.border },
+  progressSegmentActive: { backgroundColor: Colors.primary },
+  scrollContainer: { flex: 1 },
+  scrollContent: { paddingHorizontal: 20, paddingTop: 8 },
   stepLabel: {
-    fontSize: 12,
-    fontFamily: "Nunito_600SemiBold",
-    color: Colors.primary,
-    textTransform: "uppercase",
-    letterSpacing: 1,
-    marginBottom: 6,
+    fontSize: 12, fontFamily: "Nunito_600SemiBold", color: Colors.primary,
+    textTransform: "uppercase", letterSpacing: 1, marginBottom: 6,
   },
-  stepTitle: {
-    fontSize: 24,
-    fontFamily: "Nunito_800ExtraBold",
-    color: Colors.text,
-    marginBottom: 6,
-  },
+  stepTitle: { fontSize: 24, fontFamily: "Nunito_800ExtraBold", color: Colors.text, marginBottom: 6 },
   stepDescription: {
-    fontSize: 14,
-    fontFamily: "Nunito_400Regular",
-    color: Colors.textSecondary,
-    marginBottom: 24,
-    lineHeight: 20,
+    fontSize: 14, fontFamily: "Nunito_400Regular", color: Colors.textSecondary,
+    marginBottom: 24, lineHeight: 20,
   },
-  inputGroup: {
-    marginBottom: 18,
-  },
-  inputLabel: {
-    fontSize: 13,
-    fontFamily: "Nunito_600SemiBold",
-    color: Colors.textSecondary,
-    marginBottom: 6,
-  },
+  inputGroup: { marginBottom: 18 },
+  inputLabel: { fontSize: 13, fontFamily: "Nunito_600SemiBold", color: Colors.textSecondary, marginBottom: 6 },
   textInput: {
-    backgroundColor: Colors.surface,
-    borderWidth: 1,
-    borderColor: Colors.border,
-    borderRadius: 12,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    fontSize: 15,
-    fontFamily: "Nunito_400Regular",
-    color: Colors.text,
+    backgroundColor: Colors.surface, borderWidth: 1, borderColor: Colors.border,
+    borderRadius: 12, paddingHorizontal: 14, paddingVertical: 12,
+    fontSize: 15, fontFamily: "Nunito_400Regular", color: Colors.text,
   },
-  textArea: {
-    minHeight: 80,
-    textAlignVertical: "top",
+  textArea: { minHeight: 80, textAlignVertical: "top" },
+  sectionCard: {
+    backgroundColor: Colors.surface, borderRadius: 16, padding: 16,
+    marginBottom: 16, borderWidth: 1, borderColor: Colors.border,
   },
-  contactsList: {
-    gap: 6,
-    marginBottom: 20,
+  sectionCardTitle: {
+    fontSize: 15, fontFamily: "Nunito_700Bold", color: Colors.text, marginBottom: 4,
   },
+  fieldHint: {
+    fontSize: 12, fontFamily: "Nunito_400Regular", color: Colors.textTertiary,
+    marginBottom: 12, lineHeight: 16,
+  },
+  modeToggleRow: {
+    flexDirection: "row", gap: 8, marginBottom: 14,
+  },
+  modeToggleBtn: {
+    flex: 1, paddingVertical: 9, borderRadius: 10,
+    borderWidth: 1, borderColor: Colors.border,
+    alignItems: "center", backgroundColor: Colors.background,
+  },
+  modeToggleBtnActive: { borderColor: Colors.primary, backgroundColor: Colors.primary + "15" },
+  modeToggleBtnText: { fontSize: 13, fontFamily: "Nunito_600SemiBold", color: Colors.textSecondary },
+  modeToggleBtnTextActive: { color: Colors.primaryLight },
+  optionRow: { flexDirection: "row", alignItems: "center", gap: 10, marginBottom: 8 },
+  rankBadge: {
+    width: 26, height: 26, borderRadius: 8, backgroundColor: Colors.primary + "20",
+    alignItems: "center", justifyContent: "center",
+  },
+  rankBadgeText: { fontSize: 12, fontFamily: "Nunito_800ExtraBold", color: Colors.primaryLight },
+  optionInput: {
+    flex: 1, backgroundColor: Colors.surfaceElevated, borderRadius: 10,
+    paddingHorizontal: 12, paddingVertical: 9, fontSize: 14,
+    fontFamily: "Nunito_400Regular", color: Colors.text,
+  },
+  addOptionBtn: {
+    flexDirection: "row", alignItems: "center", gap: 6,
+    paddingVertical: 8, marginTop: 2,
+  },
+  addOptionText: { fontSize: 13, fontFamily: "Nunito_600SemiBold", color: Colors.primaryLight },
+  toggleRow: { flexDirection: "row", alignItems: "center", gap: 12 },
+  contactsList: { gap: 6, marginBottom: 20 },
   emptyText: {
-    fontSize: 14,
-    fontFamily: "Nunito_400Regular",
-    color: Colors.textSecondary,
-    textAlign: "center",
-    paddingVertical: 30,
+    fontSize: 14, fontFamily: "Nunito_400Regular",
+    color: Colors.textSecondary, textAlign: "center", paddingVertical: 30,
   },
   contactRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 12,
-    paddingVertical: 10,
-    paddingHorizontal: 12,
-    borderRadius: 12,
-    backgroundColor: Colors.surface,
-    borderWidth: 1,
-    borderColor: Colors.border,
+    flexDirection: "row", alignItems: "center", gap: 12,
+    paddingVertical: 10, paddingHorizontal: 12, borderRadius: 12,
+    backgroundColor: Colors.surface, borderWidth: 1, borderColor: Colors.border,
   },
-  contactRowSelected: {
-    borderColor: Colors.primary + "60",
-    backgroundColor: Colors.primary + "10",
-  },
-  contactName: {
-    flex: 1,
-    fontSize: 15,
-    fontFamily: "Nunito_600SemiBold",
-    color: Colors.text,
-  },
+  contactRowSelected: { borderColor: Colors.primary + "60", backgroundColor: Colors.primary + "10" },
+  contactName: { flex: 1, fontSize: 15, fontFamily: "Nunito_600SemiBold", color: Colors.text },
   checkbox: {
-    width: 24,
-    height: 24,
-    borderRadius: 12,
-    borderWidth: 2,
-    borderColor: Colors.border,
-    alignItems: "center",
-    justifyContent: "center",
+    width: 24, height: 24, borderRadius: 12, borderWidth: 2,
+    borderColor: Colors.border, alignItems: "center", justifyContent: "center",
   },
-  checkboxSelected: {
-    backgroundColor: Colors.primary,
-    borderColor: Colors.primary,
-  },
-  optionCard: {
-    backgroundColor: Colors.surface,
-    borderRadius: 14,
-    padding: 14,
-    marginBottom: 12,
-    borderWidth: 1,
-    borderColor: Colors.border,
-  },
-  optionHeader: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    marginBottom: 10,
-  },
-  optionNumber: {
-    fontSize: 13,
-    fontFamily: "Nunito_700Bold",
-    color: Colors.primaryLight,
-  },
-  optionFields: {
-    gap: 8,
-    marginTop: 10,
-  },
-  optionField: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-  },
-  smallInput: {
-    flex: 1,
-    backgroundColor: Colors.surfaceElevated,
-    borderRadius: 8,
-    paddingHorizontal: 10,
-    paddingVertical: 8,
-    fontSize: 13,
-    fontFamily: "Nunito_400Regular",
-    color: Colors.text,
-  },
-  addOptionButton: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 6,
-    paddingVertical: 12,
-    marginBottom: 20,
-  },
-  addOptionText: {
-    fontSize: 14,
-    fontFamily: "Nunito_600SemiBold",
-    color: Colors.primaryLight,
-  },
-  bottomActions: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    marginTop: 8,
-  },
+  checkboxSelected: { backgroundColor: Colors.primary, borderColor: Colors.primary },
+  bottomActions: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginTop: 8 },
   backButton: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 4,
-    paddingVertical: 10,
-    paddingHorizontal: 14,
+    flexDirection: "row", alignItems: "center", gap: 4,
+    paddingVertical: 10, paddingHorizontal: 14,
   },
-  backButtonText: {
-    fontSize: 14,
-    fontFamily: "Nunito_600SemiBold",
-    color: Colors.textSecondary,
-  },
+  backButtonText: { fontSize: 14, fontFamily: "Nunito_600SemiBold", color: Colors.textSecondary },
   nextButton: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
-    backgroundColor: Colors.primary,
-    paddingVertical: 12,
-    paddingHorizontal: 24,
-    borderRadius: 12,
+    flexDirection: "row", alignItems: "center", gap: 6,
+    backgroundColor: Colors.primary, paddingVertical: 12,
+    paddingHorizontal: 24, borderRadius: 12,
   },
-  nextButtonDisabled: {
-    opacity: 0.4,
-  },
-  nextButtonText: {
-    fontSize: 15,
-    fontFamily: "Nunito_700Bold",
-    color: "#fff",
-  },
-  submitButton: {
-    backgroundColor: Colors.success,
-  },
+  nextButtonDisabled: { opacity: 0.4 },
+  nextButtonText: { fontSize: 15, fontFamily: "Nunito_700Bold", color: "#fff" },
+  submitButton: { backgroundColor: Colors.primary },
 });

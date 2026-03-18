@@ -31,9 +31,14 @@ export interface HangoutPlan {
   shareCode: string;
   finalizedOptionId?: string | null;
   inviteeNames: string[];
+  surveyMode: string; // 'standard' | 'fixed-activity'
+  fixedActivity?: string | null;
+  deadline?: string | null;
+  includePlusOne: boolean;
   createdAt?: string | null;
   updatedAt?: string | null;
   options?: HangoutOption[];
+  bestRecommendation?: BestRecommendation;
 }
 
 export interface HangoutOption {
@@ -43,8 +48,10 @@ export interface HangoutOption {
   dateTime?: string | null;
   activity?: string | null;
   location?: string | null;
+  questionType: string; // 'activity' | 'time' | 'location'
   votes?: HangoutVote[];
   voteCount?: number;
+  bordaScore?: number;
 }
 
 export interface HangoutVote {
@@ -52,8 +59,18 @@ export interface HangoutVote {
   optionId?: string | null;
   planId?: string | null;
   voterName: string;
-  vote: boolean;
+  rank?: number | null; // 1 = top pick, 0/null = rejected
+  bringsGuests?: boolean | null;
+  plusOneCount?: number | null;
   createdAt?: string | null;
+}
+
+export interface BestRecommendation {
+  bestActivity?: { label: string; score: number } | null;
+  bestTime?: { label: string; score: number } | null;
+  bestLocation?: { label: string; score: number } | null;
+  totalVoters: number;
+  plusOneTotal?: number;
 }
 
 export const CIRCLE_CONFIG = {

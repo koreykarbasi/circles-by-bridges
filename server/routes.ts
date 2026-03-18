@@ -20,6 +20,102 @@ function requireAuth(req: Request, res: Response, next: NextFunction) {
   next();
 }
 
+function generateShareCode(): string {
+  const chars = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789";
+  let code = "";
+  for (let i = 0; i < 8; i++) {
+    code += chars[Math.floor(Math.random() * chars.length)];
+  }
+  return code;
+}
+
+// Compute Borda count scores for options grouped by questionType.
+// Rank 1 = highest score. Rank 0/null = rejected (score 0).
+// Score per vote = (maxRank + 1 - rank). With max 5 options: rank 1 = 5pts, rank 2 = 4pts, etc.
+function computeBordaScores(options: any[], votes: any[]) {
+  const MAX_RANK = 5;
+  return options.map((opt) => {
+    const optVotes = votes.filter((v) => v.optionId === opt.id);
+    const bordaScore = optVotes.reduce((sum: number, v: any) => {
+      const r = v.rank;
+      if (!r || r <= 0) return sum;
+      return sum + (MAX_RANK + 1 - r);
+    }, 0);
+    const voteCount = optVotes.filter((v: any) => v.rank && v.rank > 0).length;
+    return { ...opt, bordaScore, voteCount, votes: optVotes };
+  });
+}
+
+function computeBestRecommendation(optionsWithScores: any[], votes: any[], includePlusOne: boolean) {
+  const byType = (type: string) =>
+    optionsWithScores.filter((o) => o.questionType === type);
+
+  const best = (arr: any[]) => {
+    if (arr.length === 0) return null;
+    const sorted = [...arr].sort((a, b) => b.bordaScore - a.bordaScore);
+    return sorted[0].bordaScore > 0 ? { label: sorted[0].label, score: sorted[0].bordaScore } : null;
+  };
+
+  const totalVoters = new Set(votes.map((v: any) => v.voterName)).size;
+  const plusOneTotal = includePlusOne
+    ? votes.reduce((sum: number, v: any) => sum + (v.plusOneCount || 0), 0)
+    : undefined;
+
+  return {
+    bestActivity: best(byType("activity")),
+    bestTime: best(byType("time")),
+    bestLocation: best(byType("location")),
+    totalVoters,
+    plusOneTotal,
+  };
+}
+
+function generateIcs(title: string, timeLabel: string, locationLabel: string | null): string {
+  const now = new Date();
+  const dtStamp = now.toISOString().replace(/[-:]/g, "").split(".")[0] + "Z";
+  const uid = `bridges-${Date.now()}@bridges.app`;
+
+  // Try to parse a date from the time label, fallback to 1 week from now
+  let dtStart = "";
+  let dtEnd = "";
+  try {
+    const parsed = new Date(timeLabel);
+    if (!isNaN(parsed.getTime())) {
+      dtStart = parsed.toISOString().replace(/[-:]/g, "").split(".")[0] + "Z";
+      const end = new Date(parsed.getTime() + 2 * 60 * 60 * 1000);
+      dtEnd = end.toISOString().replace(/[-:]/g, "").split(".")[0] + "Z";
+    }
+  } catch (_) {}
+
+  if (!dtStart) {
+    const future = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
+    dtStart = future.toISOString().replace(/[-:]/g, "").split(".")[0] + "Z";
+    const end = new Date(future.getTime() + 2 * 60 * 60 * 1000);
+    dtEnd = end.toISOString().replace(/[-:]/g, "").split(".")[0] + "Z";
+  }
+
+  const location = locationLabel ? `LOCATION:${locationLabel}\r\n` : "";
+
+  return [
+    "BEGIN:VCALENDAR",
+    "VERSION:2.0",
+    "PRODID:-//Bridges App//EN",
+    "CALSCALE:GREGORIAN",
+    "METHOD:PUBLISH",
+    "BEGIN:VEVENT",
+    `UID:${uid}`,
+    `DTSTAMP:${dtStamp}`,
+    `DTSTART:${dtStart}`,
+    `DTEND:${dtEnd}`,
+    `SUMMARY:${title}`,
+    location.trim(),
+    "END:VEVENT",
+    "END:VCALENDAR",
+  ]
+    .filter(Boolean)
+    .join("\r\n");
+}
+
 export async function registerRoutes(app: Express): Promise<Server> {
   app.set("trust proxy", 1);
   const PgSession = connectPgSimple(session);
@@ -253,15 +349,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   // ---- Hangout Plans ----
 
-  function generateShareCode(): string {
-    const chars = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789";
-    let code = "";
-    for (let i = 0; i < 8; i++) {
-      code += chars[Math.floor(Math.random() * chars.length)];
-    }
-    return code;
-  }
-
   app.get("/api/hangouts", requireAuth, async (req, res) => {
     try {
       const plans = await storage.getHangoutPlansByUserId(req.session.userId!);
@@ -269,13 +356,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
         plans.map(async (plan) => {
           const options = await storage.getOptionsByPlanId(plan.id);
           const votes = await storage.getVotesByPlanId(plan.id);
+          const scored = computeBordaScores(options, votes);
           return {
             ...plan,
-            options: options.map((opt) => ({
-              ...opt,
-              voteCount: votes.filter((v) => v.optionId === opt.id && v.vote).length,
-              votes: votes.filter((v) => v.optionId === opt.id),
-            })),
+            options: scored,
+            bestRecommendation: computeBestRecommendation(scored, votes, plan.includePlusOne),
           };
         }),
       );
@@ -294,13 +379,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       const options = await storage.getOptionsByPlanId(plan.id);
       const votes = await storage.getVotesByPlanId(plan.id);
+      const scored = computeBordaScores(options, votes);
       res.json({
         ...plan,
-        options: options.map((opt) => ({
-          ...opt,
-          voteCount: votes.filter((v) => v.optionId === opt.id && v.vote).length,
-          votes: votes.filter((v) => v.optionId === opt.id),
-        })),
+        options: scored,
+        bestRecommendation: computeBestRecommendation(scored, votes, plan.includePlusOne),
       });
     } catch (err) {
       console.error("Error fetching hangout:", err);
@@ -310,7 +393,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.post("/api/hangouts", requireAuth, async (req, res) => {
     try {
-      const { title, description, inviteeNames, options } = req.body;
+      const { title, description, inviteeNames, options, surveyMode, fixedActivity, deadline, includePlusOne } = req.body;
       if (!title) {
         return res.status(400).json({ message: "Title is required" });
       }
@@ -329,6 +412,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
         status: "active",
         shareCode,
         inviteeNames: inviteeNames || [],
+        surveyMode: surveyMode || "standard",
+        fixedActivity: fixedActivity || null,
+        deadline: deadline || null,
+        includePlusOne: includePlusOne || false,
       });
 
       const createdOptions = [];
@@ -340,8 +427,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
             dateTime: opt.dateTime || null,
             activity: opt.activity || null,
             location: opt.location || null,
+            questionType: opt.questionType || "option",
           });
-          createdOptions.push({ ...option, voteCount: 0, votes: [] });
+          createdOptions.push({ ...option, bordaScore: 0, voteCount: 0, votes: [] });
         }
       }
 
@@ -369,13 +457,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const plan = await storage.updateHangoutPlan(req.params.id, updateData);
       const options = await storage.getOptionsByPlanId(plan!.id);
       const votes = await storage.getVotesByPlanId(plan!.id);
+      const scored = computeBordaScores(options, votes);
       res.json({
         ...plan,
-        options: options.map((opt) => ({
-          ...opt,
-          voteCount: votes.filter((v) => v.optionId === opt.id && v.vote).length,
-          votes: votes.filter((v) => v.optionId === opt.id),
-        })),
+        options: scored,
+        bestRecommendation: computeBestRecommendation(scored, votes, plan!.includePlusOne),
       });
     } catch (err) {
       console.error("Error updating hangout:", err);
@@ -403,7 +489,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (!plan || plan.userId !== req.session.userId) {
         return res.status(404).json({ message: "Hangout not found" });
       }
-      const { label, dateTime, activity, location } = req.body;
+      const { label, dateTime, activity, location, questionType } = req.body;
       if (!label) {
         return res.status(400).json({ message: "Label is required" });
       }
@@ -413,11 +499,42 @@ export async function registerRoutes(app: Express): Promise<Server> {
         dateTime: dateTime || null,
         activity: activity || null,
         location: location || null,
+        questionType: questionType || "option",
       });
-      res.status(201).json({ ...option, voteCount: 0, votes: [] });
+      res.status(201).json({ ...option, bordaScore: 0, voteCount: 0, votes: [] });
     } catch (err) {
       console.error("Error adding option:", err);
       res.status(500).json({ message: "Failed to add option" });
+    }
+  });
+
+  // Calendar invite download - no auth required (uses plan id)
+  app.get("/api/hangouts/:id/calendar", async (req, res) => {
+    try {
+      const plan = await storage.getHangoutPlan(req.params.id);
+      if (!plan || plan.status !== "finalized" || !plan.finalizedOptionId) {
+        return res.status(404).json({ message: "No finalized hangout found" });
+      }
+      const options = await storage.getOptionsByPlanId(plan.id);
+      const finalizedOption = options.find((o) => o.id === plan.finalizedOptionId);
+      const timeOption = options.find((o) => o.questionType === "time" && o.id === plan.finalizedOptionId)
+        || options.find((o) => o.questionType === "time");
+      const locationOption = options.find((o) => o.questionType === "location");
+
+      const timeLabel = finalizedOption?.label || timeOption?.label || "TBD";
+      const locationLabel = plan.fixedActivity
+        ? (locationOption?.label || null)
+        : (finalizedOption?.activity || finalizedOption?.location || null);
+
+      const icsContent = generateIcs(plan.title, timeLabel, locationLabel);
+      const filename = plan.title.replace(/[^a-z0-9]/gi, "-").toLowerCase() + ".ics";
+
+      res.setHeader("Content-Type", "text/calendar; charset=utf-8");
+      res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
+      res.send(icsContent);
+    } catch (err) {
+      console.error("Error generating calendar:", err);
+      res.status(500).json({ message: "Failed to generate calendar invite" });
     }
   });
 
@@ -430,7 +547,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       const options = await storage.getOptionsByPlanId(plan.id);
       const votes = await storage.getVotesByPlanId(plan.id);
-
+      const scored = computeBordaScores(options, votes);
       const creator = await storage.getUser(plan.userId!);
 
       res.json({
@@ -442,11 +559,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
         creatorName: creator?.username || "Someone",
         inviteeNames: plan.inviteeNames,
         finalizedOptionId: plan.finalizedOptionId,
-        options: options.map((opt) => ({
-          ...opt,
-          voteCount: votes.filter((v) => v.optionId === opt.id && v.vote).length,
-          votes: votes.filter((v) => v.optionId === opt.id),
-        })),
+        surveyMode: plan.surveyMode,
+        fixedActivity: plan.fixedActivity,
+        deadline: plan.deadline,
+        includePlusOne: plan.includePlusOne,
+        options: scored,
+        bestRecommendation: computeBestRecommendation(scored, votes, plan.includePlusOne),
       });
     } catch (err) {
       console.error("Error fetching vote page:", err);
@@ -463,9 +581,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (plan.status === "finalized") {
         return res.status(400).json({ message: "This hangout has already been finalized" });
       }
-      const { voterName, votes } = req.body;
+
+      const { voterName, votes, bringsGuests, plusOneCount } = req.body;
       if (!voterName || !votes || !Array.isArray(votes)) {
         return res.status(400).json({ message: "Voter name and votes are required" });
+      }
+
+      // Check deadline
+      if (plan.deadline) {
+        const deadlineDate = new Date(plan.deadline);
+        if (!isNaN(deadlineDate.getTime()) && new Date() > deadlineDate) {
+          return res.status(400).json({ message: "Voting has closed for this survey" });
+        }
       }
 
       const createdVotes = [];
@@ -474,7 +601,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
           optionId: v.optionId,
           planId: plan.id,
           voterName,
-          vote: v.vote ?? true,
+          rank: v.rank ?? null,
+          bringsGuests: bringsGuests ?? null,
+          plusOneCount: plusOneCount ?? null,
         });
         createdVotes.push(vote);
       }

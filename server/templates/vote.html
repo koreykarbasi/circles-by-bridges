@@ -2,173 +2,664 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>Vote - Bridges</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800&display=swap" rel="stylesheet">
 <style>
-*{margin:0;padding:0;box-sizing:border-box}
-body{font-family:'Nunito',sans-serif;background:#0B0718;color:#F0ECF8;min-height:100vh;display:flex;flex-direction:column;align-items:center}
-.container{max-width:440px;width:100%;padding:24px 20px 60px}
-.logo-row{display:flex;align-items:center;justify-content:center;gap:8px;margin-bottom:32px;padding-top:20px}
+*{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+body{font-family:'Nunito',sans-serif;background:#0B0718;color:#F0ECF8;min-height:100vh;display:flex;flex-direction:column;align-items:center;overscroll-behavior:none}
+.container{max-width:480px;width:100%;padding:24px 20px 80px}
+.logo-row{display:flex;align-items:center;justify-content:center;gap:8px;margin-bottom:28px;padding-top:20px}
 .logo-text{font-size:18px;font-weight:700;color:#9B7DFF}
-.title{font-size:26px;font-weight:800;text-align:center;margin-bottom:6px}
-.subtitle{font-size:14px;color:#9B93B8;text-align:center;margin-bottom:8px}
-.creator{font-size:13px;color:#5E5580;text-align:center;margin-bottom:24px}
-.desc{font-size:14px;color:#9B93B8;line-height:1.5;text-align:center;margin-bottom:24px}
-.name-group{margin-bottom:24px}
-.name-label{font-size:13px;font-weight:600;color:#9B93B8;margin-bottom:6px}
-.name-input{width:100%;background:#151028;border:1px solid #2A2148;border-radius:12px;padding:12px 14px;font-size:15px;font-family:'Nunito',sans-serif;color:#F0ECF8;outline:none;transition:border-color .2s}
-.name-input:focus{border-color:#9B7DFF}
-.section-title{font-size:16px;font-weight:700;margin-bottom:12px}
-.option-card{background:#151028;border:1px solid #2A2148;border-radius:14px;padding:14px;margin-bottom:10px;cursor:pointer;transition:all .2s;position:relative}
-.option-card:hover{border-color:#9B7DFF40}
-.option-card.selected{border-color:#9B7DFF;background:#9B7DFF10}
-.option-card.selected::after{content:'';position:absolute;top:12px;right:12px;width:22px;height:22px;background:#9B7DFF;border-radius:11px;display:flex;align-items:center;justify-content:center}
-.option-card.selected::before{content:'✓';position:absolute;top:12px;right:16px;z-index:1;color:#fff;font-size:14px;font-weight:700}
-.option-label{font-size:15px;font-weight:700;margin-bottom:4px;padding-right:30px}
-.option-meta{display:flex;align-items:center;gap:5px;font-size:12px;color:#5E5580;margin-top:2px}
-.vote-btn{width:100%;background:#9B7DFF;color:#fff;border:none;border-radius:12px;padding:14px;font-size:15px;font-weight:700;font-family:'Nunito',sans-serif;cursor:pointer;margin-top:20px;transition:opacity .2s}
-.vote-btn:hover{opacity:.9}
-.vote-btn:disabled{opacity:.4;cursor:not-allowed}
-.success-msg{text-align:center;padding:40px 0}
-.success-msg h2{font-size:22px;font-weight:800;color:#4ADE80;margin-bottom:8px}
-.success-msg p{color:#9B93B8;font-size:14px}
-.error-msg{text-align:center;padding:40px 0;color:#FF4757}
-.finalized-banner{background:#4ADE8015;border-radius:12px;padding:12px;text-align:center;margin-bottom:16px}
-.finalized-banner span{color:#4ADE80;font-weight:700;font-size:14px}
-.result-bar{height:4px;background:#2A2148;border-radius:2px;margin-top:8px;overflow:hidden}
-.result-fill{height:4px;border-radius:2px;background:#9B7DFF;transition:width .3s}
-.vote-count{font-size:11px;color:#5E5580;margin-top:4px}
-.winner .result-fill{background:#FFB84D}
-.winner{border-color:#FFB84D60;background:#FFB84D08}
-.trophy{color:#FFB84D;margin-right:4px}
+h1.title{font-size:24px;font-weight:800;text-align:center;margin-bottom:4px;line-height:1.2}
+.creator{font-size:13px;color:#5E5580;text-align:center;margin-bottom:8px}
+.desc{font-size:14px;color:#9B93B8;line-height:1.5;text-align:center;margin-bottom:20px}
+.deadline-badge{display:inline-flex;align-items:center;gap:6px;background:#2A2148;border-radius:8px;padding:6px 12px;font-size:12px;font-weight:600;color:#9B93B8;margin:0 auto 20px;display:flex;justify-content:center;max-width:240px}
+.name-group{margin-bottom:28px}
+.label{font-size:13px;font-weight:600;color:#9B93B8;margin-bottom:6px;display:block}
+.name-input,.text-input{width:100%;background:#151028;border:1.5px solid #2A2148;border-radius:12px;padding:12px 14px;font-size:15px;font-family:'Nunito',sans-serif;color:#F0ECF8;outline:none;transition:border-color .2s}
+.name-input:focus,.text-input:focus{border-color:#9B7DFF}
+.section{margin-bottom:32px}
+.section-header{margin-bottom:6px}
+.section-title{font-size:17px;font-weight:700;color:#F0ECF8;margin-bottom:2px}
+.section-subtitle{font-size:12px;color:#5E5580;margin-bottom:14px}
+.fixed-activity-badge{background:#9B7DFF18;border:1px solid #9B7DFF40;border-radius:10px;padding:10px 14px;display:flex;align-items:center;gap:8px;margin-bottom:16px}
+.fixed-activity-text{font-size:14px;font-weight:700;color:#B9A4FF}
+
+/* Rank cards */
+.rank-list{display:flex;flex-direction:column;gap:8px}
+.rank-card{
+  border-radius:14px;padding:14px 14px 14px 16px;
+  display:flex;align-items:center;gap:12px;
+  border:1.5px solid #2A2148;
+  background:#151028;
+  cursor:grab;
+  user-select:none;
+  touch-action:none;
+  transition:transform .15s, box-shadow .15s, opacity .15s;
+  position:relative;
+}
+.rank-card.dragging{opacity:.6;transform:scale(1.02);box-shadow:0 8px 24px rgba(0,0,0,.5);cursor:grabbing;z-index:100}
+.rank-card.drag-over{transform:translateY(-2px)}
+.rank-card.rejected{opacity:.35;border-color:#3A2A48}
+.rank-num{
+  min-width:30px;height:30px;border-radius:10px;
+  display:flex;align-items:center;justify-content:center;
+  font-size:14px;font-weight:800;flex-shrink:0;
+}
+.rank-card-content{flex:1;min-width:0}
+.rank-card-label{font-size:14px;font-weight:700;color:#F0ECF8;margin-bottom:0}
+.rank-card-meta{font-size:12px;color:#5E5580;margin-top:2px}
+.reject-btn{
+  width:28px;height:28px;border-radius:8px;
+  background:#2A1A38;border:1px solid #3A2A48;
+  display:flex;align-items:center;justify-content:center;
+  cursor:pointer;flex-shrink:0;font-size:14px;color:#7A6A98;
+  transition:background .15s,color .15s;
+}
+.reject-btn:hover{background:#FF475720;color:#FF4757}
+.reject-btn.active{background:#FF475720;color:#FF4757;border-color:#FF475740}
+.undo-btn{font-size:11px;color:#9B7DFF;text-decoration:underline;cursor:pointer;margin-top:6px;text-align:right;display:block}
+.drag-hint{font-size:11px;color:#5E5580;text-align:center;margin-top:8px;display:flex;align-items:center;justify-content:center;gap:4px}
+
+/* Plus one section */
+.plus-one-section{margin-bottom:28px}
+.radio-row{display:flex;gap:10px;margin-bottom:12px}
+.radio-opt{
+  flex:1;padding:12px;border-radius:12px;text-align:center;
+  border:1.5px solid #2A2148;background:#151028;cursor:pointer;
+  font-size:14px;font-weight:700;color:#9B93B8;transition:all .2s;
+}
+.radio-opt.selected{border-color:#9B7DFF;background:#9B7DFF15;color:#B9A4FF}
+.plus-count-row{display:flex;gap:8px;align-items:center;margin-top:4px}
+.count-btn{
+  width:40px;height:40px;border-radius:10px;border:1.5px solid #2A2148;
+  background:#151028;color:#F0ECF8;font-size:18px;font-weight:700;
+  cursor:pointer;display:flex;align-items:center;justify-content:center;
+  transition:background .15s;
+}
+.count-btn:hover{background:#2A2148}
+.count-display{min-width:40px;text-align:center;font-size:18px;font-weight:800;color:#F0ECF8}
+
+/* Submit */
+.submit-btn{
+  width:100%;background:#9B7DFF;color:#fff;border:none;
+  border-radius:14px;padding:16px;font-size:16px;font-weight:800;
+  font-family:'Nunito',sans-serif;cursor:pointer;margin-top:8px;
+  transition:opacity .2s, transform .1s;
+}
+.submit-btn:hover{opacity:.9}
+.submit-btn:active{transform:scale(.98)}
+.submit-btn:disabled{opacity:.35;cursor:not-allowed}
+
+/* Results */
+.results-banner{background:#9B7DFF15;border:1px solid #9B7DFF30;border-radius:14px;padding:16px;margin-bottom:24px}
+.results-banner-title{font-size:14px;font-weight:800;color:#9B7DFF;margin-bottom:10px;text-transform:uppercase;letter-spacing:.5px}
+.rec-row{display:flex;align-items:center;gap:8px;margin-bottom:6px}
+.rec-label{font-size:12px;font-weight:600;color:#5E5580;width:60px;flex-shrink:0}
+.rec-value{font-size:14px;font-weight:700;color:#F0ECF8}
+.result-card{background:#151028;border:1.5px solid #2A2148;border-radius:14px;padding:14px;margin-bottom:10px}
+.result-card.winner{border-color:#FFB84D60;background:#FFB84D08}
+.result-label{font-size:15px;font-weight:700;color:#F0ECF8;margin-bottom:6px;display:flex;align-items:center;gap:6px}
+.trophy{color:#FFB84D;font-size:15px}
+.result-bar-wrap{height:5px;background:#2A2148;border-radius:3px;overflow:hidden;margin-bottom:5px}
+.result-bar-fill{height:5px;border-radius:3px;background:#9B7DFF;transition:width .4s ease}
+.result-card.winner .result-bar-fill{background:#FFB84D}
+.result-score{font-size:11px;color:#5E5580;font-weight:600}
+.results-section-title{font-size:15px;font-weight:700;color:#9B93B8;margin:20px 0 10px}
+
+/* Success */
+.success-screen{text-align:center;padding:60px 20px}
+.success-screen h2{font-size:26px;font-weight:800;color:#9B7DFF;margin-bottom:10px}
+.success-screen p{font-size:14px;color:#9B93B8;line-height:1.6}
+.finalized-banner{background:#4ADE8015;border:1px solid #4ADE8030;border-radius:12px;padding:14px;text-align:center;margin-bottom:20px}
+.finalized-banner span{color:#4ADE80;font-weight:700;font-size:15px}
+.error-screen{text-align:center;padding:60px 20px;color:#FF4757}
+.closed-badge{background:#FF475715;border:1px solid #FF475730;border-radius:10px;padding:8px 14px;font-size:13px;font-weight:600;color:#FF4757;display:inline-block;margin-bottom:16px}
 </style>
 </head>
 <body>
 <div class="container" id="app">
-<div class="logo-row">
-<svg width="24" height="24" viewBox="0 0 100 100" fill="none"><path d="M20 70 Q50 20 80 70" stroke="#9B7DFF" stroke-width="6" fill="none"/><path d="M30 70 Q50 30 70 70" stroke="#B9A4FF" stroke-width="4" fill="none"/></svg>
-<span class="logo-text">Bridges</span>
-</div>
-<div id="loading"><p style="text-align:center;color:#9B93B8">Loading...</p></div>
+  <div class="logo-row">
+    <svg width="24" height="24" viewBox="0 0 100 100" fill="none"><path d="M20 70 Q50 20 80 70" stroke="#9B7DFF" stroke-width="6" fill="none"/><path d="M30 70 Q50 30 70 70" stroke="#B9A4FF" stroke-width="4" fill="none"/></svg>
+    <span class="logo-text">Bridges</span>
+  </div>
+  <p style="text-align:center;color:#5E5580">Loading...</p>
 </div>
 
 <script>
 const shareCode = window.location.pathname.split('/vote/')[1];
 let planData = null;
-let selectedOptions = new Set();
+let voterName = '';
 let submitted = false;
+
+// Per question-type: array of option ids in ranked order (index 0 = rank 1)
+let rankings = {}; // { questionType: [optionId, ...] }
+let rejected = {};  // { optionId: true }
+let bringsGuests = null; // true/false
+let plusOneCount = 1;
+
+// Drag state
+let dragSrc = null;
+let dragType = null;
+
+function esc(s) {
+  if (!s) return '';
+  const d = document.createElement('div');
+  d.textContent = String(s);
+  return d.innerHTML;
+}
 
 async function load() {
   try {
-    const res = await fetch(`/api/vote/${shareCode}`);
+    const res = await fetch('/api/vote/' + shareCode);
     if (!res.ok) throw new Error('Not found');
     planData = await res.json();
+
+    // Initialize rankings: each type gets its options in order
+    const types = [...new Set(planData.options.map(o => o.questionType))];
+    types.forEach(t => {
+      rankings[t] = planData.options.filter(o => o.questionType === t).map(o => o.id);
+    });
+
     render();
-  } catch (e) {
-    document.getElementById('loading').innerHTML = '<div class="error-msg"><h2>Hangout not found</h2><p>This link may have expired or been removed.</p></div>';
+  } catch(e) {
+    document.getElementById('app').innerHTML =
+      '<div class="error-screen"><h2>Not found</h2><p>This survey link may have expired or been removed.</p></div>';
   }
 }
 
 function render() {
   const app = document.getElementById('app');
   const isFinalized = planData.status === 'finalized';
-  const maxVotes = Math.max(...planData.options.map(o => o.voteCount || 0), 1);
+  const isDeadlinePassed = planData.deadline && new Date(planData.deadline) < new Date();
 
-  let html = `<div class="logo-row"><svg width="24" height="24" viewBox="0 0 100 100" fill="none"><path d="M20 70 Q50 20 80 70" stroke="#9B7DFF" stroke-width="6" fill="none"/><path d="M30 70 Q50 30 70 70" stroke="#B9A4FF" stroke-width="4" fill="none"/></svg><span class="logo-text">Bridges</span></div>`;
+  let html = `
+    <div class="logo-row">
+      <svg width="24" height="24" viewBox="0 0 100 100" fill="none"><path d="M20 70 Q50 20 80 70" stroke="#9B7DFF" stroke-width="6" fill="none"/><path d="M30 70 Q50 30 70 70" stroke="#B9A4FF" stroke-width="4" fill="none"/></svg>
+      <span class="logo-text">Bridges</span>
+    </div>
+    <h1 class="title">${esc(planData.title)}</h1>
+    <p class="creator">survey by ${esc(planData.creatorName)}</p>
+  `;
 
-  html += `<h1 class="title">${esc(planData.title)}</h1>`;
-  html += `<p class="creator">by ${esc(planData.creatorName)}</p>`;
-  if (planData.description) html += `<p class="desc">${esc(planData.description)}</p>`;
+  if (planData.description) {
+    html += `<p class="desc">${esc(planData.description)}</p>`;
+  }
+
+  if (planData.deadline) {
+    const d = new Date(planData.deadline);
+    const label = isDeadlinePassed ? 'Voting closed' : 'Closes ' + d.toLocaleDateString('en-US', { month:'short', day:'numeric', hour:'numeric', minute:'2-digit' });
+    html += `<div class="deadline-badge">${isDeadlinePassed ? '&#x1F512;' : '&#x23F0;'} ${label}</div>`;
+  }
 
   if (isFinalized) {
-    const winner = planData.options.find(o => o.id === planData.finalizedOptionId);
-    html += `<div class="finalized-banner"><span>Plan finalized${winner ? ': ' + esc(winner.label) : ''}</span></div>`;
-    html += `<div class="section-title">Results</div>`;
-    const sorted = [...planData.options].sort((a,b) => (b.voteCount||0) - (a.voteCount||0));
-    sorted.forEach(opt => {
-      const isWinner = opt.id === planData.finalizedOptionId;
-      const pct = maxVotes > 0 ? ((opt.voteCount||0)/maxVotes)*100 : 0;
-      html += `<div class="option-card${isWinner?' winner':''}">`;
-      html += `<div class="option-label">${isWinner?'<span class="trophy">&#x1F3C6;</span>':''}${esc(opt.label)}</div>`;
-      if(opt.dateTime) html += `<div class="option-meta">${esc(opt.dateTime)}</div>`;
-      if(opt.activity) html += `<div class="option-meta">${esc(opt.activity)}</div>`;
-      if(opt.location) html += `<div class="option-meta">${esc(opt.location)}</div>`;
-      html += `<div class="result-bar"><div class="result-fill" style="width:${pct}%"></div></div>`;
-      html += `<div class="vote-count">${opt.voteCount||0} vote${(opt.voteCount||0)!==1?'s':''}</div>`;
-      html += `</div>`;
-    });
+    html += renderResults(true);
+  } else if (isDeadlinePassed) {
+    html += `<div style="text-align:center"><span class="closed-badge">Voting is closed</span></div>`;
+    html += renderResults(false);
   } else if (submitted) {
-    html += `<div class="success-msg"><h2>Vote submitted!</h2><p>Your picks have been recorded. The organizer will finalize the plan soon.</p></div>`;
+    html += `
+      <div class="success-screen">
+        <h2>Thanks for voting!</h2>
+        <p>Your rankings have been recorded.<br>The organizer will finalize the plan soon.</p>
+      </div>
+    `;
+    html += renderResults(false);
   } else {
-    html += `<div class="name-group"><div class="name-label">Your name</div><input class="name-input" id="voterName" placeholder="Enter your name" /></div>`;
-    html += `<div class="section-title">Pick your favorites</div>`;
-    html += `<p style="font-size:12px;color:#5E5580;margin-bottom:12px">Tap all the options that work for you</p>`;
-    planData.options.forEach(opt => {
-      html += `<div class="option-card" id="opt-${opt.id}" onclick="toggle('${opt.id}')">`;
-      html += `<div class="option-label">${esc(opt.label)}</div>`;
-      if(opt.dateTime) html += `<div class="option-meta">${esc(opt.dateTime)}</div>`;
-      if(opt.activity) html += `<div class="option-meta">${esc(opt.activity)}</div>`;
-      if(opt.location) html += `<div class="option-meta">${esc(opt.location)}</div>`;
-      html += `</div>`;
-    });
-    html += `<button class="vote-btn" id="submitBtn" onclick="submit()" disabled>Submit Vote</button>`;
+    html += renderVoteForm();
   }
 
   app.innerHTML = html;
-  updateButton();
-}
 
-function toggle(id) {
-  if (selectedOptions.has(id)) selectedOptions.delete(id);
-  else selectedOptions.add(id);
-  planData.options.forEach(opt => {
-    const el = document.getElementById('opt-'+opt.id);
-    if (el) el.className = selectedOptions.has(opt.id) ? 'option-card selected' : 'option-card';
-  });
-  updateButton();
-}
-
-function updateButton() {
-  const btn = document.getElementById('submitBtn');
-  const name = document.getElementById('voterName');
-  if (btn && name) {
-    btn.disabled = selectedOptions.size === 0 || !name.value.trim();
+  if (!isFinalized && !isDeadlinePassed && !submitted) {
+    attachDragHandlers();
+    attachFormHandlers();
+    updateSubmitBtn();
   }
 }
 
-document.addEventListener('input', e => {
-  if (e.target && e.target.id === 'voterName') updateButton();
-});
+function renderVoteForm() {
+  let html = '';
 
-async function submit() {
-  const name = document.getElementById('voterName').value.trim();
-  if (!name || selectedOptions.size === 0) return;
+  // Name
+  html += `
+    <div class="name-group">
+      <label class="label" for="voterName">Your name</label>
+      <input class="name-input" id="voterName" placeholder="Enter your name" autocomplete="given-name" value="${esc(voterName)}" />
+    </div>
+  `;
+
+  // Fixed activity badge
+  if (planData.surveyMode === 'fixed-activity' && planData.fixedActivity) {
+    html += `
+      <div class="fixed-activity-badge">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#9B7DFF" stroke-width="2.5" stroke-linecap="round"><path d="M12 2l2.4 7.4H22l-6.2 4.5 2.4 7.4L12 17l-6.2 4.3 2.4-7.4L2 9.4h7.6z"/></svg>
+        <span class="fixed-activity-text">${esc(planData.fixedActivity)}</span>
+      </div>
+    `;
+  }
+
+  // Activity options (only if standard mode)
+  const activityOptions = planData.options.filter(o => o.questionType === 'activity');
+  if (activityOptions.length > 0) {
+    html += renderRankSection('activity', 'Activity', 'Drag to rank your preferred activity');
+  }
+
+  // Time options
+  const timeOptions = planData.options.filter(o => o.questionType === 'time');
+  if (timeOptions.length > 0) {
+    html += renderRankSection('time', 'When', 'Drag to rank your preferred time');
+  }
+
+  // Location options
+  const locationOptions = planData.options.filter(o => o.questionType === 'location');
+  if (locationOptions.length > 0) {
+    html += renderRankSection('location', 'Where', 'Drag to rank your preferred location');
+  }
+
+  // Plus one
+  if (planData.includePlusOne) {
+    html += `
+      <div class="plus-one-section">
+        <div class="section-title" style="margin-bottom:10px">Are you bringing anyone?</div>
+        <div class="radio-row">
+          <div class="radio-opt${bringsGuests === false ? ' selected' : ''}" id="no-guests" onclick="setBringsGuests(false)">Just me</div>
+          <div class="radio-opt${bringsGuests === true ? ' selected' : ''}" id="yes-guests" onclick="setBringsGuests(true)">Yes, bringing guests</div>
+        </div>
+        ${bringsGuests === true ? `
+          <div class="label" style="margin-bottom:8px">How many guests?</div>
+          <div class="plus-count-row">
+            <button class="count-btn" onclick="changePlusOne(-1)">−</button>
+            <span class="count-display" id="plusOneDisplay">${plusOneCount}</span>
+            <button class="count-btn" onclick="changePlusOne(1)">+</button>
+          </div>
+        ` : ''}
+      </div>
+    `;
+  }
+
+  html += `<button class="submit-btn" id="submitBtn" onclick="submitVotes()" disabled>Submit my rankings</button>`;
+  return html;
+}
+
+function renderRankSection(type, title, subtitle) {
+  const order = rankings[type] || [];
+  const maxScore = order.length;
+  let html = `
+    <div class="section" id="section-${type}">
+      <div class="section-header">
+        <div class="section-title">${title}</div>
+        <div class="section-subtitle">${subtitle} — top is best</div>
+      </div>
+      <div class="rank-list" id="list-${type}" data-type="${type}">
+  `;
+
+  order.forEach((optId, idx) => {
+    const opt = planData.options.find(o => o.id === optId);
+    if (!opt) return;
+    const isRejected = !!rejected[optId];
+    const rank = idx + 1;
+    const gradientPct = Math.max(0, 1 - idx / Math.max(order.length - 1, 1));
+    const r = Math.round(155 * gradientPct + 50 * (1 - gradientPct));
+    const g = Math.round(125 * gradientPct + 40 * (1 - gradientPct));
+    const b = Math.round(255 * gradientPct + 80 * (1 - gradientPct));
+    const numBg = isRejected ? '#2A2148' : `rgba(${r},${g},${b},0.2)`;
+    const numColor = isRejected ? '#5E5580' : `rgb(${r},${g},${b})`;
+    const borderColor = isRejected ? '#2A1A38' : `rgba(${r},${g},${b},0.3)`;
+
+    html += `
+      <div class="rank-card${isRejected ? ' rejected' : ''}"
+           id="card-${optId}"
+           data-id="${optId}"
+           data-type="${type}"
+           draggable="${!isRejected}"
+           style="border-color:${borderColor}">
+        <div class="rank-num" style="background:${numBg};color:${numColor}">
+          ${isRejected ? '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>' : rank}
+        </div>
+        <div class="rank-card-content">
+          <div class="rank-card-label">${esc(opt.label)}</div>
+          ${opt.dateTime ? `<div class="rank-card-meta">${esc(opt.dateTime)}</div>` : ''}
+        </div>
+        <div class="reject-btn${isRejected ? ' active' : ''}" onclick="toggleReject('${optId}', '${type}')" title="${isRejected ? 'Undo rejection' : 'Not interested'}">
+          ${isRejected
+            ? '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"><polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>'
+            : '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>'}
+        </div>
+      </div>
+    `;
+  });
+
+  html += `
+      </div>
+      <p class="drag-hint">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#5E5580" stroke-width="2" stroke-linecap="round"><circle cx="9" cy="5" r="1"/><circle cx="9" cy="12" r="1"/><circle cx="9" cy="19" r="1"/><circle cx="15" cy="5" r="1"/><circle cx="15" cy="12" r="1"/><circle cx="15" cy="19" r="1"/></svg>
+        Drag to reorder &nbsp;·&nbsp; Tap ✕ to reject
+      </p>
+    </div>
+  `;
+  return html;
+}
+
+function renderResults(showFinalized) {
+  const rec = planData.bestRecommendation;
+  let html = '';
+
+  if (showFinalized) {
+    const winner = planData.options.find(o => o.id === planData.finalizedOptionId);
+    html += `<div class="finalized-banner"><span>Plan finalized${winner ? ': ' + esc(winner.label) : ''}</span></div>`;
+  }
+
+  if (rec && (rec.bestActivity || rec.bestTime || rec.bestLocation)) {
+    html += `<div class="results-banner"><div class="results-banner-title">Best picks</div>`;
+    if (rec.bestActivity) html += `<div class="rec-row"><span class="rec-label">Activity</span><span class="rec-value">${esc(rec.bestActivity.label)}</span></div>`;
+    if (rec.bestTime) html += `<div class="rec-row"><span class="rec-label">Time</span><span class="rec-value">${esc(rec.bestTime.label)}</span></div>`;
+    if (rec.bestLocation) html += `<div class="rec-row"><span class="rec-label">Where</span><span class="rec-value">${esc(rec.bestLocation.label)}</span></div>`;
+    if (rec.totalVoters !== undefined) html += `<div class="rec-row" style="margin-top:6px"><span class="rec-label">Voters</span><span class="rec-value">${rec.totalVoters}</span></div>`;
+    html += `</div>`;
+  }
+
+  const types = [
+    { key: 'activity', label: 'Activity' },
+    { key: 'time', label: 'When' },
+    { key: 'location', label: 'Where' },
+  ];
+
+  types.forEach(({ key, label }) => {
+    const opts = planData.options.filter(o => o.questionType === key);
+    if (opts.length === 0) return;
+
+    const sorted = [...opts].sort((a, b) => (b.bordaScore || 0) - (a.bordaScore || 0));
+    const maxScore = sorted[0]?.bordaScore || 1;
+
+    html += `<div class="results-section-title">${label}</div>`;
+    sorted.forEach(opt => {
+      const isWinner = showFinalized && opt.id === planData.finalizedOptionId;
+      const pct = maxScore > 0 ? ((opt.bordaScore || 0) / maxScore) * 100 : 0;
+      html += `
+        <div class="result-card${isWinner ? ' winner' : ''}">
+          <div class="result-label">
+            ${isWinner ? '<span class="trophy">&#x1F3C6;</span>' : ''}
+            ${esc(opt.label)}
+          </div>
+          <div class="result-bar-wrap"><div class="result-bar-fill" style="width:${pct}%"></div></div>
+          <div class="result-score">${opt.bordaScore || 0} pts &middot; ${opt.voteCount || 0} voter${(opt.voteCount || 0) !== 1 ? 's' : ''}</div>
+        </div>
+      `;
+    });
+  });
+
+  return html;
+}
+
+// --- Drag & Drop ---
+function attachDragHandlers() {
+  document.querySelectorAll('.rank-list').forEach(list => {
+    const type = list.dataset.type;
+
+    list.addEventListener('dragstart', e => {
+      const card = e.target.closest('.rank-card');
+      if (!card || card.classList.contains('rejected')) { e.preventDefault(); return; }
+      dragSrc = card.dataset.id;
+      dragType = type;
+      card.classList.add('dragging');
+      e.dataTransfer.effectAllowed = 'move';
+    });
+
+    list.addEventListener('dragend', e => {
+      const card = e.target.closest('.rank-card');
+      if (card) card.classList.remove('dragging');
+      document.querySelectorAll('.rank-card.drag-over').forEach(c => c.classList.remove('drag-over'));
+      dragSrc = null; dragType = null;
+    });
+
+    list.addEventListener('dragover', e => {
+      e.preventDefault();
+      e.dataTransfer.dropEffect = 'move';
+      const card = e.target.closest('.rank-card');
+      if (card && card.dataset.id !== dragSrc) {
+        document.querySelectorAll('.rank-card.drag-over').forEach(c => c.classList.remove('drag-over'));
+        card.classList.add('drag-over');
+      }
+    });
+
+    list.addEventListener('drop', e => {
+      e.preventDefault();
+      const card = e.target.closest('.rank-card');
+      if (!card || !dragSrc || card.dataset.id === dragSrc) return;
+      const targetId = card.dataset.id;
+      const order = rankings[type];
+      const fromIdx = order.indexOf(dragSrc);
+      const toIdx = order.indexOf(targetId);
+      if (fromIdx < 0 || toIdx < 0) return;
+      order.splice(fromIdx, 1);
+      order.splice(toIdx, 0, dragSrc);
+      renderSection(type);
+      updateSubmitBtn();
+    });
+  });
+
+  // Touch drag
+  attachTouchHandlers();
+}
+
+function attachTouchHandlers() {
+  document.querySelectorAll('.rank-card:not(.rejected)').forEach(card => {
+    let startY = 0, startIdx = -1, currentIdx = -1, type = '';
+    let clone = null;
+    let scrollInterval = null;
+
+    card.addEventListener('touchstart', e => {
+      if (e.target.closest('.reject-btn')) return;
+      const touch = e.touches[0];
+      startY = touch.clientY;
+      type = card.dataset.type;
+      const order = rankings[type];
+      startIdx = order.indexOf(card.dataset.id);
+      currentIdx = startIdx;
+
+      // Create visual clone
+      clone = card.cloneNode(true);
+      clone.style.cssText = `
+        position:fixed;left:${card.getBoundingClientRect().left}px;
+        top:${card.getBoundingClientRect().top}px;
+        width:${card.offsetWidth}px;opacity:.85;
+        transform:scale(1.02);z-index:999;pointer-events:none;
+        box-shadow:0 8px 24px rgba(0,0,0,.5);border-radius:14px;
+        transition:none;
+      `;
+      document.body.appendChild(clone);
+      card.style.opacity = '0.3';
+    }, {passive:true});
+
+    card.addEventListener('touchmove', e => {
+      if (!clone) return;
+      e.preventDefault();
+      const touch = e.touches[0];
+      const dy = touch.clientY - startY;
+      clone.style.top = (card.getBoundingClientRect().top + dy) + 'px';
+
+      // Find which card we're hovering over
+      const cards = Array.from(document.querySelectorAll(`#list-${type} .rank-card`));
+      cards.forEach(c => c.classList.remove('drag-over'));
+      const hovered = cards.find(c => {
+        const r = c.getBoundingClientRect();
+        return touch.clientY > r.top && touch.clientY < r.bottom && c !== card;
+      });
+      if (hovered) {
+        hovered.classList.add('drag-over');
+        const hoverId = hovered.dataset.id;
+        const order = rankings[type];
+        const fromIdx = order.indexOf(card.dataset.id);
+        const toIdx = order.indexOf(hoverId);
+        if (fromIdx >= 0 && toIdx >= 0 && toIdx !== currentIdx) {
+          currentIdx = toIdx;
+        }
+      }
+    }, {passive:false});
+
+    card.addEventListener('touchend', e => {
+      if (!clone) return;
+      clone.remove(); clone = null;
+      card.style.opacity = '';
+      document.querySelectorAll('.rank-card.drag-over').forEach(c => c.classList.remove('drag-over'));
+
+      const order = rankings[type];
+      const fromIdx = order.indexOf(card.dataset.id);
+      if (fromIdx >= 0 && currentIdx >= 0 && fromIdx !== currentIdx) {
+        order.splice(fromIdx, 1);
+        order.splice(currentIdx, 0, card.dataset.id);
+      }
+      renderSection(type);
+      updateSubmitBtn();
+    });
+  });
+}
+
+function renderSection(type) {
+  const section = document.getElementById('section-' + type);
+  if (!section) return;
+  const titles = { activity: 'Activity', time: 'When', location: 'Where' };
+  const subtitles = { activity: 'Drag to rank your preferred activity', time: 'Drag to rank your preferred time', location: 'Drag to rank your preferred location' };
+  section.innerHTML = `
+    <div class="section-header">
+      <div class="section-title">${titles[type] || type}</div>
+      <div class="section-subtitle">${subtitles[type] || ''} — top is best</div>
+    </div>
+  ` + document.getElementById('section-' + type).innerHTML.split('</div>').slice(1).join('</div>');
+
+  // Re-render just the list
+  const list = document.getElementById('list-' + type);
+  if (!list) return;
+  const order = rankings[type] || [];
+  list.innerHTML = '';
+  order.forEach((optId, idx) => {
+    const opt = planData.options.find(o => o.id === optId);
+    if (!opt) return;
+    const isRejected = !!rejected[optId];
+    const gradientPct = Math.max(0, 1 - idx / Math.max(order.length - 1, 1));
+    const r = Math.round(155 * gradientPct + 50 * (1 - gradientPct));
+    const g = Math.round(125 * gradientPct + 40 * (1 - gradientPct));
+    const b = Math.round(255 * gradientPct + 80 * (1 - gradientPct));
+    const numBg = isRejected ? '#2A2148' : `rgba(${r},${g},${b},0.2)`;
+    const numColor = isRejected ? '#5E5580' : `rgb(${r},${g},${b})`;
+    const borderColor = isRejected ? '#2A1A38' : `rgba(${r},${g},${b},0.3)`;
+
+    const cardEl = document.createElement('div');
+    cardEl.className = 'rank-card' + (isRejected ? ' rejected' : '');
+    cardEl.id = 'card-' + optId;
+    cardEl.dataset.id = optId;
+    cardEl.dataset.type = type;
+    cardEl.draggable = !isRejected;
+    cardEl.style.borderColor = borderColor;
+    cardEl.innerHTML = `
+      <div class="rank-num" style="background:${numBg};color:${numColor}">
+        ${isRejected ? '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>' : (idx + 1)}
+      </div>
+      <div class="rank-card-content">
+        <div class="rank-card-label">${esc(opt.label)}</div>
+        ${opt.dateTime ? `<div class="rank-card-meta">${esc(opt.dateTime)}</div>` : ''}
+      </div>
+      <div class="reject-btn${isRejected ? ' active' : ''}" title="${isRejected ? 'Undo rejection' : 'Not interested'}">
+        ${isRejected
+          ? '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"><polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>'
+          : '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>'}
+      </div>
+    `;
+    cardEl.querySelector('.reject-btn').addEventListener('click', () => toggleReject(optId, type));
+    list.appendChild(cardEl);
+  });
+
+  attachDragHandlers();
+  attachTouchHandlers();
+}
+
+function toggleReject(optId, type) {
+  rejected[optId] = !rejected[optId];
+  renderSection(type);
+  updateSubmitBtn();
+}
+
+function attachFormHandlers() {
+  const nameInput = document.getElementById('voterName');
+  if (nameInput) {
+    nameInput.addEventListener('input', e => {
+      voterName = e.target.value;
+      updateSubmitBtn();
+    });
+  }
+}
+
+function setBringsGuests(val) {
+  bringsGuests = val;
+  // Re-render plus one section
+  render();
+}
+
+function changePlusOne(delta) {
+  plusOneCount = Math.max(1, Math.min(10, plusOneCount + delta));
+  const display = document.getElementById('plusOneDisplay');
+  if (display) display.textContent = plusOneCount;
+}
+
+function updateSubmitBtn() {
+  const btn = document.getElementById('submitBtn');
+  if (!btn) return;
+  const name = document.getElementById('voterName');
+  const hasName = name && name.value.trim().length > 0;
+  const plusOneDone = !planData.includePlusOne || bringsGuests !== null;
+  btn.disabled = !hasName || !plusOneDone;
+}
+
+async function submitVotes() {
+  const nameEl = document.getElementById('voterName');
+  const name = nameEl ? nameEl.value.trim() : voterName.trim();
+  if (!name) return;
+
   const btn = document.getElementById('submitBtn');
   btn.disabled = true;
   btn.textContent = 'Submitting...';
+
+  const votes = [];
+  planData.options.forEach(opt => {
+    const type = opt.questionType;
+    const order = rankings[type] || [];
+    const idx = order.indexOf(opt.id);
+    const isRejected = !!rejected[opt.id];
+    const rank = isRejected ? 0 : (idx >= 0 ? idx + 1 : 0);
+    votes.push({ optionId: opt.id, rank });
+  });
+
   try {
-    const votes = planData.options.map(opt => ({
-      optionId: opt.id,
-      vote: selectedOptions.has(opt.id),
-    }));
-    const res = await fetch(`/api/vote/${shareCode}`, {
+    const res = await fetch('/api/vote/' + shareCode, {
       method: 'POST',
-      headers: {'Content-Type':'application/json'},
-      body: JSON.stringify({ voterName: name, votes }),
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        voterName: name,
+        votes,
+        bringsGuests: planData.includePlusOne ? bringsGuests : null,
+        plusOneCount: planData.includePlusOne && bringsGuests ? plusOneCount : null,
+      }),
     });
-    if (!res.ok) throw new Error('Failed');
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.message || 'Failed');
+    }
     submitted = true;
+    voterName = name;
+
+    // Refresh plan data to show updated results
+    const updated = await fetch('/api/vote/' + shareCode);
+    if (updated.ok) planData = await updated.json();
     render();
   } catch(e) {
     btn.disabled = false;
-    btn.textContent = 'Submit Vote';
-    alert('Failed to submit vote. Please try again.');
+    btn.textContent = 'Submit my rankings';
+    alert(e.message || 'Failed to submit. Please try again.');
   }
 }
-
-function esc(s) { const d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
 
 load();
 </script>

@@ -20,7 +20,8 @@
     "Plan a spontaneous date or hangout with [Name] this week.",
     "Surprise [Name] with a home-cooked meal or dessert drop-off.",
     "Plan a no-phones evening with [Name] - just quality time.",
-    "Invite [Name] to do something completely new together."
+    "Invite [Name] to do something completely new together.",
+    "Send [Name] your favourite picture of the both of you"
   ],
   "circle2Call": [
     "Call [Name] to catch up - even 10 minutes makes a difference.",
@@ -193,5 +194,5 @@
       "Plan a camping or nature trip together"
     ]
   },
-  "lastSynced": "2026-03-16T02:42:29.562Z"
+  "lastSynced": "2026-03-18T02:27:11.573Z"
 }

@@ -43,6 +43,11 @@ export const hangoutPlans = pgTable("hangout_plans", {
   shareCode: text("share_code").notNull().unique(),
   finalizedOptionId: varchar("finalized_option_id"),
   inviteeNames: text("invitee_names").array().notNull().default(sql`'{}'::text[]`),
+  // New survey fields
+  surveyMode: text("survey_mode").notNull().default("standard"), // 'standard' | 'fixed-activity'
+  fixedActivity: text("fixed_activity"),
+  deadline: text("deadline"),
+  includePlusOne: boolean("include_plus_one").notNull().default(false),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });
@@ -56,6 +61,7 @@ export const hangoutOptions = pgTable("hangout_options", {
   dateTime: text("date_time"),
   activity: text("activity"),
   location: text("location"),
+  questionType: text("question_type").notNull().default("option"), // 'activity' | 'time' | 'location'
 });
 
 export const hangoutVotes = pgTable("hangout_votes", {
@@ -65,7 +71,9 @@ export const hangoutVotes = pgTable("hangout_votes", {
   optionId: varchar("option_id").references(() => hangoutOptions.id),
   planId: varchar("plan_id").references(() => hangoutPlans.id),
   voterName: text("voter_name").notNull(),
-  vote: boolean("vote").notNull().default(true),
+  rank: integer("rank"), // 1 = top pick, 0 or null = rejected. Replaces boolean vote.
+  bringsGuests: boolean("brings_guests"),
+  plusOneCount: integer("plus_one_count"),
   createdAt: timestamp("created_at").defaultNow(),
 });
 
