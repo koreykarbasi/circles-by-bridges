@@ -135,11 +135,25 @@ export default function HomeScreen() {
       return !isInCooldown(c.circleLevel as 1 | 2 | 3, daysSinceLastSug);
     };
 
+    const circle3NudgeContact = contacts.find((c) => {
+      if (c.circleLevel !== 3) return false;
+      if (dismissedSuggestions.has(c.id)) return false;
+      if (reminderContactIds.has(c.id)) return false;
+      const daysSince = getDaysSince(c.lastContacted ?? undefined);
+      if (daysSince === null || daysSince < 90) return false;
+      const daysSinceLastSug = getDaysSinceLastSuggestedSync(c.id, lastSuggestedDates);
+      return daysSinceLastSug === null || daysSinceLastSug > 60;
+    });
+
+    const c1c2SlotCount = circle3NudgeContact
+      ? MAX_SUGGESTIONS - 1
+      : MAX_SUGGESTIONS;
+
     const currentStableIds = shownSuggestionIds.current.filter(
       (id) => !dismissedSuggestions.has(id) && !reminderContactIds.has(id),
-    );
+    ).slice(0, c1c2SlotCount);
     const stableSet = new Set(currentStableIds);
-    const slotsNeeded = MAX_SUGGESTIONS - currentStableIds.length;
+    const slotsNeeded = c1c2SlotCount - currentStableIds.length;
 
     let newContacts: typeof contacts = [];
     if (slotsNeeded > 0) {
@@ -156,39 +170,28 @@ export default function HomeScreen() {
         .map((x) => x.contact);
     }
 
-    const allIds = [...currentStableIds, ...newContacts.map((c) => c.id)];
-    shownSuggestionIds.current = allIds;
+    const allC1C2Ids = [...currentStableIds, ...newContacts.map((c) => c.id)];
+    shownSuggestionIds.current = allC1C2Ids;
 
-    const result: Suggestion[] = allIds
+    const result: Suggestion[] = allC1C2Ids
       .map((id) => contacts.find((c) => c.id === id))
       .filter((c): c is typeof contacts[0] => c !== undefined)
       .map((c) => getSuggestionForContact(c));
 
-    if (result.length < MAX_SUGGESTIONS) {
-      const circle3Nudge = contacts.find((c) => {
-        if (c.circleLevel !== 3) return false;
-        if (dismissedSuggestions.has(c.id)) return false;
-        if (reminderContactIds.has(c.id)) return false;
-        const daysSince = getDaysSince(c.lastContacted ?? undefined);
-        if (daysSince === null || daysSince < 90) return false;
-        const daysSinceLastSug = getDaysSinceLastSuggestedSync(c.id, lastSuggestedDates);
-        return daysSinceLastSug === null || daysSinceLastSug > 60;
+    if (circle3NudgeContact) {
+      const daysSince = getDaysSince(circle3NudgeContact.lastContacted ?? undefined)!;
+      const is6Month = daysSince >= 180;
+      result.push({
+        contactId: circle3NudgeContact.id,
+        contactName: circle3NudgeContact.name,
+        avatarColor: circle3NudgeContact.avatarColor,
+        photoUri: circle3NudgeContact.photoUri,
+        circleLevel: 3 as 1 | 2 | 3,
+        prompt: is6Month
+          ? `It's been 6 months since you last spoke to ${circle3NudgeContact.name} — it might be time to reconnect.`
+          : `You haven't spoken to ${circle3NudgeContact.name} in 3 months — want to set up a hangout or give them a call?`,
+        actionType: "hangout",
       });
-      if (circle3Nudge) {
-        const daysSince = getDaysSince(circle3Nudge.lastContacted ?? undefined)!;
-        const is6Month = daysSince >= 180;
-        result.push({
-          contactId: circle3Nudge.id,
-          contactName: circle3Nudge.name,
-          avatarColor: circle3Nudge.avatarColor,
-          photoUri: circle3Nudge.photoUri,
-          circleLevel: 3 as 1 | 2 | 3,
-          prompt: is6Month
-            ? `It's been 6 months since you last spoke to ${circle3Nudge.name} — it might be time to reconnect.`
-            : `You haven't spoken to ${circle3Nudge.name} in 3 months — want to set up a hangout or give them a call?`,
-          actionType: "hangout",
-        });
-      }
     }
 
     return result;
