@@ -13,7 +13,7 @@ import { formatLastContacted, getDaysSince, getDaysUntilBirthday } from "@/lib/h
 import { CIRCLE_CONFIG } from "@/lib/types";
 import { generateReminders, Reminder } from "@/lib/reminders";
 import { getSmartPrompt, getActionType, getNextPrompt, loadSyncedPrompts } from "@/lib/prompts";
-import { loadSchedulerData, markSuggested, getDaysSinceLastSuggestedSync, scoreSuggestion } from "@/lib/suggestion-scheduler";
+import { loadSchedulerData, markSuggested, getDaysSinceLastSuggestedSync, scoreSuggestion, isInCooldown } from "@/lib/suggestion-scheduler";
 import { getTextCopyMessage } from "@/components/SuggestionCard";
 import * as Clipboard from "expo-clipboard";
 import { router } from "expo-router";
@@ -121,24 +121,48 @@ export default function HomeScreen() {
     [suggestionPrompts],
   );
 
+  const shownSuggestionIds = useRef<string[]>([]);
+  const suggestionKeyRef = useRef<string>("");
+
   const suggestions = useMemo(() => {
     const reminderContactIds = new Set(visibleReminders.map((r) => r.contactId));
-    const eligibleContacts = contacts
-      .filter((c) => !dismissedSuggestions.has(c.id) && !reminderContactIds.has(c.id) && c.circleLevel !== 3)
-      .map((c) => {
-        const daysSinceLastSug = getDaysSinceLastSuggestedSync(c.id, lastSuggestedDates);
-        const daysSinceContact = getDaysSince(c.lastContacted ?? undefined);
-        const daysUntilBday = getDaysUntilBirthday(c.birthday ?? undefined);
-        return {
-          contact: c,
-          score: scoreSuggestion(c.circleLevel as 1 | 2 | 3, daysSinceLastSug, daysSinceContact, daysUntilBday),
-        };
-      })
-      .sort((a, b) => b.score - a.score)
-      .slice(0, MAX_SUGGESTIONS)
-      .map((x) => x.contact);
 
-    const result = eligibleContacts.map((c) => getSuggestionForContact(c));
+    const isEligibleForNewSlot = (c: typeof contacts[0]): boolean => {
+      if (dismissedSuggestions.has(c.id)) return false;
+      if (reminderContactIds.has(c.id)) return false;
+      if (c.circleLevel === 3) return false;
+      const daysSinceLastSug = getDaysSinceLastSuggestedSync(c.id, lastSuggestedDates);
+      return !isInCooldown(c.circleLevel as 1 | 2 | 3, daysSinceLastSug);
+    };
+
+    const currentStableIds = shownSuggestionIds.current.filter(
+      (id) => !dismissedSuggestions.has(id) && !reminderContactIds.has(id),
+    );
+    const stableSet = new Set(currentStableIds);
+    const slotsNeeded = MAX_SUGGESTIONS - currentStableIds.length;
+
+    let newContacts: typeof contacts = [];
+    if (slotsNeeded > 0) {
+      newContacts = contacts
+        .filter((c) => !stableSet.has(c.id) && isEligibleForNewSlot(c))
+        .map((c) => {
+          const daysSinceLastSug = getDaysSinceLastSuggestedSync(c.id, lastSuggestedDates);
+          const daysSinceContact = getDaysSince(c.lastContacted ?? undefined);
+          const daysUntilBday = getDaysUntilBirthday(c.birthday ?? undefined);
+          return { contact: c, score: scoreSuggestion(c.circleLevel as 1 | 2 | 3, daysSinceLastSug, daysSinceContact, daysUntilBday) };
+        })
+        .sort((a, b) => b.score - a.score)
+        .slice(0, slotsNeeded)
+        .map((x) => x.contact);
+    }
+
+    const allIds = [...currentStableIds, ...newContacts.map((c) => c.id)];
+    shownSuggestionIds.current = allIds;
+
+    const result: Suggestion[] = allIds
+      .map((id) => contacts.find((c) => c.id === id))
+      .filter((c): c is typeof contacts[0] => c !== undefined)
+      .map((c) => getSuggestionForContact(c));
 
     if (result.length < MAX_SUGGESTIONS) {
       const circle3Nudge = contacts.find((c) => {
@@ -170,12 +194,12 @@ export default function HomeScreen() {
     return result;
   }, [contacts, dismissedSuggestions, visibleReminders, getSuggestionForContact, lastSuggestedDates]);
 
-  const suggestionKeyRef = useRef<string>("");
   useEffect(() => {
     const key = suggestions.map((s) => s.contactId).join(",");
     if (key !== "" && key !== suggestionKeyRef.current) {
       suggestionKeyRef.current = key;
       suggestions.forEach((s) => markSuggested(s.contactId));
+      loadSchedulerData().then(setLastSuggestedDates);
     }
   }, [suggestions]);
 

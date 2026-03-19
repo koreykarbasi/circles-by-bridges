@@ -3,6 +3,20 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 
 const SCHEDULER_KEY = "bridges_suggestion_scheduler_v2";
 
+export const CIRCLE_COOLDOWN_DAYS: Record<1 | 2 | 3, number> = {
+  1: 7,
+  2: 3,
+  3: 60,
+};
+
+export function isInCooldown(
+  circleLevel: 1 | 2 | 3,
+  daysSinceLastSuggested: number | null,
+): boolean {
+  if (daysSinceLastSuggested === null) return false;
+  return daysSinceLastSuggested < CIRCLE_COOLDOWN_DAYS[circleLevel];
+}
+
 interface SchedulerData {
   lastSuggested: Record<string, string>;
 }

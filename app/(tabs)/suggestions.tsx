@@ -11,7 +11,7 @@ import { CIRCLE_CONFIG } from "@/lib/types";
 import { getSmartPrompt, getNextPrompt, getActionType, resetSeenPrompts, loadSyncedPrompts } from "@/lib/prompts";
 import { getDaysSince, getDaysUntilBirthday, formatLastContacted, formatBirthdayCountdown, getContactUrgency } from "@/lib/helpers";
 import { generateReminders } from "@/lib/reminders";
-import { loadSchedulerData, markSuggested, getDaysSinceLastSuggestedSync, scoreSuggestion } from "@/lib/suggestion-scheduler";
+import { loadSchedulerData, markSuggested, getDaysSinceLastSuggestedSync, scoreSuggestion, isInCooldown } from "@/lib/suggestion-scheduler";
 import type { Contact } from "@/lib/types";
 import type { Reminder } from "@/lib/reminders";
 import { router } from "expo-router";
@@ -116,7 +116,16 @@ export default function SuggestionsScreen() {
       ? contacts.filter((c) => c.circleLevel === filterCircle && c.circleLevel !== 3)
       : contacts.filter((c) => c.circleLevel !== 3);
 
-    return [...filtered]
+    const inCooldown = (c: typeof contacts[0]) => {
+      const daysSinceLastSug = getDaysSinceLastSuggestedSync(c.id, lastSuggestedDates);
+      return isInCooldown(c.circleLevel as 1 | 2 | 3, daysSinceLastSug);
+    };
+
+    const eligible = filtered.filter((c) => !inCooldown(c));
+    const cooledDown = filtered.filter((c) => inCooldown(c));
+    const pool = eligible.length >= 1 ? eligible : [...eligible, ...cooledDown];
+
+    return [...pool]
       .map((c) => {
         const daysSinceLastSug = getDaysSinceLastSuggestedSync(c.id, lastSuggestedDates);
         const daysSinceContact = getDaysSince(c.lastContacted ?? undefined);
@@ -174,6 +183,7 @@ export default function SuggestionsScreen() {
     if (key !== "" && key !== suggestionKeyRef.current) {
       suggestionKeyRef.current = key;
       shownIds.forEach((id) => markSuggested(id));
+      loadSchedulerData().then(setLastSuggestedDates);
     }
   }, [suggestions, circle3Nudges]);
 
