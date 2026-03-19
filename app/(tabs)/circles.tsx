@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useMemo } from "react";
 import { View, Text, StyleSheet, ScrollView, Pressable, Alert, Platform } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
@@ -10,6 +10,7 @@ import { CIRCLE_CONFIG } from "@/lib/types";
 import type { Contact } from "@/lib/types";
 import { router } from "expo-router";
 import * as Haptics from "expo-haptics";
+import { computeProfileCompletion } from "@/lib/profile-completion";
 
 export default function CirclesScreen() {
   const insets = useSafeAreaInsets();
@@ -18,6 +19,7 @@ export default function CirclesScreen() {
 
   const circleContacts = getCircleContacts(activeCircle);
   const config = CIRCLE_CONFIG[activeCircle];
+  const profileCompletion = useMemo(() => computeProfileCompletion(contacts), [contacts]);
   const webTopInset = Platform.OS === "web" ? 67 : 0;
 
   return (
@@ -91,6 +93,22 @@ export default function CirclesScreen() {
 
         <Text style={styles.circleDescription}>{config.description}</Text>
 
+        {profileCompletion.stage === 2 && (
+          <View style={styles.encouragementCard}>
+            <Ionicons name="checkmark-circle" size={18} color={Colors.success} style={{ marginRight: 8 }} />
+            <View style={{ flex: 1 }}>
+              <Text style={styles.encouragementTitle}>Your circles are taking shape</Text>
+              <Text style={styles.encouragementSub}>
+                {activeCircle === 2
+                  ? "Close friends check in every month — colleagues, old classmates, neighbors you'd grab coffee with."
+                  : activeCircle === 3
+                    ? "Acquaintances are people worth keeping warm — former coworkers, distant family, friendly contacts."
+                    : "Core friends are your closest relationships. Keep their birthdays on record so you never miss one."}
+              </Text>
+            </View>
+          </View>
+        )}
+
         {circleContacts.length === 0 ? (
           <EmptyState
             icon="person-add-outline"
@@ -102,17 +120,29 @@ export default function CirclesScreen() {
         ) : (
           <>
             {circleContacts.map((contact) => (
-              <ContactCard
-                key={contact.id}
-                contact={contact}
-                onPress={() =>
-                  router.push({ pathname: "/edit-contact", params: { id: contact.id } })
-                }
-                onMarkContacted={() => markContacted(contact.id)}
-                onPlanHangout={() =>
-                  router.push({ pathname: "/create-hangout", params: { contactName: contact.name } })
-                }
-              />
+              <View key={contact.id}>
+                <ContactCard
+                  contact={contact}
+                  onPress={() =>
+                    router.push({ pathname: "/edit-contact", params: { id: contact.id } })
+                  }
+                  onMarkContacted={() => markContacted(contact.id)}
+                  onPlanHangout={() => {
+                    markContacted(contact.id);
+                    router.push({ pathname: "/create-hangout", params: { contactName: contact.name } });
+                  }}
+                />
+                {activeCircle === 1 && !contact.birthday && (
+                  <Pressable
+                    onPress={() => router.push({ pathname: "/edit-contact", params: { id: contact.id } })}
+                    style={({ pressed }) => [styles.birthdayNudge, pressed && { opacity: 0.7 }]}
+                  >
+                    <Ionicons name="gift-outline" size={14} color={Colors.accent} />
+                    <Text style={styles.birthdayNudgeText}>Add {contact.name.split(" ")[0]}'s birthday</Text>
+                    <Ionicons name="chevron-forward" size={13} color={Colors.textTertiary} />
+                  </Pressable>
+                )}
+              </View>
             ))}
             {circleContacts.length < config.max && (
               <Pressable
@@ -243,5 +273,46 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontFamily: "Nunito_600SemiBold",
     color: Colors.primary,
+  },
+  encouragementCard: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    backgroundColor: Colors.surface,
+    borderWidth: 1,
+    borderColor: Colors.success + "30",
+    borderRadius: 14,
+    padding: 14,
+    marginBottom: 12,
+    marginTop: 4,
+  },
+  encouragementTitle: {
+    fontSize: 14,
+    fontFamily: "Nunito_700Bold",
+    color: Colors.text,
+    marginBottom: 3,
+  },
+  encouragementSub: {
+    fontSize: 13,
+    fontFamily: "Nunito_400Regular",
+    color: Colors.textSecondary,
+    lineHeight: 18,
+  },
+  birthdayNudge: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    backgroundColor: Colors.accent + "12",
+    borderRadius: 8,
+    marginTop: -4,
+    marginBottom: 8,
+    marginHorizontal: 2,
+  },
+  birthdayNudgeText: {
+    flex: 1,
+    fontSize: 12,
+    fontFamily: "Nunito_600SemiBold",
+    color: Colors.accent,
   },
 });

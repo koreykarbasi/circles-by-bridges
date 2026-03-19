@@ -5,6 +5,7 @@ import { Ionicons } from "@expo/vector-icons";
 import Colors from "@/constants/colors";
 import { useContacts } from "@/lib/contacts-context";
 import { useAuth } from "@/lib/auth-context";
+import { computeProfileCompletion, STAGE1_GOALS } from "@/lib/profile-completion";
 import { CirclesVisualization } from "@/components/CirclesVisualization";
 import { ChecklistItem } from "@/components/ChecklistItem";
 import { EmptyState } from "@/components/EmptyState";
@@ -12,6 +13,9 @@ import { formatLastContacted, getDaysSince, getDaysUntilBirthday } from "@/lib/h
 import { CIRCLE_CONFIG } from "@/lib/types";
 import { generateReminders, Reminder } from "@/lib/reminders";
 import { getSmartPrompt, getActionType, getNextPrompt, loadSyncedPrompts } from "@/lib/prompts";
+import { loadSchedulerData, markSuggested, getDaysSinceLastSuggestedSync, scoreSuggestion } from "@/lib/suggestion-scheduler";
+import { getTextCopyMessage } from "@/components/SuggestionCard";
+import * as Clipboard from "expo-clipboard";
 import { router } from "expo-router";
 
 const MAX_REMINDERS = 3;
@@ -71,9 +75,11 @@ export default function HomeScreen() {
   const [dismissedReminders, setDismissedReminders] = useState<Set<string>>(new Set());
   const [dismissedSuggestions, setDismissedSuggestions] = useState<Set<string>>(new Set());
   const [suggestionPrompts, setSuggestionPrompts] = useState<Map<string, string>>(new Map());
+  const [lastSuggestedDates, setLastSuggestedDates] = useState<Record<string, string>>({});
 
   useEffect(() => {
     loadSyncedPrompts();
+    loadSchedulerData().then(setLastSuggestedDates);
   }, []);
 
   const allReminders = useMemo(() => generateReminders(contacts), [contacts]);
@@ -118,16 +124,52 @@ export default function HomeScreen() {
   const suggestions = useMemo(() => {
     const reminderContactIds = new Set(visibleReminders.map((r) => r.contactId));
     const eligibleContacts = contacts
-      .filter((c) => !dismissedSuggestions.has(c.id) && !reminderContactIds.has(c.id))
-      .sort((a, b) => {
-        const aDays = getDaysSince(a.lastContacted ?? undefined) ?? 999;
-        const bDays = getDaysSince(b.lastContacted ?? undefined) ?? 999;
-        return bDays - aDays;
+      .filter((c) => !dismissedSuggestions.has(c.id) && !reminderContactIds.has(c.id) && c.circleLevel !== 3)
+      .map((c) => {
+        const daysSinceLastSug = getDaysSinceLastSuggestedSync(c.id, lastSuggestedDates);
+        const daysSinceContact = getDaysSince(c.lastContacted ?? undefined);
+        const daysUntilBday = getDaysUntilBirthday(c.birthday ?? undefined);
+        return {
+          contact: c,
+          score: scoreSuggestion(c.circleLevel as 1 | 2 | 3, daysSinceLastSug, daysSinceContact, daysUntilBday),
+        };
       })
-      .slice(0, MAX_SUGGESTIONS);
+      .sort((a, b) => b.score - a.score)
+      .slice(0, MAX_SUGGESTIONS)
+      .map((x) => x.contact);
 
-    return eligibleContacts.map((c) => getSuggestionForContact(c));
-  }, [contacts, dismissedSuggestions, visibleReminders, getSuggestionForContact]);
+    const result = eligibleContacts.map((c) => {
+      markSuggested(c.id);
+      return getSuggestionForContact(c);
+    });
+
+    if (result.length < MAX_SUGGESTIONS) {
+      const circle3Nudge = contacts.find((c) => {
+        if (c.circleLevel !== 3) return false;
+        if (dismissedSuggestions.has(c.id)) return false;
+        if (reminderContactIds.has(c.id)) return false;
+        const daysSince = getDaysSince(c.lastContacted ?? undefined);
+        return daysSince !== null && daysSince >= 90;
+      });
+      if (circle3Nudge) {
+        const daysSince = getDaysSince(circle3Nudge.lastContacted ?? undefined)!;
+        const is6Month = daysSince >= 180;
+        result.push({
+          contactId: circle3Nudge.id,
+          contactName: circle3Nudge.name,
+          avatarColor: circle3Nudge.avatarColor,
+          photoUri: circle3Nudge.photoUri,
+          circleLevel: 3 as 1 | 2 | 3,
+          prompt: is6Month
+            ? `It's been 6 months since you last spoke to ${circle3Nudge.name} — it might be time to reconnect.`
+            : `You haven't spoken to ${circle3Nudge.name} in 3 months — want to set up a hangout or give them a call?`,
+          actionType: "hangout",
+        });
+      }
+    }
+
+    return result;
+  }, [contacts, dismissedSuggestions, visibleReminders, getSuggestionForContact, lastSuggestedDates]);
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
@@ -207,7 +249,34 @@ export default function HomeScreen() {
     [contacts],
   );
 
+  const handleSuggestionCopyText = useCallback(
+    async (suggestion: Suggestion) => {
+      const message = getTextCopyMessage(suggestion.contactName);
+      if (Platform.OS === "web") {
+        try { await navigator.clipboard.writeText(message); } catch {}
+      } else {
+        await Clipboard.setStringAsync(message);
+      }
+      setDismissedSuggestions((prev) => new Set(prev).add(suggestion.contactId));
+      await markContacted(suggestion.contactId);
+    },
+    [markContacted],
+  );
+
+  const handleSuggestionHangout = useCallback(
+    async (suggestion: Suggestion) => {
+      await markContacted(suggestion.contactId);
+      setDismissedSuggestions((prev) => new Set(prev).add(suggestion.contactId));
+      router.push({
+        pathname: "/create-hangout",
+        params: { contactName: suggestion.contactName },
+      });
+    },
+    [markContacted],
+  );
+
   const totalItems = visibleReminders.length + suggestions.length;
+  const profileCompletion = useMemo(() => computeProfileCompletion(contacts), [contacts]);
   const webTopInset = Platform.OS === "web" ? 67 : 0;
 
   return (
@@ -271,6 +340,32 @@ export default function HomeScreen() {
         </View>
         <Ionicons name="chevron-forward" size={16} color={Colors.textTertiary} />
       </Pressable>
+
+      {profileCompletion.stage === 1 && (
+        <Pressable
+          onPress={() => router.push("/(tabs)/circles")}
+          style={({ pressed }) => [styles.profileBanner, pressed && { opacity: 0.8 }]}
+        >
+          <View style={styles.profileBannerLeft}>
+            <View style={styles.profileBannerIcon}>
+              <Ionicons name="people-outline" size={18} color="#9B7DFF" />
+            </View>
+            <View style={styles.profileBannerText}>
+              <Text style={styles.profileBannerTitle}>Complete your circles</Text>
+              <Text style={styles.profileBannerSub}>
+                {profileCompletion.circle1WithBirthday}/{STAGE1_GOALS.circle1WithBirthday} core friends with birthdays
+                {profileCompletion.circle2Count < STAGE1_GOALS.circle2
+                  ? `, ${profileCompletion.circle2Count}/${STAGE1_GOALS.circle2} close friends`
+                  : ""}
+                {profileCompletion.circle3Count < STAGE1_GOALS.circle3
+                  ? `, ${profileCompletion.circle3Count}/${STAGE1_GOALS.circle3} acquaintance`
+                  : ""}
+              </Text>
+            </View>
+          </View>
+          <Ionicons name="chevron-forward" size={16} color={Colors.textTertiary} />
+        </Pressable>
+      )}
 
       {contacts.length === 0 && (
         <View style={styles.section}>
@@ -353,25 +448,31 @@ export default function HomeScreen() {
                   </View>
                   <Text style={styles.suggestionPrompt} numberOfLines={2}>{suggestion.prompt}</Text>
                   <View style={styles.suggestionActions}>
-                    <Pressable
-                      onPress={() => handleSuggestionRefresh(suggestion)}
-                      hitSlop={8}
-                      style={({ pressed }) => [styles.suggestionActionBtn, pressed && { opacity: 0.5 }]}
-                    >
-                      <Ionicons name="shuffle-outline" size={18} color={Colors.textSecondary} />
-                    </Pressable>
-                    {suggestion.actionType === "hangout" && (
+                    {suggestion.actionType !== "hangout" && (
                       <Pressable
-                        onPress={() =>
-                          router.push({
-                            pathname: "/create-hangout",
-                            params: { contactName: suggestion.contactName },
-                          })
-                        }
+                        onPress={() => handleSuggestionRefresh(suggestion)}
                         hitSlop={8}
                         style={({ pressed }) => [styles.suggestionActionBtn, pressed && { opacity: 0.5 }]}
                       >
-                        <Ionicons name="calendar-outline" size={18} color={Colors.primary} />
+                        <Ionicons name="shuffle-outline" size={18} color={Colors.textSecondary} />
+                      </Pressable>
+                    )}
+                    {suggestion.actionType === "text" && (
+                      <Pressable
+                        onPress={() => handleSuggestionCopyText(suggestion)}
+                        hitSlop={8}
+                        style={({ pressed }) => [styles.suggestionActionBtn, pressed && { opacity: 0.5 }]}
+                      >
+                        <Ionicons name="copy-outline" size={18} color={Colors.primaryLight} />
+                      </Pressable>
+                    )}
+                    {suggestion.actionType === "hangout" && (
+                      <Pressable
+                        onPress={() => handleSuggestionHangout(suggestion)}
+                        hitSlop={8}
+                        style={({ pressed }) => [styles.suggestionActionBtn, pressed && { opacity: 0.5 }]}
+                      >
+                        <Ionicons name="calendar-outline" size={18} color={Colors.primaryLight} />
                       </Pressable>
                     )}
                     <Pressable
@@ -479,6 +580,46 @@ const styles = StyleSheet.create({
     color: Colors.text,
   },
   hangoutBannerSub: {
+    fontSize: 12,
+    fontFamily: "Nunito_400Regular",
+    color: Colors.textSecondary,
+    marginTop: 1,
+  },
+  profileBanner: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    backgroundColor: Colors.surface,
+    borderWidth: 1,
+    borderColor: "#9B7DFF30",
+    borderRadius: 14,
+    paddingVertical: 12,
+    paddingHorizontal: 14,
+    marginTop: 10,
+  },
+  profileBannerLeft: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    flex: 1,
+  },
+  profileBannerIcon: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: "#9B7DFF18",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  profileBannerText: {
+    flex: 1,
+  },
+  profileBannerTitle: {
+    fontSize: 14,
+    fontFamily: "Nunito_700Bold",
+    color: Colors.text,
+  },
+  profileBannerSub: {
     fontSize: 12,
     fontFamily: "Nunito_400Regular",
     color: Colors.textSecondary,

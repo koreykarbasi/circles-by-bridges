@@ -295,6 +295,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const contact = await storage.createContact({
         ...req.body,
         userId: req.session.userId!,
+        lastContacted: req.body.lastContacted ?? new Date().toISOString(),
       });
       res.status(201).json(contact);
     } catch (err) {

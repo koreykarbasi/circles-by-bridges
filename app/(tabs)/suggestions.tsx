@@ -11,6 +11,7 @@ import { CIRCLE_CONFIG } from "@/lib/types";
 import { getSmartPrompt, getNextPrompt, getActionType, resetSeenPrompts, loadSyncedPrompts } from "@/lib/prompts";
 import { getDaysSince, getDaysUntilBirthday, formatLastContacted, formatBirthdayCountdown, getContactUrgency } from "@/lib/helpers";
 import { generateReminders } from "@/lib/reminders";
+import { loadSchedulerData, markSuggested, getDaysSinceLastSuggestedSync, scoreSuggestion } from "@/lib/suggestion-scheduler";
 import type { Contact } from "@/lib/types";
 import type { Reminder } from "@/lib/reminders";
 import { router } from "expo-router";
@@ -23,35 +24,20 @@ interface GeneratedSuggestion {
   urgency: "overdue" | "soon" | "ok";
   birthdayLabel?: string;
   lastContactedLabel?: string;
+  isCircle3Nudge?: boolean;
 }
 
-function scoreContact(contact: Contact): number {
-  let score = 0;
-  const urgency = getContactUrgency(contact.circleLevel as 1 | 2 | 3, contact.lastContacted ?? undefined);
-  if (urgency === "overdue") score += 100;
-  else if (urgency === "soon") score += 50;
-
-  const bday = getDaysUntilBirthday(contact.birthday ?? undefined);
-  if (bday !== null && bday <= 7) score += 80;
-  else if (bday !== null && bday <= 14) score += 40;
-  else if (bday !== null && bday <= 30) score += 20;
-
-  if (contact.circleLevel === 1) score += 15;
-  else if (contact.circleLevel === 2) score += 8;
-
-  const daysSince = getDaysSince(contact.lastContacted ?? undefined);
-  if (daysSince === null) score += 30;
-  else score += Math.min(daysSince, 60);
-
-  return score;
-}
-
-function buildSuggestion(contact: Contact): GeneratedSuggestion {
+function buildSuggestion(
+  contact: Contact,
+  lastSuggestedDates: Record<string, string>,
+): GeneratedSuggestion {
   const urgency = getContactUrgency(contact.circleLevel as 1 | 2 | 3, contact.lastContacted ?? undefined);
   const bday = getDaysUntilBirthday(contact.birthday ?? undefined);
   const hasBirthdaySoon = bday !== null && bday <= 14;
   const birthdayLabel = formatBirthdayCountdown(contact.birthday ?? undefined);
   const lastContactedLabel = formatLastContacted(contact.lastContacted ?? undefined);
+
+  markSuggested(contact.id);
 
   const prompt = getSmartPrompt(
     contact.id,
@@ -73,6 +59,25 @@ function buildSuggestion(contact: Contact): GeneratedSuggestion {
   };
 }
 
+function buildCircle3Nudge(contact: Contact): GeneratedSuggestion | null {
+  const daysSince = getDaysSince(contact.lastContacted ?? undefined);
+  if (daysSince === null || daysSince < 90) return null;
+
+  const is6Month = daysSince >= 180;
+  const lastContactedLabel = formatLastContacted(contact.lastContacted ?? undefined);
+
+  return {
+    contact,
+    prompt: is6Month
+      ? `It's been 6 months since you last spoke to ${contact.name} — it might be time to reconnect.`
+      : `You haven't spoken to ${contact.name} in 3 months — want to set up a hangout or give them a call?`,
+    type: "hangout",
+    urgency: is6Month ? "overdue" : "soon",
+    lastContactedLabel,
+    isCircle3Nudge: true,
+  };
+}
+
 export default function SuggestionsScreen() {
   const insets = useSafeAreaInsets();
   const { contacts, markContacted, markHangout } = useContacts();
@@ -82,10 +87,12 @@ export default function SuggestionsScreen() {
   const [completedReminderIds, setCompletedReminderIds] = useState<Set<string>>(new Set());
   const [cardPrompts, setCardPrompts] = useState<Record<string, GeneratedSuggestion>>({});
   const [remindersCollapsed, setRemindersCollapsed] = useState(false);
+  const [lastSuggestedDates, setLastSuggestedDates] = useState<Record<string, string>>({});
   const visitCount = useRef(0);
 
   useEffect(() => {
     loadSyncedPrompts();
+    loadSchedulerData().then(setLastSuggestedDates);
   }, []);
 
   useEffect(() => {
@@ -105,15 +112,41 @@ export default function SuggestionsScreen() {
 
   const rankedContacts = useMemo(() => {
     const filtered = filterCircle
-      ? contacts.filter((c) => c.circleLevel === filterCircle)
-      : contacts;
+      ? contacts.filter((c) => c.circleLevel === filterCircle && c.circleLevel !== 3)
+      : contacts.filter((c) => c.circleLevel !== 3);
 
     return [...filtered]
-      .map((c) => ({ contact: c, score: scoreContact(c) }))
+      .map((c) => {
+        const daysSinceLastSug = getDaysSinceLastSuggestedSync(c.id, lastSuggestedDates);
+        const daysSinceContact = getDaysSince(c.lastContacted ?? undefined);
+        const daysUntilBday = getDaysUntilBirthday(c.birthday ?? undefined);
+        return {
+          contact: c,
+          score: scoreSuggestion(
+            c.circleLevel as 1 | 2 | 3,
+            daysSinceLastSug,
+            daysSinceContact,
+            daysUntilBday,
+          ),
+        };
+      })
       .sort((a, b) => b.score - a.score)
       .slice(0, 8)
       .map((x) => x.contact);
-  }, [contacts, filterCircle]);
+  }, [contacts, filterCircle, lastSuggestedDates]);
+
+  const circle3Nudges = useMemo(() => {
+    if (filterCircle && filterCircle !== 3) return [];
+    const c3 = filterCircle === 3
+      ? contacts.filter((c) => c.circleLevel === 3)
+      : contacts.filter((c) => c.circleLevel === 3);
+
+    return c3
+      .filter((c) => !completedIds.has(c.id))
+      .map((c) => buildCircle3Nudge(c))
+      .filter((n): n is GeneratedSuggestion => n !== null)
+      .slice(0, 3);
+  }, [contacts, filterCircle, completedIds]);
 
   const suggestions = useMemo(() => {
     const result: GeneratedSuggestion[] = [];
@@ -123,7 +156,7 @@ export default function SuggestionsScreen() {
       if (existing && existing.contact.id === contact.id) {
         result.push(existing);
       } else {
-        result.push(buildSuggestion(contact));
+        result.push(buildSuggestion(contact, lastSuggestedDates));
       }
     }
     return result;
@@ -172,6 +205,26 @@ export default function SuggestionsScreen() {
     [markContacted],
   );
 
+  const handleCopyText = useCallback(
+    (contactId: string) => {
+      markContacted(contactId);
+      setCompletedIds((prev) => new Set(prev).add(contactId));
+    },
+    [markContacted],
+  );
+
+  const handlePlanHangout = useCallback(
+    (contact: Contact) => {
+      markContacted(contact.id);
+      setCompletedIds((prev) => new Set(prev).add(contact.id));
+      router.push({
+        pathname: "/create-hangout",
+        params: { contactName: contact.name },
+      });
+    },
+    [markContacted],
+  );
+
   const handleReminderComplete = useCallback(
     async (reminder: Reminder) => {
       setCompletedReminderIds((prev) => new Set(prev).add(reminder.id));
@@ -202,7 +255,7 @@ export default function SuggestionsScreen() {
     [],
   );
 
-  const handlePlanHangout = useCallback(
+  const handlePlanHangoutReminder = useCallback(
     (reminder: Reminder) => {
       router.push({
         pathname: "/create-hangout",
@@ -222,6 +275,7 @@ export default function SuggestionsScreen() {
   }, []);
 
   const webTopInset = Platform.OS === "web" ? 67 : 0;
+  const allSuggestions = useMemo(() => [...suggestions, ...circle3Nudges], [suggestions, circle3Nudges]);
 
   return (
     <ScrollView
@@ -340,7 +394,7 @@ export default function SuggestionsScreen() {
                   onComplete={() => handleReminderComplete(reminder)}
                   onYes={reminder.type === "hangout-6month" ? () => handleReminderYes(reminder) : undefined}
                   onNo={reminder.type === "hangout-6month" ? () => handleReminderNo(reminder) : undefined}
-                  onPlanHangout={reminder.actionType === "hangout" ? () => handlePlanHangout(reminder) : undefined}
+                  onPlanHangout={reminder.actionType === "hangout" ? () => handlePlanHangoutReminder(reminder) : undefined}
                 />
               ))}
             </View>
@@ -360,16 +414,16 @@ export default function SuggestionsScreen() {
           actionLabel="Add someone"
           onAction={() => router.push("/(tabs)/circles")}
         />
-      ) : suggestions.length === 0 ? (
+      ) : allSuggestions.length === 0 ? (
         <EmptyState
           icon="checkmark-circle-outline"
           title="All caught up!"
           subtitle="You've completed all suggestions. Tap below for new ones."
         />
       ) : (
-        suggestions.map((s) => (
+        allSuggestions.map((s) => (
           <SuggestionCard
-            key={s.contact.id + "-" + refreshKey}
+            key={s.contact.id + "-" + (s.isCircle3Nudge ? "nudge" : refreshKey)}
             contactName={s.contact.name}
             avatarColor={s.contact.avatarColor}
             photoUri={s.contact.photoUri}
@@ -381,6 +435,8 @@ export default function SuggestionsScreen() {
             lastContactedLabel={s.lastContactedLabel}
             onDone={() => handleDone(s.contact.id)}
             onRefresh={() => handleRefreshSingle(s.contact.id, s.prompt)}
+            onCopyText={s.type === "text" ? () => handleCopyText(s.contact.id) : undefined}
+            onPlanHangout={s.type === "hangout" ? () => handlePlanHangout(s.contact) : undefined}
           />
         ))
       )}
@@ -501,7 +557,6 @@ const styles = StyleSheet.create({
   },
   suggestionsSectionHeader: {
     marginBottom: 12,
-    paddingHorizontal: 4,
   },
   suggestionsSectionTitle: {
     fontSize: 17,
@@ -512,9 +567,9 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    gap: 6,
+    gap: 8,
     paddingVertical: 14,
-    marginTop: 4,
+    marginTop: 8,
   },
   refreshAllText: {
     fontSize: 14,

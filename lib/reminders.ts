@@ -152,45 +152,23 @@ function generateCircle2Reminders(contact: Contact): Reminder[] {
 }
 
 function generateCircle3Reminders(contact: Contact): Reminder[] {
-  const reminders: Reminder[] = [];
-  const baseScore = 20;
+  // Circle 3: ONLY birthday reminder, and ONLY on the actual day itself
+  const daysUntil = getDaysUntilBirthday(contact.birthday ?? undefined);
+  if (daysUntil !== 0) return [];
 
-  reminders.push(...generateBirthdayReminders(contact, baseScore));
-
-  const daysSinceHangout = getDaysSince(contact.lastHangout ?? undefined);
-  if (daysSinceHangout === null || daysSinceHangout > 180) {
-    const severity = daysSinceHangout === null ? 50 : Math.min(80, 30 + Math.floor((daysSinceHangout - 180) / 7));
-    reminders.push({
-      id: `hangout6m-${contact.id}`,
+  return [
+    {
+      id: `birthday-${contact.id}`,
       contactId: contact.id,
       contactName: contact.name,
       circleLevel: contact.circleLevel,
-      type: "hangout-6month",
-      priority: baseScore + severity,
-      title: `Have you hung out with ${contact.name} recently?`,
-      subtitle: daysSinceHangout === null ? "No hangout on record" : `Last hangout was ${Math.floor(daysSinceHangout / 30)} months ago`,
-      actionType: "hangout",
-    });
-  }
-
-  const daysSinceContact = getDaysSince(contact.lastContacted ?? undefined);
-  if (daysSinceContact === null || daysSinceContact > 90) {
-    const severity = daysSinceContact === null ? 40 : Math.min(80, 30 + Math.floor((daysSinceContact - 90) / 7));
-    const daysText = daysSinceContact === null ? "never" : `${daysSinceContact} days ago`;
-    reminders.push({
-      id: `checkin-${contact.id}`,
-      contactId: contact.id,
-      contactName: contact.name,
-      circleLevel: contact.circleLevel,
-      type: "check-in-overdue",
-      priority: baseScore + severity,
-      title: `Reconnect with ${contact.name}`,
-      subtitle: daysSinceContact === null ? "You haven't reached out yet" : `Last contact: ${daysText}`,
+      type: "birthday",
+      priority: 70,
+      title: `It's ${contact.name}'s birthday today`,
+      subtitle: "Today is their birthday",
       actionType: "text",
-    });
-  }
-
-  return reminders;
+    },
+  ];
 }
 
 export function generateReminders(contacts: Contact[]): Reminder[] {

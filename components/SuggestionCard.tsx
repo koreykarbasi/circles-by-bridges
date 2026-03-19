@@ -1,10 +1,11 @@
 import React, { useCallback } from "react";
-import { View, Text, StyleSheet, Pressable } from "react-native";
+import { View, Text, StyleSheet, Pressable, Platform } from "react-native";
 import Animated, { useSharedValue, useAnimatedStyle, withTiming, withSequence, runOnJS, Easing } from "react-native-reanimated";
 import { Ionicons } from "@expo/vector-icons";
 import { Avatar } from "./Avatar";
 import Colors from "@/constants/colors";
 import * as Haptics from "expo-haptics";
+import * as Clipboard from "expo-clipboard";
 
 interface SuggestionCardProps {
   contactName: string;
@@ -18,6 +19,8 @@ interface SuggestionCardProps {
   lastContactedLabel?: string;
   onDone: () => void;
   onRefresh: () => void;
+  onCopyText?: () => void;
+  onPlanHangout?: () => void;
 }
 
 const TYPE_CONFIG = {
@@ -32,6 +35,29 @@ const URGENCY_CONFIG = {
   ok: { color: Colors.success, label: "On track" },
 };
 
+const TEXT_COPY_TEMPLATES = [
+  "Hey {name}, I was just thinking about you — it's been a while! How have you been?",
+  "Hey {name}, randomly thought of you today. Hope everything's going well on your end!",
+  "Hey {name}, you crossed my mind — wanted to reach out. How's life treating you?",
+  "Hey {name}, it's been too long! I'd love to catch up sometime. What's new with you?",
+  "Hey {name}, just thinking about you and wanted to say hi. How are things?",
+  "Hey {name}, hope you're doing well! Was reminiscing the other day and thought of you.",
+  "Hey {name}, you've been on my mind lately. Hope everything's going your way!",
+  "Hey {name}, just wanted to reach out and check in. How has everything been?",
+  "Hey {name}, thinking of you today. Let's catch up soon!",
+  "Hey {name}, hope life's been treating you well. Would love to hear what's new with you.",
+  "Hey {name}, wanted to let you know I was thinking about you. How's everything going?",
+  "Hey {name}, it's been a minute! What's been keeping you busy lately?",
+  "Hey {name}, hope you're having a great week. Just wanted to say hi!",
+  "Hey {name}, feel like we haven't talked in forever. Hope you're doing amazing!",
+  "Hey {name}, just thought of you and had to say hello. How are you doing these days?",
+];
+
+export function getTextCopyMessage(contactName: string): string {
+  const template = TEXT_COPY_TEMPLATES[Math.floor(Math.random() * TEXT_COPY_TEMPLATES.length)];
+  return template.replace("{name}", contactName);
+}
+
 export function SuggestionCard({
   contactName,
   avatarColor,
@@ -44,6 +70,8 @@ export function SuggestionCard({
   lastContactedLabel,
   onDone,
   onRefresh,
+  onCopyText,
+  onPlanHangout,
 }: SuggestionCardProps) {
   const circleColor = circleLevel === 1 ? Colors.circle1 : circleLevel === 2 ? Colors.circle2 : Colors.circle3;
   const typeConfig = TYPE_CONFIG[type];
@@ -92,6 +120,24 @@ export function SuggestionCard({
     setTimeout(() => onRefresh(), 120);
   }, [onRefresh]);
 
+  const handleCopyText = useCallback(async () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    const message = getTextCopyMessage(contactName);
+    if (Platform.OS === "web") {
+      try {
+        await navigator.clipboard.writeText(message);
+      } catch {}
+    } else {
+      await Clipboard.setStringAsync(message);
+    }
+    onCopyText?.();
+  }, [contactName, onCopyText]);
+
+  const handlePlanHangout = useCallback(() => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    onPlanHangout?.();
+  }, [onPlanHangout]);
+
   return (
     <Animated.View style={[styles.container, animatedStyle]}>
       <View style={styles.header}>
@@ -131,6 +177,25 @@ export function SuggestionCard({
             <Ionicons name="shuffle-outline" size={20} color={Colors.textSecondary} />
           </Pressable>
         </Animated.View>
+
+        {type === "text" && onCopyText && (
+          <Pressable
+            onPress={handleCopyText}
+            style={({ pressed }) => [styles.iconButton, pressed && { opacity: 0.5 }]}
+          >
+            <Ionicons name="copy-outline" size={20} color={Colors.primaryLight} />
+          </Pressable>
+        )}
+
+        {type === "hangout" && onPlanHangout && (
+          <Pressable
+            onPress={handlePlanHangout}
+            style={({ pressed }) => [styles.iconButton, pressed && { opacity: 0.5 }]}
+          >
+            <Ionicons name="calendar-outline" size={20} color={Colors.primaryLight} />
+          </Pressable>
+        )}
+
         <Pressable
           onPress={handleDone}
           style={({ pressed }) => [styles.primaryButton, pressed && { opacity: 0.8 }]}
@@ -221,7 +286,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "flex-end",
-    gap: 10,
+    gap: 8,
   },
   iconButton: {
     padding: 8,
