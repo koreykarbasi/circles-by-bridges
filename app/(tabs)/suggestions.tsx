@@ -27,17 +27,12 @@ interface GeneratedSuggestion {
   isCircle3Nudge?: boolean;
 }
 
-function buildSuggestion(
-  contact: Contact,
-  lastSuggestedDates: Record<string, string>,
-): GeneratedSuggestion {
+function buildSuggestion(contact: Contact): GeneratedSuggestion {
   const urgency = getContactUrgency(contact.circleLevel as 1 | 2 | 3, contact.lastContacted ?? undefined);
   const bday = getDaysUntilBirthday(contact.birthday ?? undefined);
   const hasBirthdaySoon = bday !== null && bday <= 14;
   const birthdayLabel = formatBirthdayCountdown(contact.birthday ?? undefined);
   const lastContactedLabel = formatLastContacted(contact.lastContacted ?? undefined);
-
-  markSuggested(contact.id);
 
   const prompt = getSmartPrompt(
     contact.id,
@@ -59,9 +54,15 @@ function buildSuggestion(
   };
 }
 
-function buildCircle3Nudge(contact: Contact): GeneratedSuggestion | null {
+function buildCircle3Nudge(
+  contact: Contact,
+  lastSuggestedDates: Record<string, string>,
+): GeneratedSuggestion | null {
   const daysSince = getDaysSince(contact.lastContacted ?? undefined);
   if (daysSince === null || daysSince < 90) return null;
+
+  const daysSinceLastSug = getDaysSinceLastSuggestedSync(contact.id, lastSuggestedDates);
+  if (daysSinceLastSug !== null && daysSinceLastSug <= 60) return null;
 
   const is6Month = daysSince >= 180;
   const lastContactedLabel = formatLastContacted(contact.lastContacted ?? undefined);
@@ -143,10 +144,10 @@ export default function SuggestionsScreen() {
 
     return c3
       .filter((c) => !completedIds.has(c.id))
-      .map((c) => buildCircle3Nudge(c))
+      .map((c) => buildCircle3Nudge(c, lastSuggestedDates))
       .filter((n): n is GeneratedSuggestion => n !== null)
       .slice(0, 3);
-  }, [contacts, filterCircle, completedIds]);
+  }, [contacts, filterCircle, completedIds, lastSuggestedDates]);
 
   const suggestions = useMemo(() => {
     const result: GeneratedSuggestion[] = [];
@@ -156,12 +157,25 @@ export default function SuggestionsScreen() {
       if (existing && existing.contact.id === contact.id) {
         result.push(existing);
       } else {
-        result.push(buildSuggestion(contact, lastSuggestedDates));
+        result.push(buildSuggestion(contact));
       }
     }
     return result;
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [rankedContacts, completedIds, refreshKey, cardPrompts]);
+
+  const suggestionKeyRef = useRef<string>("");
+  useEffect(() => {
+    const shownIds = [
+      ...suggestions.map((s) => s.contact.id),
+      ...circle3Nudges.map((s) => s.contact.id),
+    ];
+    const key = shownIds.join(",");
+    if (key !== "" && key !== suggestionKeyRef.current) {
+      suggestionKeyRef.current = key;
+      shownIds.forEach((id) => markSuggested(id));
+    }
+  }, [suggestions, circle3Nudges]);
 
   const handleRefreshSingle = useCallback((contactId: string, currentPrompt: string) => {
     const contact = contacts.find((c) => c.id === contactId);

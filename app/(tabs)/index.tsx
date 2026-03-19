@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useMemo, useEffect } from "react";
+import React, { useState, useCallback, useMemo, useEffect, useRef } from "react";
 import { View, Text, StyleSheet, ScrollView, Platform, RefreshControl, Pressable, Image } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
@@ -138,10 +138,7 @@ export default function HomeScreen() {
       .slice(0, MAX_SUGGESTIONS)
       .map((x) => x.contact);
 
-    const result = eligibleContacts.map((c) => {
-      markSuggested(c.id);
-      return getSuggestionForContact(c);
-    });
+    const result = eligibleContacts.map((c) => getSuggestionForContact(c));
 
     if (result.length < MAX_SUGGESTIONS) {
       const circle3Nudge = contacts.find((c) => {
@@ -149,7 +146,9 @@ export default function HomeScreen() {
         if (dismissedSuggestions.has(c.id)) return false;
         if (reminderContactIds.has(c.id)) return false;
         const daysSince = getDaysSince(c.lastContacted ?? undefined);
-        return daysSince !== null && daysSince >= 90;
+        if (daysSince === null || daysSince < 90) return false;
+        const daysSinceLastSug = getDaysSinceLastSuggestedSync(c.id, lastSuggestedDates);
+        return daysSinceLastSug === null || daysSinceLastSug > 60;
       });
       if (circle3Nudge) {
         const daysSince = getDaysSince(circle3Nudge.lastContacted ?? undefined)!;
@@ -170,6 +169,15 @@ export default function HomeScreen() {
 
     return result;
   }, [contacts, dismissedSuggestions, visibleReminders, getSuggestionForContact, lastSuggestedDates]);
+
+  const suggestionKeyRef = useRef<string>("");
+  useEffect(() => {
+    const key = suggestions.map((s) => s.contactId).join(",");
+    if (key !== "" && key !== suggestionKeyRef.current) {
+      suggestionKeyRef.current = key;
+      suggestions.forEach((s) => markSuggested(s.contactId));
+    }
+  }, [suggestions]);
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
