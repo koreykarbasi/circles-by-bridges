@@ -15,7 +15,10 @@
     },
     "ios": {
       "supportsTablet": false,
-      "bundleIdentifier": "com.bridges.app"
+      "bundleIdentifier": "com.bridges.app",
+      "infoPlist": {
+        "CFBundleDisplayName": "Bridges"
+      }
     },
     "android": {
       "package": "com.bridges.app",

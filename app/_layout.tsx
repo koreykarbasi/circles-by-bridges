@@ -27,18 +27,25 @@ function RootLayoutNav() {
   const { hasCompletedOnboarding } = useOnboarding();
 
   useEffect(() => {
-    if (authLoading || hasCompletedOnboarding === null) return;
+    // Wait only for the onboarding flag (fast AsyncStorage read).
+    // Do NOT wait for authLoading — the auth cache resolves user immediately
+    // if available; background network check updates state afterward.
+    if (hasCompletedOnboarding === null) return;
 
     if (!hasCompletedOnboarding) {
       router.replace("/onboarding");
     } else if (!user) {
+      // No cached user → go to auth. If background check later validates a
+      // session the user will be redirected to tabs when user state updates.
       router.replace("/auth");
     } else {
       router.replace("/(tabs)");
     }
-  }, [authLoading, user, hasCompletedOnboarding]);
+  }, [user, hasCompletedOnboarding]);
 
-  if (authLoading || hasCompletedOnboarding === null) {
+  // Spinner only while onboarding flag is being read (milliseconds).
+  // Once that resolves we render the Stack immediately and let navigation fire.
+  if (hasCompletedOnboarding === null) {
     return (
       <View style={{ flex: 1, backgroundColor: Colors.background, alignItems: "center", justifyContent: "center" }}>
         <ActivityIndicator size="large" color={Colors.primary} />
