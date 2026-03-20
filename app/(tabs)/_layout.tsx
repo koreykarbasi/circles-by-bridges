@@ -37,7 +37,7 @@ function ClassicTabLayout() {
   const safeAreaInsets = useSafeAreaInsets();
   const { contacts } = useContacts();
   const profileCompletion = useMemo(() => computeProfileCompletion(contacts), [contacts]);
-  const circlesBadge = profileCompletion.stage === 1 ? "!" : undefined;
+  const circlesBadge = profileCompletion.stage === 1 ? "" : undefined;
 
   return (
     <Tabs

@@ -23,14 +23,14 @@ import Colors from "@/constants/colors";
 SplashScreen.preventAutoHideAsync();
 
 function RootLayoutNav() {
-  const { user, isLoading: authLoading } = useAuth();
+  const { user, isCacheHydrated } = useAuth();
   const { hasCompletedOnboarding } = useOnboarding();
 
   useEffect(() => {
-    // Wait only for the onboarding flag (fast AsyncStorage read).
-    // Do NOT wait for authLoading — the auth cache resolves user immediately
-    // if available; background network check updates state afterward.
-    if (hasCompletedOnboarding === null) return;
+    // Wait for onboarding flag AND auth cache to be read before navigating.
+    // Both are fast AsyncStorage reads. The background network check updates
+    // state afterward without causing flicker.
+    if (hasCompletedOnboarding === null || !isCacheHydrated) return;
 
     if (!hasCompletedOnboarding) {
       router.replace("/onboarding");
@@ -41,11 +41,10 @@ function RootLayoutNav() {
     } else {
       router.replace("/(tabs)");
     }
-  }, [user, hasCompletedOnboarding]);
+  }, [user, hasCompletedOnboarding, isCacheHydrated]);
 
-  // Spinner only while onboarding flag is being read (milliseconds).
-  // Once that resolves we render the Stack immediately and let navigation fire.
-  if (hasCompletedOnboarding === null) {
+  // Spinner only while onboarding flag or auth cache is being read (milliseconds).
+  if (hasCompletedOnboarding === null || !isCacheHydrated) {
     return (
       <View style={{ flex: 1, backgroundColor: Colors.background, alignItems: "center", justifyContent: "center" }}>
         <ActivityIndicator size="large" color={Colors.primary} />

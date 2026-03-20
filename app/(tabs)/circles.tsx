@@ -130,7 +130,7 @@ export default function CirclesScreen() {
                     router.push({ pathname: "/create-hangout", params: { contactName: contact.name } });
                   }}
                 />
-                {activeCircle === 1 && !contact.birthday && (
+                {activeCircle === 1 && !contact.birthday && profileCompletion.stage === 1 && (
                   <Pressable
                     onPress={() => router.push({ pathname: "/edit-contact", params: { id: contact.id, focusBirthday: "true" } })}
                     style={({ pressed }) => [styles.birthdayNudge, pressed && { opacity: 0.7 }]}

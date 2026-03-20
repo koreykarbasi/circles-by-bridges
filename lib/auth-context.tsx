@@ -44,6 +44,7 @@ async function writeAuthCache(user: AuthUser | null): Promise<void> {
 interface AuthContextValue {
   user: AuthUser | null;
   isLoading: boolean;
+  isCacheHydrated: boolean;
   login: (email: string, password: string) => Promise<void>;
   register: (email: string, password: string, name?: string) => Promise<void>;
   loginAsGuest: (name: string) => Promise<void>;
@@ -57,6 +58,7 @@ const AuthContext = createContext<AuthContextValue | null>(null);
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<AuthUser | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [isCacheHydrated, setIsCacheHydrated] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -67,8 +69,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
       if (cached) {
         setUser(cached);
-        setIsLoading(false);
       }
+      // Mark cache as read — navigation can now fire without waiting for network
+      setIsCacheHydrated(true);
 
       try {
         const baseUrl = getApiUrl();
@@ -139,8 +142,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const value = useMemo(
-    () => ({ user, isLoading, login, register, loginAsGuest, logout, updateProfilePhoto, updateName }),
-    [user, isLoading, login, register, loginAsGuest, logout, updateProfilePhoto, updateName],
+    () => ({ user, isLoading, isCacheHydrated, login, register, loginAsGuest, logout, updateProfilePhoto, updateName }),
+    [user, isLoading, isCacheHydrated, login, register, loginAsGuest, logout, updateProfilePhoto, updateName],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
