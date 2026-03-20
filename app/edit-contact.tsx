@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useRef, useEffect } from "react";
 import {
   View,
   Text,
@@ -30,7 +30,7 @@ const PREDEFINED_LABELS = [
 
 export default function EditContactScreen() {
   const insets = useSafeAreaInsets();
-  const { id } = useLocalSearchParams<{ id: string }>();
+  const { id, focusBirthday } = useLocalSearchParams<{ id: string; focusBirthday?: string }>();
   const { contacts, updateContact, deleteContact, markContacted, getCircleContacts } = useContacts();
 
   const contact = contacts.find((c) => c.id === id);
@@ -45,6 +45,19 @@ export default function EditContactScreen() {
   const [notes, setNotes] = useState(contact?.notes ?? "");
   const [photoUri, setPhotoUri] = useState<string | null>(contact?.photoUri ?? null);
   const [saving, setSaving] = useState(false);
+
+  const birthdayInputRef = useRef<TextInput>(null);
+  const scrollRef = useRef<ScrollView>(null);
+
+  useEffect(() => {
+    if (focusBirthday === "true") {
+      const timer = setTimeout(() => {
+        birthdayInputRef.current?.focus();
+        scrollRef.current?.scrollToEnd({ animated: true });
+      }, 400);
+      return () => clearTimeout(timer);
+    }
+  }, [focusBirthday]);
 
   const handlePickPhoto = async () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -183,6 +196,7 @@ export default function EditContactScreen() {
       </View>
 
       <ScrollView
+        ref={scrollRef}
         contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + 40 }]}
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
@@ -350,6 +364,7 @@ export default function EditContactScreen() {
             Birthday{circleLevel === 1 ? " (required)" : ""}
           </Text>
           <TextInput
+            ref={birthdayInputRef}
             style={[styles.input, birthdayError && styles.inputError]}
             placeholder="MM/DD (e.g. 03/15)"
             placeholderTextColor={Colors.textTertiary}

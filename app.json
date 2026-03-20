@@ -20,6 +20,7 @@
         "CFBundleDisplayName": "Bridges"
       }
     },
+    "_comment_appStoreName": "App Store listing name is 'Bridges: Social Health' — set manually in App Store Connect during submission, not here",
     "android": {
       "package": "com.bridges.app",
       "adaptiveIcon": {

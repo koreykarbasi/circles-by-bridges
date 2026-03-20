@@ -109,7 +109,12 @@ function ClassicTabLayout() {
 }
 
 export default function TabLayout() {
-  if (isLiquidGlassAvailable()) {
+  const { contacts } = useContacts();
+  const profileCompletion = useMemo(() => computeProfileCompletion(contacts), [contacts]);
+
+  // Use NativeTabs (liquid glass) only when profile is complete — badge not needed then.
+  // While Stage 1 is active, fall back to ClassicTabLayout so the Circles badge is visible.
+  if (isLiquidGlassAvailable() && profileCompletion.stage === 2) {
     return <NativeTabLayout />;
   }
   return <ClassicTabLayout />;

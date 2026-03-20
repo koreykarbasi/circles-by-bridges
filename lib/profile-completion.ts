@@ -1,12 +1,12 @@
 import type { Contact } from "./types";
 
 export interface ProfileCompletion {
-  stage: 0 | 1 | 2;
+  stage: 1 | 2;
   circle1WithBirthday: number;
   circle2Count: number;
   circle3Count: number;
   circle1NoBirthday: Contact[];
-  isStage1Complete: boolean;
+  isComplete: boolean;
 }
 
 const STAGE1_CIRCLE1_WITH_BIRTHDAY = 3;
@@ -19,14 +19,14 @@ export function computeProfileCompletion(contacts: Contact[]): ProfileCompletion
   const circle3Count = contacts.filter((c) => c.circleLevel === 3).length;
   const circle1NoBirthday = contacts.filter((c) => c.circleLevel === 1 && !c.birthday);
 
-  const isStage1Complete =
+  const isComplete =
     circle1WithBirthday >= STAGE1_CIRCLE1_WITH_BIRTHDAY &&
     circle2Count >= STAGE1_CIRCLE2 &&
     circle3Count >= STAGE1_CIRCLE3;
 
-  const stage: 0 | 1 | 2 = contacts.length === 0 ? 0 : isStage1Complete ? 2 : 1;
+  const stage: 1 | 2 = isComplete ? 2 : 1;
 
-  return { stage, circle1WithBirthday, circle2Count, circle3Count, circle1NoBirthday, isStage1Complete };
+  return { stage, circle1WithBirthday, circle2Count, circle3Count, circle1NoBirthday, isComplete };
 }
 
 export const STAGE1_GOALS = {

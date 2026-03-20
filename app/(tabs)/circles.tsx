@@ -95,15 +95,13 @@ export default function CirclesScreen() {
 
         {profileCompletion.stage === 2 && (
           <View style={styles.encouragementCard}>
-            <Ionicons name="checkmark-circle" size={18} color={Colors.success} style={{ marginRight: 8 }} />
             <View style={{ flex: 1 }}>
               <Text style={styles.encouragementTitle}>Your circles are taking shape</Text>
               <Text style={styles.encouragementSub}>
-                {activeCircle === 2
-                  ? "Close friends check in every month — colleagues, old classmates, neighbors you'd grab coffee with."
-                  : activeCircle === 3
-                    ? "Acquaintances are people worth keeping warm — former coworkers, distant family, friendly contacts."
-                    : "Core friends are your closest relationships. Keep their birthdays on record so you never miss one."}
+                <Text style={{ fontFamily: "Nunito_700Bold" }}>Close friends</Text>
+                {" — old roommates, college friends, former colleagues you'd grab coffee with.\n"}
+                <Text style={{ fontFamily: "Nunito_700Bold" }}>Acquaintances</Text>
+                {" — former coworkers, distant family, interesting people worth keeping in touch with."}
               </Text>
             </View>
           </View>
@@ -134,7 +132,7 @@ export default function CirclesScreen() {
                 />
                 {activeCircle === 1 && !contact.birthday && (
                   <Pressable
-                    onPress={() => router.push({ pathname: "/edit-contact", params: { id: contact.id } })}
+                    onPress={() => router.push({ pathname: "/edit-contact", params: { id: contact.id, focusBirthday: "true" } })}
                     style={({ pressed }) => [styles.birthdayNudge, pressed && { opacity: 0.7 }]}
                   >
                     <Ionicons name="gift-outline" size={14} color={Colors.accent} />
