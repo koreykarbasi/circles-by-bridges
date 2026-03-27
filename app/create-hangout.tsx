@@ -1,10 +1,10 @@
-import React, { useState, useCallback } from "react";
+import React, { useState, useCallback, useEffect } from "react";
 import {
   View, Text, StyleSheet, ScrollView, Pressable, TextInput, Platform, Alert, Switch,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
-import { router } from "expo-router";
+import { router, useLocalSearchParams } from "expo-router";
 import * as Haptics from "expo-haptics";
 import Colors from "@/constants/colors";
 import { useContacts } from "@/lib/contacts-context";
@@ -21,6 +21,7 @@ interface OptionDraft {
 export default function CreateHangoutScreen() {
   const insets = useSafeAreaInsets();
   const { contacts } = useContacts();
+  const { contactName } = useLocalSearchParams<{ contactName?: string }>();
   const [step, setStep] = useState<1 | 2 | 3>(1);
 
   // Step 1
@@ -29,6 +30,21 @@ export default function CreateHangoutScreen() {
 
   // Step 2
   const [selectedContacts, setSelectedContacts] = useState<Set<string>>(new Set());
+
+  useEffect(() => {
+    const nameParam = Array.isArray(contactName) ? contactName[0] : contactName;
+    if (nameParam && contacts.length > 0) {
+      const match = contacts.find(
+        (c) => c.name.toLowerCase() === nameParam.toLowerCase()
+      );
+      if (match) {
+        setSelectedContacts((prev) => {
+          if (prev.has(match.id)) return prev;
+          return new Set([match.id]);
+        });
+      }
+    }
+  }, [contactName]);
 
   // Step 3 - survey builder
   const [surveyMode, setSurveyMode] = useState<SurveyMode>("standard");
@@ -126,7 +142,15 @@ export default function CreateHangoutScreen() {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       router.back();
     } catch (err) {
-      Alert.alert("Error", "Failed to create survey. Please try again.");
+      const message = err instanceof Error ? err.message : "";
+      if (message.startsWith("401:")) {
+        Alert.alert("Session expired", "Please log in again.", [
+          { text: "OK", onPress: () => router.replace("/auth") },
+        ]);
+      } else {
+        const detail = message.replace(/^\d+:\s*/, "") || "Failed to create survey. Please try again.";
+        Alert.alert("Error", detail);
+      }
     } finally {
       setSubmitting(false);
     }
@@ -241,21 +265,6 @@ export default function CreateHangoutScreen() {
             );
           })
         )}
-      </View>
-
-      <View style={styles.bottomActions}>
-        <Pressable onPress={() => setStep(1)} style={({ pressed }) => [styles.backButton, pressed && { opacity: 0.7 }]}>
-          <Ionicons name="arrow-back" size={18} color={Colors.textSecondary} />
-          <Text style={styles.backButtonText}>Back</Text>
-        </Pressable>
-        <Pressable
-          onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); setStep(3); }}
-          disabled={!canProceedStep2}
-          style={({ pressed }) => [styles.nextButton, !canProceedStep2 && styles.nextButtonDisabled, pressed && { opacity: 0.8 }]}
-        >
-          <Text style={styles.nextButtonText}>Next</Text>
-          <Ionicons name="arrow-forward" size={18} color="#fff" />
-        </Pressable>
       </View>
     </>
   );
@@ -388,6 +397,8 @@ export default function CreateHangoutScreen() {
     </>
   );
 
+  const step2FooterBottom = insets.bottom + (Platform.OS === "web" ? 34 : 0);
+
   return (
     <View style={styles.screen}>
       <View style={[styles.headerBar, { paddingTop: insets.top + 8 + webTopInset }]}>
@@ -406,7 +417,10 @@ export default function CreateHangoutScreen() {
 
       <ScrollView
         style={styles.scrollContainer}
-        contentContainerStyle={[styles.scrollContent, { paddingBottom: 40 + (Platform.OS === "web" ? 34 : 0) }]}
+        contentContainerStyle={[
+          styles.scrollContent,
+          { paddingBottom: step === 2 ? 80 + step2FooterBottom : 40 + (Platform.OS === "web" ? 34 : 0) },
+        ]}
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
       >
@@ -414,6 +428,23 @@ export default function CreateHangoutScreen() {
         {step === 2 && renderStep2()}
         {step === 3 && renderStep3()}
       </ScrollView>
+
+      {step === 2 && (
+        <View style={[styles.stickyFooter, { paddingBottom: step2FooterBottom + 8 }]}>
+          <Pressable onPress={() => setStep(1)} style={({ pressed }) => [styles.backButton, pressed && { opacity: 0.7 }]}>
+            <Ionicons name="arrow-back" size={18} color={Colors.textSecondary} />
+            <Text style={styles.backButtonText}>Back</Text>
+          </Pressable>
+          <Pressable
+            onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); setStep(3); }}
+            disabled={!canProceedStep2}
+            style={({ pressed }) => [styles.nextButton, !canProceedStep2 && styles.nextButtonDisabled, pressed && { opacity: 0.8 }]}
+          >
+            <Text style={styles.nextButtonText}>Next</Text>
+            <Ionicons name="arrow-forward" size={18} color="#fff" />
+          </Pressable>
+        </View>
+      )}
     </View>
   );
 }
@@ -506,6 +537,11 @@ const styles = StyleSheet.create({
   },
   checkboxSelected: { backgroundColor: Colors.primary, borderColor: Colors.primary },
   bottomActions: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginTop: 8 },
+  stickyFooter: {
+    flexDirection: "row", justifyContent: "space-between", alignItems: "center",
+    paddingHorizontal: 20, paddingTop: 12,
+    backgroundColor: Colors.background, borderTopWidth: 1, borderTopColor: Colors.border,
+  },
   backButton: {
     flexDirection: "row", alignItems: "center", gap: 4,
     paddingVertical: 10, paddingHorizontal: 14,
