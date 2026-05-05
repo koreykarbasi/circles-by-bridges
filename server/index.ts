@@ -242,6 +242,7 @@ function setupErrorHandler(app: express.Application) {
 
 import { seedDatabase, updateExistingContactsWithLabels } from "./seed";
 import { initPromptSync } from "./prompts-sync";
+import { scheduleDailyNotifications } from "./push-notifications";
 
 (async () => {
   setupCors(app);
@@ -260,6 +261,8 @@ import { initPromptSync } from "./prompts-sync";
   initPromptSync().catch((err) => {
     console.log("[prompts-sync] Init failed (non-fatal):", err.message);
   });
+
+  scheduleDailyNotifications();
 
   const port = parseInt(process.env.PORT || "5000", 10);
   server.listen(

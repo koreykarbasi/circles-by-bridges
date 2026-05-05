@@ -277,6 +277,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
     res.json({ id: user.id, email: user.email, name: user.username, profilePhotoUri: user.profilePhotoUri });
   });
 
+  app.put("/api/notifications/token", requireAuth, async (req, res) => {
+    try {
+      const { token } = req.body;
+      if (!token || typeof token !== "string" || !token.trim()) {
+        return bad(res, "Push token is required");
+      }
+      await storage.updateUser(req.session.userId!, { pushToken: token.trim() });
+      res.json({ ok: true });
+    } catch (err) {
+      console.error("Error saving push token:", err);
+      res.status(500).json({ message: "Failed to save push token" });
+    }
+  });
+
   app.put("/api/auth/profile", requireAuth, async (req, res) => {
     try {
       const { profilePhotoUri, name } = req.body;

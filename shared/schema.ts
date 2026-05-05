@@ -11,6 +11,7 @@ export const users = pgTable("users", {
   password: text("password").notNull(),
   profilePhotoUri: text("profile_photo_uri"),
   username: text("username"),
+  pushToken: text("push_token"),
 });
 
 export const contacts = pgTable("contacts", {

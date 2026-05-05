@@ -1,7 +1,7 @@
 import { QueryClientProvider } from "@tanstack/react-query";
-import { Stack } from "expo-router";
+import { Stack, router } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
-import React, { useEffect } from "react";
+import React, { useEffect, useRef } from "react";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { KeyboardProvider } from "react-native-keyboard-controller";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
@@ -16,34 +16,99 @@ import {
   Nunito_700Bold,
   Nunito_800ExtraBold,
 } from "@expo-google-fonts/nunito";
-import { router } from "expo-router";
-import { View, ActivityIndicator } from "react-native";
+import { View, ActivityIndicator, Platform } from "react-native";
 import Colors from "@/constants/colors";
+import * as Notifications from "expo-notifications";
+import { getApiUrl, apiRequest } from "@/lib/query-client";
 
 SplashScreen.preventAutoHideAsync();
+
+// Show notifications in foreground as banners
+Notifications.setNotificationHandler({
+  handleNotification: async () => ({
+    shouldShowAlert: true,
+    shouldPlaySound: true,
+    shouldSetBadge: false,
+    shouldShowBanner: true,
+    shouldShowList: true,
+  }),
+});
+
+async function registerForPushNotifications(): Promise<string | null> {
+  if (Platform.OS === "web") return null;
+
+  const { status: existingStatus } = await Notifications.getPermissionsAsync();
+  let finalStatus = existingStatus;
+
+  if (existingStatus !== "granted") {
+    const { status } = await Notifications.requestPermissionsAsync();
+    finalStatus = status;
+  }
+
+  if (finalStatus !== "granted") return null;
+
+  try {
+    const token = (await Notifications.getExpoPushTokenAsync()).data;
+    return token;
+  } catch {
+    return null;
+  }
+}
+
+async function savePushToken(token: string) {
+  try {
+    await apiRequest("PUT", "/api/notifications/token", { token });
+  } catch {
+    // Non-fatal — token registration is best-effort
+  }
+}
 
 function RootLayoutNav() {
   const { user, isCacheHydrated } = useAuth();
   const { hasCompletedOnboarding } = useOnboarding();
+  const notificationListener = useRef<Notifications.EventSubscription | null>(null);
+  const responseListener = useRef<Notifications.EventSubscription | null>(null);
+
+  // Register for push notifications once the user is authenticated
+  useEffect(() => {
+    if (!user) return;
+
+    registerForPushNotifications().then((token) => {
+      if (token) savePushToken(token);
+    });
+
+    // Handle notification taps — navigate to circles tab (where contacts live)
+    responseListener.current = Notifications.addNotificationResponseReceivedListener((response) => {
+      const data = response.notification.request.content.data as Record<string, string> | undefined;
+      if (data?.contactId) {
+        router.push("/(tabs)/circles");
+      } else {
+        router.push("/(tabs)");
+      }
+    });
+
+    return () => {
+      if (notificationListener.current) {
+        Notifications.removeNotificationSubscription(notificationListener.current);
+      }
+      if (responseListener.current) {
+        Notifications.removeNotificationSubscription(responseListener.current);
+      }
+    };
+  }, [user?.id]);
 
   useEffect(() => {
-    // Wait for onboarding flag AND auth cache to be read before navigating.
-    // Both are fast AsyncStorage reads. The background network check updates
-    // state afterward without causing flicker.
     if (hasCompletedOnboarding === null || !isCacheHydrated) return;
 
     if (!hasCompletedOnboarding) {
       router.replace("/onboarding");
     } else if (!user) {
-      // No cached user → go to auth. If background check later validates a
-      // session the user will be redirected to tabs when user state updates.
       router.replace("/auth");
     } else {
       router.replace("/(tabs)");
     }
   }, [user, hasCompletedOnboarding, isCacheHydrated]);
 
-  // Spinner only while onboarding flag or auth cache is being read (milliseconds).
   if (hasCompletedOnboarding === null || !isCacheHydrated) {
     return (
       <View style={{ flex: 1, backgroundColor: Colors.background, alignItems: "center", justifyContent: "center" }}>
