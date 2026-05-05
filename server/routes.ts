@@ -462,8 +462,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (!title || typeof title !== "string" || !title.trim()) {
         return bad(res, "Title is required");
       }
-      if (inviteeNames !== undefined && !Array.isArray(inviteeNames)) {
-        return bad(res, "inviteeNames must be an array");
+      if (!Array.isArray(inviteeNames)) {
+        return bad(res, "inviteeNames is required and must be an array");
       }
 
       let shareCode = generateShareCode();
@@ -663,10 +663,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ message: "This hangout has already been finalized" });
       }
 
-      const { voterName, votes, bringsGuests, plusOneCount } = req.body;
-      if (!voterName || typeof voterName !== "string" || !voterName.trim()) {
+      const { votes, bringsGuests, plusOneCount } = req.body;
+      const rawVoterName: unknown = req.body.voterName;
+      if (!rawVoterName || typeof rawVoterName !== "string" || !rawVoterName.trim()) {
         return bad(res, "Voter name is required");
       }
+      const voterName = rawVoterName.trim();
       if (!votes || !Array.isArray(votes) || votes.length === 0) {
         return bad(res, "Votes must be a non-empty array");
       }
