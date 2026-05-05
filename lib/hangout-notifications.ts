@@ -17,6 +17,7 @@ async function getViewedMap(userId: string): Promise<ViewedMap> {
 }
 
 export async function markHangoutViewed(hangoutId: string, userId: string): Promise<void> {
+  if (!userId) return;
   try {
     const map = await getViewedMap(userId);
     map[hangoutId] = new Date().toISOString();
@@ -25,6 +26,7 @@ export async function markHangoutViewed(hangoutId: string, userId: string): Prom
 }
 
 export async function getViewedTimestamps(userId: string): Promise<ViewedMap> {
+  if (!userId) return {};
   return getViewedMap(userId);
 }
 
