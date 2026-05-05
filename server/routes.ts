@@ -27,6 +27,8 @@ function bad(res: Response, message: string) {
 
 const VALID_CIRCLE_LEVELS = [1, 2, 3] as const;
 const VALID_HANGOUT_STATUSES = ["draft", "active", "finalized"] as const;
+// 5 MB image → ~6.7 MB base64 string; cap at 7 MB of string length
+const MAX_PHOTO_CHARS = 7 * 1024 * 1024;
 
 const CONTACT_WRITABLE_FIELDS = new Set([
   "name", "circleLevel", "interests", "labels", "birthday",
@@ -278,6 +280,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.put("/api/auth/profile", requireAuth, async (req, res) => {
     try {
       const { profilePhotoUri, name } = req.body;
+      if (profilePhotoUri !== undefined && typeof profilePhotoUri === "string" && profilePhotoUri.length > MAX_PHOTO_CHARS) {
+        return bad(res, "Photo data exceeds maximum allowed size");
+      }
       const updateData: any = {};
       if (profilePhotoUri !== undefined) updateData.profilePhotoUri = profilePhotoUri;
       if (name !== undefined) updateData.username = name;
@@ -357,6 +362,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const body = req.body as Record<string, unknown>;
       if (!body.name || typeof body.name !== "string" || !(body.name as string).trim()) {
         return bad(res, "Name is required");
+      }
+      if (body.photoUri !== undefined && typeof body.photoUri === "string" && body.photoUri.length > MAX_PHOTO_CHARS) {
+        return bad(res, "Photo data exceeds maximum allowed size");
       }
       const normalizedLevel = Number(body.circleLevel);
       if (!VALID_CIRCLE_LEVELS.includes(normalizedLevel as 1 | 2 | 3)) {
