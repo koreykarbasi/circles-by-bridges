@@ -55,6 +55,11 @@ export default function AddContactScreen() {
     if (!result.canceled && result.assets[0]) {
       const asset = result.assets[0];
       if (asset.base64) {
+        const estimatedBytes = asset.base64.length * 0.75;
+        if (estimatedBytes > 5 * 1024 * 1024) {
+          Alert.alert("Photo is too large", "Please choose a smaller image (under 5 MB).");
+          return;
+        }
         const mimeType = asset.mimeType || "image/jpeg";
         setPhotoUri(`data:${mimeType};base64,${asset.base64}`);
       } else {

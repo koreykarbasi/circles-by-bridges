@@ -71,7 +71,13 @@ export default function EditContactScreen() {
       base64: true,
     });
     if (!result.canceled && result.assets[0]?.base64) {
-      const dataUri = `data:image/jpeg;base64,${result.assets[0].base64}`;
+      const base64 = result.assets[0].base64;
+      const estimatedBytes = base64.length * 0.75;
+      if (estimatedBytes > 5 * 1024 * 1024) {
+        Alert.alert("Photo is too large", "Please choose a smaller image (under 5 MB).");
+        return;
+      }
+      const dataUri = `data:image/jpeg;base64,${base64}`;
       setPhotoUri(dataUri);
     }
   };
