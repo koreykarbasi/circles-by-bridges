@@ -70,10 +70,6 @@ function RootLayoutNav() {
         options={{ headerShown: false, presentation: "modal" }}
       />
       <Stack.Screen
-        name="hangouts"
-        options={{ headerShown: false, presentation: "modal" }}
-      />
-      <Stack.Screen
         name="create-hangout"
         options={{ headerShown: false, presentation: "modal" }}
       />

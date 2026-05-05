@@ -104,9 +104,6 @@ export default function HangoutsScreen() {
   return (
     <View style={styles.screen}>
       <View style={[styles.headerBar, { paddingTop: insets.top + 8 + webTopInset }]}>
-        <Pressable onPress={() => router.back()} style={styles.closeButton}>
-          <Ionicons name="arrow-back" size={24} color={Colors.text} />
-        </Pressable>
         <Text style={styles.headerTitle}>Hangouts</Text>
         <Pressable
           onPress={() => {
@@ -176,9 +173,6 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.surface,
     borderBottomWidth: 1,
     borderBottomColor: Colors.border,
-  },
-  closeButton: {
-    padding: 4,
   },
   headerTitle: {
     fontSize: 17,

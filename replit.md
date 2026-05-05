@@ -14,7 +14,7 @@ Bridges is a relationship management app based on Dunbar's social brain theory. 
 - **Integrations**: GitHub (code backup), Google Sheets (prompt sync)
 
 ## Project Structure
-- `app/(tabs)/` - Three main tabs: Home, Circles, Suggestions
+- `app/(tabs)/` - Four main tabs: Home, Circles, Suggestions, Hangouts
 - `app/onboarding.tsx` - 7-screen onboarding walkthrough
 - `app/auth.tsx` - Login/Register screen (email + password)
 - `app/profile.tsx` - Profile/settings page with photo upload, replay walkthrough, logout
