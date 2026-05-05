@@ -6,6 +6,7 @@ import session from "express-session";
 import connectPgSimple from "connect-pg-simple";
 import { pool } from "./db";
 import { getPrompts, syncFromSheet } from "./prompts-sync";
+import type { InsertContact } from "@shared/schema";
 
 declare module "express-session" {
   interface SessionData {
@@ -32,10 +33,16 @@ const CONTACT_WRITABLE_FIELDS = new Set([
   "lastContacted", "lastHangout", "notes", "phone", "photoUri",
 ]);
 
-function pickContactFields(body: Record<string, unknown>): Record<string, unknown> {
-  return Object.fromEntries(
-    Object.entries(body).filter(([k]) => CONTACT_WRITABLE_FIELDS.has(k)),
-  );
+type SafeContactUpdate = Partial<Omit<InsertContact, "userId" | "avatarColor">>;
+
+function pickContactFields(body: Record<string, unknown>): SafeContactUpdate {
+  const result: Record<string, unknown> = {};
+  for (const [k, v] of Object.entries(body)) {
+    if (CONTACT_WRITABLE_FIELDS.has(k)) {
+      result[k] = v;
+    }
+  }
+  return result as SafeContactUpdate;
 }
 
 function generateShareCode(): string {
@@ -321,13 +328,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return bad(res, "circleLevel must be 1, 2, or 3");
       }
       const safe = pickContactFields(body);
+      const avatarColor =
+        typeof body.avatarColor === "string" && body.avatarColor
+          ? body.avatarColor
+          : "#9B7DFF";
       const contact = await storage.createContact({
         ...safe,
         name: name.trim(),
         circleLevel: level,
         userId: req.session.userId!,
-        lastContacted: (safe.lastContacted as string | undefined) ?? new Date().toISOString(),
-      } as any);
+        avatarColor,
+        lastContacted: safe.lastContacted ?? new Date().toISOString(),
+      });
       res.status(201).json(contact);
     } catch (err) {
       console.error("Error creating contact:", err);
@@ -348,14 +360,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
           return bad(res, "Name must be a non-empty string");
         }
       }
+      let normalizedLevel: number | undefined;
       if ("circleLevel" in body) {
-        const level = Number(body.circleLevel);
-        if (!VALID_CIRCLE_LEVELS.includes(level as 1 | 2 | 3)) {
+        normalizedLevel = Number(body.circleLevel);
+        if (!VALID_CIRCLE_LEVELS.includes(normalizedLevel as 1 | 2 | 3)) {
           return bad(res, "circleLevel must be 1, 2, or 3");
         }
       }
       const safe = pickContactFields(body);
-      const contact = await storage.updateContact(id, safe as any);
+      if (normalizedLevel !== undefined) {
+        safe.circleLevel = normalizedLevel;
+      }
+      const contact = await storage.updateContact(id, safe);
       res.json(contact);
     } catch (err) {
       console.error("Error updating contact:", err);
@@ -443,8 +459,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post("/api/hangouts", requireAuth, async (req, res) => {
     try {
       const { title, description, inviteeNames, options, surveyMode, fixedActivity, deadline, includePlusOne } = req.body;
-      if (!title) {
-        return res.status(400).json({ message: "Title is required" });
+      if (!title || typeof title !== "string" || !title.trim()) {
+        return bad(res, "Title is required");
+      }
+      if (inviteeNames !== undefined && !Array.isArray(inviteeNames)) {
+        return bad(res, "inviteeNames must be an array");
       }
 
       let shareCode = generateShareCode();
