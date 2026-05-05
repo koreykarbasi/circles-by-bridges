@@ -57,7 +57,8 @@ async function registerForPushNotifications(): Promise<string | null> {
 
 async function savePushToken(token: string) {
   try {
-    await apiRequest("PUT", "/api/notifications/token", { token });
+    const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+    await apiRequest("PUT", "/api/notifications/token", { token, timezone });
   } catch {
     // Non-fatal — token registration is best-effort
   }
@@ -77,11 +78,11 @@ function RootLayoutNav() {
       if (token) savePushToken(token);
     });
 
-    // Handle notification taps — navigate to circles tab (where contacts live)
+    // Handle notification taps — deep-link to the relevant contact
     responseListener.current = Notifications.addNotificationResponseReceivedListener((response) => {
       const data = response.notification.request.content.data as Record<string, string> | undefined;
       if (data?.contactId) {
-        router.push("/(tabs)/circles");
+        router.push({ pathname: "/edit-contact", params: { id: data.contactId } });
       } else {
         router.push("/(tabs)");
       }

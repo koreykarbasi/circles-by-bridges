@@ -279,11 +279,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.put("/api/notifications/token", requireAuth, async (req, res) => {
     try {
-      const { token } = req.body;
+      const { token, timezone } = req.body;
       if (!token || typeof token !== "string" || !token.trim()) {
         return bad(res, "Push token is required");
       }
-      await storage.updateUser(req.session.userId!, { pushToken: token.trim() });
+      const update: { pushToken: string; notificationTimezone?: string } = {
+        pushToken: token.trim(),
+      };
+      if (timezone && typeof timezone === "string") {
+        update.notificationTimezone = timezone.trim();
+      }
+      await storage.updateUser(req.session.userId!, update);
       res.json({ ok: true });
     } catch (err) {
       console.error("Error saving push token:", err);

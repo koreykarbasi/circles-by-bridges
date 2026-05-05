@@ -1,6 +1,6 @@
 import { db } from "./db";
 import { users, contacts } from "@shared/schema";
-import { isNotNull } from "drizzle-orm";
+import { isNotNull, eq } from "drizzle-orm";
 
 // ─── Reminder helpers (mirrors lib/helpers.ts + lib/reminders.ts) ─────────────
 
@@ -27,7 +27,14 @@ interface PushMessage {
 }
 
 function buildMessages(
-  contact: { id: string; name: string; circleLevel: number; birthday?: string | null; lastContacted?: string | null; lastHangout?: string | null },
+  contact: {
+    id: string;
+    name: string;
+    circleLevel: number;
+    birthday?: string | null;
+    lastContacted?: string | null;
+    lastHangout?: string | null;
+  },
 ): PushMessage[] {
   const messages: PushMessage[] = [];
   const daysUntilBirthday = getDaysUntilBirthday(contact.birthday);
@@ -35,56 +42,36 @@ function buildMessages(
   if (contact.circleLevel === 1) {
     // Birthday: within 7 days
     if (daysUntilBirthday !== null && daysUntilBirthday <= 7) {
-      const subtitle =
-        daysUntilBirthday === 0
-          ? "Today is their birthday"
-          : daysUntilBirthday === 1
-          ? "Their birthday is tomorrow"
-          : `Birthday in ${daysUntilBirthday} days`;
-      messages.push({
-        title: `${contact.name}'s birthday is coming up`,
-        body: subtitle,
-        contactId: contact.id,
-      });
+      const body =
+        daysUntilBirthday === 0 ? "Today is their birthday!" :
+        daysUntilBirthday === 1 ? "Their birthday is tomorrow" :
+        `Birthday in ${daysUntilBirthday} days`;
+      messages.push({ title: `${contact.name}'s birthday is coming up`, body, contactId: contact.id });
     }
     // Check-in overdue: > 7 days
     const daysSinceContact = getDaysSince(contact.lastContacted);
     if (daysSinceContact === null || daysSinceContact > 7) {
-      const daysText =
-        daysSinceContact === null ? "You haven't reached out yet" : `${daysSinceContact} days since you last connected`;
-      messages.push({
-        title: `Check in with ${contact.name}`,
-        body: daysText,
-        contactId: contact.id,
-      });
+      const body = daysSinceContact === null
+        ? "You haven't reached out yet"
+        : `${daysSinceContact} days since you last connected`;
+      messages.push({ title: `Check in with ${contact.name}`, body, contactId: contact.id });
     }
   } else if (contact.circleLevel === 2) {
     // Birthday: within 7 days
     if (daysUntilBirthday !== null && daysUntilBirthday <= 7) {
-      const subtitle =
-        daysUntilBirthday === 0
-          ? "Today is their birthday"
-          : daysUntilBirthday === 1
-          ? "Their birthday is tomorrow"
-          : `Birthday in ${daysUntilBirthday} days`;
-      messages.push({
-        title: `${contact.name}'s birthday is coming up`,
-        body: subtitle,
-        contactId: contact.id,
-      });
+      const body =
+        daysUntilBirthday === 0 ? "Today is their birthday!" :
+        daysUntilBirthday === 1 ? "Their birthday is tomorrow" :
+        `Birthday in ${daysUntilBirthday} days`;
+      messages.push({ title: `${contact.name}'s birthday is coming up`, body, contactId: contact.id });
     }
     // Hangout overdue: > 3 weeks
     const daysSinceHangout = getDaysSince(contact.lastHangout);
     if (daysSinceHangout === null || daysSinceHangout > 21) {
-      const hText =
-        daysSinceHangout === null
-          ? "You haven't hung out yet"
-          : `${Math.floor(daysSinceHangout / 7)} weeks since your last hangout`;
-      messages.push({
-        title: `Plan a hangout with ${contact.name}`,
-        body: hText,
-        contactId: contact.id,
-      });
+      const body = daysSinceHangout === null
+        ? "You haven't hung out yet"
+        : `${Math.floor(daysSinceHangout / 7)} weeks since your last hangout`;
+      messages.push({ title: `Plan a hangout with ${contact.name}`, body, contactId: contact.id });
     }
   }
   // Circle 3: no push notifications
@@ -96,7 +83,12 @@ function buildMessages(
 
 const EXPO_PUSH_URL = "https://exp.host/api/v2/push/send";
 
-async function sendExpoPush(token: string, title: string, body: string, data?: Record<string, string>) {
+async function sendExpoPush(
+  token: string,
+  title: string,
+  body: string,
+  data?: Record<string, string>,
+) {
   try {
     const payload = { to: token, title, body, sound: "default", data: data ?? {} };
     const res = await fetch(EXPO_PUSH_URL, {
@@ -112,26 +104,48 @@ async function sendExpoPush(token: string, title: string, body: string, data?: R
   }
 }
 
+// ─── Per-user local-time check ────────────────────────────────────────────────
+// Returns true if it is currently between 9:00 and 9:59 in the given timezone.
+function isNineAmLocalNow(timezone: string): boolean {
+  try {
+    const formatter = new Intl.DateTimeFormat("en-US", {
+      timeZone: timezone,
+      hour: "numeric",
+      hour12: false,
+    });
+    const localHour = parseInt(formatter.format(new Date()), 10);
+    return localHour === 9;
+  } catch {
+    // Unknown timezone — fall back to UTC
+    return new Date().getUTCHours() === 9;
+  }
+}
+
 // ─── Daily reminder dispatch ──────────────────────────────────────────────────
 
 export async function sendDailyReminders() {
-  console.log("[push] Sending daily reminders…");
+  console.log("[push] Checking per-user 9am reminders…");
   try {
     const usersWithTokens = await db
-      .select({ id: users.id, pushToken: users.pushToken })
+      .select({
+        id: users.id,
+        pushToken: users.pushToken,
+        notificationTimezone: users.notificationTimezone,
+      })
       .from(users)
       .where(isNotNull(users.pushToken));
 
     let sent = 0;
     for (const user of usersWithTokens) {
       if (!user.pushToken) continue;
+
+      const tz = user.notificationTimezone ?? "UTC";
+      if (!isNineAmLocalNow(tz)) continue;
+
       const userContacts = await db
         .select()
         .from(contacts)
-        .where(
-          // drizzle eq imported inline to avoid circular dep
-          (await import("drizzle-orm")).eq(contacts.userId, user.id),
-        );
+        .where(eq(contacts.userId, user.id));
 
       const messages: PushMessage[] = [];
       for (const contact of userContacts) {
@@ -139,8 +153,7 @@ export async function sendDailyReminders() {
       }
 
       // Cap at 3 notifications per user per day to avoid spam
-      const toSend = messages.slice(0, 3);
-      for (const msg of toSend) {
+      for (const msg of messages.slice(0, 3)) {
         await sendExpoPush(
           user.pushToken,
           msg.title,
@@ -150,39 +163,33 @@ export async function sendDailyReminders() {
         sent++;
       }
     }
-    console.log(`[push] Daily reminders done. Sent ${sent} notifications to ${usersWithTokens.length} users.`);
+    if (sent > 0) {
+      console.log(`[push] Sent ${sent} notifications.`);
+    }
   } catch (err) {
-    console.error("[push] Error sending daily reminders:", err);
+    console.error("[push] Error sending reminders:", err);
   }
 }
 
-// ─── Scheduler ────────────────────────────────────────────────────────────────
-
-let schedulerInterval: ReturnType<typeof setInterval> | null = null;
+// ─── Hourly scheduler ─────────────────────────────────────────────────────────
+// Runs every hour; sendDailyReminders() only delivers to users for whom it
+// is currently 9am local time, so each user gets notified once per day.
 
 export function scheduleDailyNotifications() {
-  if (schedulerInterval) return;
+  const MS_PER_HOUR = 60 * 60 * 1000;
 
-  function msUntil9amUtc(): number {
-    const now = new Date();
-    const next9am = new Date(
-      Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(), 9, 0, 0, 0),
-    );
-    if (next9am <= now) next9am.setUTCDate(next9am.getUTCDate() + 1);
-    return next9am.getTime() - now.getTime();
+  function msUntilNextHour(): number {
+    const now = Date.now();
+    return MS_PER_HOUR - (now % MS_PER_HOUR);
   }
 
-  function scheduleNext() {
-    const delay = msUntil9amUtc();
-    console.log(`[push] Next daily reminder in ${Math.round(delay / 60000)} minutes`);
-    setTimeout(() => {
-      sendDailyReminders().catch((err) => console.error("[push] Uncaught error:", err));
-      schedulerInterval = setInterval(() => {
-        sendDailyReminders().catch((err) => console.error("[push] Uncaught error:", err));
-      }, 24 * 60 * 60 * 1000);
-    }, delay);
-  }
+  // First run at the top of the next hour, then every hour after that
+  setTimeout(() => {
+    sendDailyReminders().catch((err) => console.error("[push] Uncaught:", err));
+    setInterval(() => {
+      sendDailyReminders().catch((err) => console.error("[push] Uncaught:", err));
+    }, MS_PER_HOUR);
+  }, msUntilNextHour());
 
-  scheduleNext();
-  console.log("[push] Daily notification scheduler started");
+  console.log("[push] Hourly notification scheduler started (delivers at 9am per user timezone)");
 }

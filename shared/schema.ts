@@ -12,6 +12,7 @@ export const users = pgTable("users", {
   profilePhotoUri: text("profile_photo_uri"),
   username: text("username"),
   pushToken: text("push_token"),
+  notificationTimezone: text("notification_timezone"),
 });
 
 export const contacts = pgTable("contacts", {
