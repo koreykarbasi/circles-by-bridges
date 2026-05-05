@@ -279,7 +279,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.get("/api/contacts/:id", requireAuth, async (req, res) => {
     try {
-      const contact = await storage.getContact(req.params.id);
+      const { id } = req.params as { id: string };
+      const contact = await storage.getContact(id);
       if (!contact || contact.userId !== req.session.userId) {
         return res.status(404).json({ message: "Contact not found" });
       }
@@ -306,11 +307,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.put("/api/contacts/:id", requireAuth, async (req, res) => {
     try {
-      const existing = await storage.getContact(req.params.id);
+      const { id } = req.params as { id: string };
+      const existing = await storage.getContact(id);
       if (!existing || existing.userId !== req.session.userId) {
         return res.status(404).json({ message: "Contact not found" });
       }
-      const contact = await storage.updateContact(req.params.id, req.body);
+      const contact = await storage.updateContact(id, req.body);
       res.json(contact);
     } catch (err) {
       console.error("Error updating contact:", err);
@@ -320,11 +322,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.delete("/api/contacts/:id", requireAuth, async (req, res) => {
     try {
-      const existing = await storage.getContact(req.params.id);
+      const { id } = req.params as { id: string };
+      const existing = await storage.getContact(id);
       if (!existing || existing.userId !== req.session.userId) {
         return res.status(404).json({ message: "Contact not found" });
       }
-      await storage.deleteContact(req.params.id);
+      await storage.deleteContact(id);
       res.json({ success: true });
     } catch (err) {
       console.error("Error deleting contact:", err);
@@ -334,11 +337,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.post("/api/contacts/:id/mark-contacted", requireAuth, async (req, res) => {
     try {
-      const existing = await storage.getContact(req.params.id);
+      const { id } = req.params as { id: string };
+      const existing = await storage.getContact(id);
       if (!existing || existing.userId !== req.session.userId) {
         return res.status(404).json({ message: "Contact not found" });
       }
-      const contact = await storage.updateContact(req.params.id, {
+      const contact = await storage.updateContact(id, {
         lastContacted: new Date().toISOString(),
       });
       res.json(contact);
@@ -374,7 +378,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.get("/api/hangouts/:id", requireAuth, async (req, res) => {
     try {
-      const plan = await storage.getHangoutPlan(req.params.id);
+      const { id } = req.params as { id: string };
+      const plan = await storage.getHangoutPlan(id);
       if (!plan || plan.userId !== req.session.userId) {
         return res.status(404).json({ message: "Hangout not found" });
       }
@@ -443,7 +448,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.put("/api/hangouts/:id", requireAuth, async (req, res) => {
     try {
-      const existing = await storage.getHangoutPlan(req.params.id);
+      const { id } = req.params as { id: string };
+      const existing = await storage.getHangoutPlan(id);
       if (!existing || existing.userId !== req.session.userId) {
         return res.status(404).json({ message: "Hangout not found" });
       }
@@ -455,7 +461,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (finalizedOptionId !== undefined) updateData.finalizedOptionId = finalizedOptionId;
       if (inviteeNames !== undefined) updateData.inviteeNames = inviteeNames;
 
-      const plan = await storage.updateHangoutPlan(req.params.id, updateData);
+      const plan = await storage.updateHangoutPlan(id, updateData);
       const options = await storage.getOptionsByPlanId(plan!.id);
       const votes = await storage.getVotesByPlanId(plan!.id);
       const scored = computeBordaScores(options, votes);
@@ -472,11 +478,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.delete("/api/hangouts/:id", requireAuth, async (req, res) => {
     try {
-      const existing = await storage.getHangoutPlan(req.params.id);
+      const { id } = req.params as { id: string };
+      const existing = await storage.getHangoutPlan(id);
       if (!existing || existing.userId !== req.session.userId) {
         return res.status(404).json({ message: "Hangout not found" });
       }
-      await storage.deleteHangoutPlan(req.params.id);
+      await storage.deleteHangoutPlan(id);
       res.json({ success: true });
     } catch (err) {
       console.error("Error deleting hangout:", err);
@@ -486,7 +493,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.post("/api/hangouts/:id/options", requireAuth, async (req, res) => {
     try {
-      const plan = await storage.getHangoutPlan(req.params.id);
+      const { id } = req.params as { id: string };
+      const plan = await storage.getHangoutPlan(id);
       if (!plan || plan.userId !== req.session.userId) {
         return res.status(404).json({ message: "Hangout not found" });
       }
@@ -512,7 +520,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Calendar invite download - no auth required (uses plan id)
   app.get("/api/hangouts/:id/calendar", async (req, res) => {
     try {
-      const plan = await storage.getHangoutPlan(req.params.id);
+      const { id } = req.params as { id: string };
+      const plan = await storage.getHangoutPlan(id);
       if (!plan || plan.status !== "finalized" || !plan.finalizedOptionId) {
         return res.status(404).json({ message: "No finalized hangout found" });
       }

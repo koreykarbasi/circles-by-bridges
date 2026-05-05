@@ -278,7 +278,7 @@ const HARDCODED_PROMPTS: SyncedPrompts = {
 };
 
 let currentPrompts: SyncedPrompts = { ...HARDCODED_PROMPTS };
-let syncTimer: NodeJS.Timeout | null = null;
+let syncTimer: ReturnType<typeof setInterval> | null = null;
 
 export function getPrompts(): SyncedPrompts {
   return currentPrompts;
