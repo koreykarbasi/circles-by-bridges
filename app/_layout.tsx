@@ -19,7 +19,7 @@ import {
 import { View, ActivityIndicator, Platform } from "react-native";
 import Colors from "@/constants/colors";
 import * as Notifications from "expo-notifications";
-import { getApiUrl, apiRequest } from "@/lib/query-client";
+import { apiRequest } from "@/lib/query-client";
 
 SplashScreen.preventAutoHideAsync();
 
@@ -67,18 +67,17 @@ async function savePushToken(token: string) {
 function RootLayoutNav() {
   const { user, isCacheHydrated } = useAuth();
   const { hasCompletedOnboarding } = useOnboarding();
-  const notificationListener = useRef<Notifications.EventSubscription | null>(null);
-  const responseListener = useRef<Notifications.EventSubscription | null>(null);
+  const responseListener = useRef<{ remove(): void } | null>(null);
 
-  // Register for push notifications once the user is authenticated
+  // Register for push notifications once onboarding is done and user is authenticated
   useEffect(() => {
-    if (!user) return;
+    if (!user || !hasCompletedOnboarding) return;
 
     registerForPushNotifications().then((token) => {
       if (token) savePushToken(token);
     });
 
-    // Handle notification taps — deep-link to the relevant contact
+    // Handle notification taps — deep-link to the relevant contact's edit screen
     responseListener.current = Notifications.addNotificationResponseReceivedListener((response) => {
       const data = response.notification.request.content.data as Record<string, string> | undefined;
       if (data?.contactId) {
@@ -89,14 +88,10 @@ function RootLayoutNav() {
     });
 
     return () => {
-      if (notificationListener.current) {
-        Notifications.removeNotificationSubscription(notificationListener.current);
-      }
-      if (responseListener.current) {
-        Notifications.removeNotificationSubscription(responseListener.current);
-      }
+      responseListener.current?.remove();
+      responseListener.current = null;
     };
-  }, [user?.id]);
+  }, [user?.id, hasCompletedOnboarding]);
 
   useEffect(() => {
     if (hasCompletedOnboarding === null || !isCacheHydrated) return;
