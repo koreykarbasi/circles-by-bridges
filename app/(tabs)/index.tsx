@@ -10,13 +10,15 @@ import { CirclesVisualization } from "@/components/CirclesVisualization";
 import { ChecklistItem } from "@/components/ChecklistItem";
 import { EmptyState } from "@/components/EmptyState";
 import { formatLastContacted, getDaysSince, getDaysUntilBirthday } from "@/lib/helpers";
-import { CIRCLE_CONFIG } from "@/lib/types";
+import { CIRCLE_CONFIG, HangoutPlan } from "@/lib/types";
 import { generateReminders, Reminder } from "@/lib/reminders";
 import { getSmartPrompt, getActionType, getNextPrompt, loadSyncedPrompts } from "@/lib/prompts";
 import { loadSchedulerData, markSuggested, getDaysSinceLastSuggestedSync, scoreSuggestion, isInCooldown } from "@/lib/suggestion-scheduler";
 import { getTextCopyMessage } from "@/components/SuggestionCard";
 import * as Clipboard from "expo-clipboard";
 import { router } from "expo-router";
+import { useQuery } from "@tanstack/react-query";
+import { getViewedTimestamps, hasUnreadVotes } from "@/lib/hangout-notifications";
 
 const MAX_REMINDERS = 3;
 const MAX_SUGGESTIONS = 2;
@@ -77,9 +79,16 @@ export default function HomeScreen() {
   const [suggestionPrompts, setSuggestionPrompts] = useState<Map<string, string>>(new Map());
   const [lastSuggestedDates, setLastSuggestedDates] = useState<Record<string, string>>({});
 
+  const { data: hangouts } = useQuery<HangoutPlan[]>({
+    queryKey: ["/api/hangouts"],
+    refetchInterval: 60000,
+  });
+  const [hangoutViewedMap, setHangoutViewedMap] = useState<Record<string, string>>({});
+
   useEffect(() => {
     loadSyncedPrompts();
     loadSchedulerData().then(setLastSuggestedDates);
+    getViewedTimestamps().then(setHangoutViewedMap);
   }, []);
 
   const allReminders = useMemo(() => generateReminders(contacts), [contacts]);
@@ -314,6 +323,13 @@ export default function HomeScreen() {
   const profileCompletion = useMemo(() => computeProfileCompletion(contacts), [contacts]);
   const webTopInset = Platform.OS === "web" ? 67 : 0;
 
+  const hangoutWithNewVotes = useMemo(() => {
+    if (!hangouts) return null;
+    return hangouts.find(
+      (h) => h.status !== "finalized" && hasUnreadVotes(h, hangoutViewedMap[h.id]),
+    ) ?? null;
+  }, [hangouts, hangoutViewedMap]);
+
   return (
     <ScrollView
       style={styles.container}
@@ -375,6 +391,22 @@ export default function HomeScreen() {
         </View>
         <Ionicons name="chevron-forward" size={16} color={Colors.textTertiary} />
       </Pressable>
+
+      {hangoutWithNewVotes && (
+        <Pressable
+          onPress={() => router.push({ pathname: "/hangout-detail", params: { id: hangoutWithNewVotes.id } })}
+          style={({ pressed }) => [styles.newVotesBanner, pressed && { opacity: 0.8 }]}
+        >
+          <View style={styles.newVotesBannerLeft}>
+            <View style={styles.newVotesDotLarge} />
+            <View>
+              <Text style={styles.newVotesBannerTitle}>New votes on "{hangoutWithNewVotes.title}"</Text>
+              <Text style={styles.newVotesBannerSub}>Tap to see the latest results</Text>
+            </View>
+          </View>
+          <Ionicons name="chevron-forward" size={16} color={Colors.primaryLight} />
+        </Pressable>
+      )}
 
       {profileCompletion.stage === 1 && (
         <Pressable
@@ -595,6 +627,42 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     paddingHorizontal: 14,
     marginTop: 12,
+  },
+  newVotesBanner: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    backgroundColor: Colors.primary + "12",
+    borderWidth: 1,
+    borderColor: Colors.primary + "40",
+    borderRadius: 14,
+    paddingVertical: 11,
+    paddingHorizontal: 14,
+    marginTop: 8,
+  },
+  newVotesBannerLeft: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    flex: 1,
+  },
+  newVotesDotLarge: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    backgroundColor: Colors.primary,
+  },
+  newVotesBannerTitle: {
+    fontSize: 13,
+    fontFamily: "Nunito_700Bold",
+    color: Colors.primaryLight,
+    flexShrink: 1,
+  },
+  newVotesBannerSub: {
+    fontSize: 11,
+    fontFamily: "Nunito_400Regular",
+    color: Colors.textSecondary,
+    marginTop: 1,
   },
   hangoutBannerLeft: {
     flexDirection: "row",

@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from "react";
+import React, { useState, useCallback, useEffect } from "react";
 import {
   View, Text, StyleSheet, ScrollView, Pressable, Platform, Alert, Share, Linking,
 } from "react-native";
@@ -10,6 +10,7 @@ import * as Haptics from "expo-haptics";
 import Colors from "@/constants/colors";
 import { apiRequest, getApiUrl, queryClient } from "@/lib/query-client";
 import type { HangoutPlan, HangoutOption } from "@/lib/types";
+import { markHangoutViewed } from "@/lib/hangout-notifications";
 
 function getBordaColor(rank: number, total: number): string {
   if (total <= 1) return Colors.primary;
@@ -111,6 +112,12 @@ export default function HangoutDetailScreen() {
     enabled: !!id,
     refetchInterval: 15000,
   });
+
+  useEffect(() => {
+    if (plan?.id) {
+      markHangoutViewed(plan.id);
+    }
+  }, [plan?.id]);
 
   const finalizeMutation = useMutation({
     mutationFn: async (optionId: string) => {

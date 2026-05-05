@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useState, useEffect } from "react";
 import {
   View, Text, StyleSheet, ScrollView, Pressable, Platform, ActivityIndicator,
 } from "react-native";
@@ -10,10 +10,13 @@ import * as Haptics from "expo-haptics";
 import Colors from "@/constants/colors";
 import { EmptyState } from "@/components/EmptyState";
 import type { HangoutPlan } from "@/lib/types";
+import { getViewedTimestamps, hasUnreadVotes, countNewVoters } from "@/lib/hangout-notifications";
 
-function HangoutCard({ plan }: { plan: HangoutPlan }) {
+function HangoutCard({ plan, viewedAt }: { plan: HangoutPlan; viewedAt: string | undefined }) {
   const isFinalized = plan.status === "finalized";
   const totalVotes = (plan.options || []).reduce((sum, o) => sum + (o.voteCount || 0), 0);
+  const unread = !isFinalized && hasUnreadVotes(plan, viewedAt);
+  const newVoterCount = unread ? countNewVoters(plan, viewedAt) : 0;
 
   const finalizedOption = isFinalized && plan.finalizedOptionId
     ? (plan.options || []).find((o) => o.id === plan.finalizedOptionId)
@@ -25,11 +28,14 @@ function HangoutCard({ plan }: { plan: HangoutPlan }) {
         Haptics.selectionAsync();
         router.push({ pathname: "/hangout-detail", params: { id: plan.id } });
       }}
-      style={({ pressed }) => [styles.card, pressed && { opacity: 0.8 }]}
+      style={({ pressed }) => [styles.card, unread && styles.cardUnread, pressed && { opacity: 0.8 }]}
     >
       <View style={styles.cardHeader}>
         <View style={{ flex: 1 }}>
-          <Text style={styles.cardTitle} numberOfLines={1}>{plan.title}</Text>
+          <View style={styles.titleRow}>
+            <Text style={styles.cardTitle} numberOfLines={1}>{plan.title}</Text>
+            {unread && <View style={styles.unreadDot} />}
+          </View>
           <View style={styles.cardMeta}>
             <Ionicons name="people-outline" size={13} color={Colors.textTertiary} />
             <Text style={styles.cardMetaText}>{plan.inviteeNames.length} invited</Text>
@@ -44,6 +50,15 @@ function HangoutCard({ plan }: { plan: HangoutPlan }) {
           </Text>
         </View>
       </View>
+
+      {unread && newVoterCount > 0 && (
+        <View style={styles.newVotesRow}>
+          <View style={styles.newVotesDot} />
+          <Text style={styles.newVotesText}>
+            {newVoterCount === 1 ? "1 new vote" : `${newVoterCount} new votes`}
+          </Text>
+        </View>
+      )}
 
       {finalizedOption && (
         <View style={styles.winnerRow}>
@@ -69,10 +84,15 @@ function HangoutCard({ plan }: { plan: HangoutPlan }) {
 export default function HangoutsScreen() {
   const insets = useSafeAreaInsets();
   const webTopInset = Platform.OS === "web" ? 67 : 0;
+  const [viewedMap, setViewedMap] = useState<Record<string, string>>({});
 
   const { data: hangouts, isLoading } = useQuery<HangoutPlan[]>({
     queryKey: ["/api/hangouts"],
   });
+
+  useEffect(() => {
+    getViewedTimestamps().then(setViewedMap);
+  }, [hangouts]);
 
   const activeHangouts = (hangouts || []).filter((h) => h.status !== "finalized");
   const pastHangouts = (hangouts || []).filter((h) => h.status === "finalized");
@@ -117,7 +137,7 @@ export default function HangoutsScreen() {
               <>
                 <Text style={styles.sectionTitle}>Active</Text>
                 {activeHangouts.map((h) => (
-                  <HangoutCard key={h.id} plan={h} />
+                  <HangoutCard key={h.id} plan={h} viewedAt={viewedMap[h.id]} />
                 ))}
               </>
             )}
@@ -127,7 +147,7 @@ export default function HangoutsScreen() {
                   Past
                 </Text>
                 {pastHangouts.map((h) => (
-                  <HangoutCard key={h.id} plan={h} />
+                  <HangoutCard key={h.id} plan={h} viewedAt={viewedMap[h.id]} />
                 ))}
               </>
             )}
@@ -186,15 +206,31 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: Colors.border,
   },
+  cardUnread: {
+    borderColor: Colors.primary + "50",
+    backgroundColor: Colors.primary + "06",
+  },
   cardHeader: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "flex-start",
   },
+  titleRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
   cardTitle: {
     fontSize: 16,
     fontFamily: "Nunito_700Bold",
     color: Colors.text,
+    flexShrink: 1,
+  },
+  unreadDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: Colors.primary,
   },
   cardMeta: {
     flexDirection: "row",
@@ -213,6 +249,27 @@ const styles = StyleSheet.create({
     borderRadius: 1.5,
     backgroundColor: Colors.textTertiary,
     marginHorizontal: 4,
+  },
+  newVotesRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    marginTop: 8,
+    backgroundColor: Colors.primary + "12",
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 8,
+  },
+  newVotesDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: Colors.primaryLight,
+  },
+  newVotesText: {
+    fontSize: 12,
+    fontFamily: "Nunito_600SemiBold",
+    color: Colors.primaryLight,
   },
   statusBadge: {
     paddingHorizontal: 10,
