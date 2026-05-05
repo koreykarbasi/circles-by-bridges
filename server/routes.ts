@@ -355,22 +355,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ message: "Contact not found" });
       }
       const body = req.body as Record<string, unknown>;
-      if ("name" in body) {
-        if (!body.name || typeof body.name !== "string" || !(body.name as string).trim()) {
-          return bad(res, "Name must be a non-empty string");
-        }
+      if (!body.name || typeof body.name !== "string" || !(body.name as string).trim()) {
+        return bad(res, "Name is required");
       }
-      let normalizedLevel: number | undefined;
-      if ("circleLevel" in body) {
-        normalizedLevel = Number(body.circleLevel);
-        if (!VALID_CIRCLE_LEVELS.includes(normalizedLevel as 1 | 2 | 3)) {
-          return bad(res, "circleLevel must be 1, 2, or 3");
-        }
+      const normalizedLevel = Number(body.circleLevel);
+      if (!VALID_CIRCLE_LEVELS.includes(normalizedLevel as 1 | 2 | 3)) {
+        return bad(res, "circleLevel must be 1, 2, or 3");
       }
       const safe = pickContactFields(body);
-      if (normalizedLevel !== undefined) {
-        safe.circleLevel = normalizedLevel;
-      }
+      safe.name = (body.name as string).trim();
+      safe.circleLevel = normalizedLevel;
       const contact = await storage.updateContact(id, safe);
       res.json(contact);
     } catch (err) {
