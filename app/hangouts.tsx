@@ -1,10 +1,10 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useCallback } from "react";
 import {
   View, Text, StyleSheet, ScrollView, Pressable, Platform, ActivityIndicator,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
-import { router } from "expo-router";
+import { router, useFocusEffect } from "expo-router";
 import { useQuery } from "@tanstack/react-query";
 import * as Haptics from "expo-haptics";
 import Colors from "@/constants/colors";
@@ -90,9 +90,11 @@ export default function HangoutsScreen() {
     queryKey: ["/api/hangouts"],
   });
 
-  useEffect(() => {
-    getViewedTimestamps().then(setViewedMap);
-  }, [hangouts]);
+  useFocusEffect(
+    useCallback(() => {
+      getViewedTimestamps().then(setViewedMap);
+    }, []),
+  );
 
   const activeHangouts = (hangouts || []).filter((h) => h.status !== "finalized");
   const pastHangouts = (hangouts || []).filter((h) => h.status === "finalized");

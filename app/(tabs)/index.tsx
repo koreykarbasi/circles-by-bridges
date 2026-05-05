@@ -16,7 +16,7 @@ import { getSmartPrompt, getActionType, getNextPrompt, loadSyncedPrompts } from 
 import { loadSchedulerData, markSuggested, getDaysSinceLastSuggestedSync, scoreSuggestion, isInCooldown } from "@/lib/suggestion-scheduler";
 import { getTextCopyMessage } from "@/components/SuggestionCard";
 import * as Clipboard from "expo-clipboard";
-import { router } from "expo-router";
+import { router, useFocusEffect } from "expo-router";
 import { useQuery } from "@tanstack/react-query";
 import { getViewedTimestamps, hasUnreadVotes } from "@/lib/hangout-notifications";
 
@@ -88,8 +88,13 @@ export default function HomeScreen() {
   useEffect(() => {
     loadSyncedPrompts();
     loadSchedulerData().then(setLastSuggestedDates);
-    getViewedTimestamps().then(setHangoutViewedMap);
   }, []);
+
+  useFocusEffect(
+    useCallback(() => {
+      getViewedTimestamps().then(setHangoutViewedMap);
+    }, []),
+  );
 
   const allReminders = useMemo(() => generateReminders(contacts), [contacts]);
 
@@ -392,22 +397,6 @@ export default function HomeScreen() {
         <Ionicons name="chevron-forward" size={16} color={Colors.textTertiary} />
       </Pressable>
 
-      {hangoutWithNewVotes && (
-        <Pressable
-          onPress={() => router.push({ pathname: "/hangout-detail", params: { id: hangoutWithNewVotes.id } })}
-          style={({ pressed }) => [styles.newVotesBanner, pressed && { opacity: 0.8 }]}
-        >
-          <View style={styles.newVotesBannerLeft}>
-            <View style={styles.newVotesDotLarge} />
-            <View>
-              <Text style={styles.newVotesBannerTitle}>New votes on "{hangoutWithNewVotes.title}"</Text>
-              <Text style={styles.newVotesBannerSub}>Tap to see the latest results</Text>
-            </View>
-          </View>
-          <Ionicons name="chevron-forward" size={16} color={Colors.primaryLight} />
-        </Pressable>
-      )}
-
       {profileCompletion.stage === 1 && (
         <Pressable
           onPress={() => router.push("/(tabs)/circles")}
@@ -482,6 +471,22 @@ export default function HomeScreen() {
               />
             ))}
           </View>
+
+          {hangoutWithNewVotes && (
+            <Pressable
+              onPress={() => router.push({ pathname: "/hangout-detail", params: { id: hangoutWithNewVotes.id } })}
+              style={({ pressed }) => [styles.newVotesBanner, pressed && { opacity: 0.8 }]}
+            >
+              <View style={styles.newVotesBannerLeft}>
+                <View style={styles.newVotesDotLarge} />
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.newVotesBannerTitle} numberOfLines={1}>New votes on "{hangoutWithNewVotes.title}"</Text>
+                  <Text style={styles.newVotesBannerSub}>Tap to see the latest results</Text>
+                </View>
+              </View>
+              <Ionicons name="chevron-forward" size={16} color={Colors.primaryLight} />
+            </Pressable>
+          )}
 
           <View style={styles.section}>
             <View style={styles.sectionHeader}>
