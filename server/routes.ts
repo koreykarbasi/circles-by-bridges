@@ -20,6 +20,24 @@ function requireAuth(req: Request, res: Response, next: NextFunction) {
   next();
 }
 
+function bad(res: Response, message: string) {
+  return res.status(400).json({ message });
+}
+
+const VALID_CIRCLE_LEVELS = [1, 2, 3] as const;
+const VALID_HANGOUT_STATUSES = ["draft", "active", "finalized"] as const;
+
+const CONTACT_WRITABLE_FIELDS = new Set([
+  "name", "circleLevel", "interests", "labels", "birthday",
+  "lastContacted", "lastHangout", "notes", "phone", "photoUri",
+]);
+
+function pickContactFields(body: Record<string, unknown>): Record<string, unknown> {
+  return Object.fromEntries(
+    Object.entries(body).filter(([k]) => CONTACT_WRITABLE_FIELDS.has(k)),
+  );
+}
+
 function generateShareCode(): string {
   const chars = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789";
   let code = "";
@@ -293,11 +311,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.post("/api/contacts", requireAuth, async (req, res) => {
     try {
+      const body = req.body as Record<string, unknown>;
+      const { name, circleLevel } = body;
+      if (!name || typeof name !== "string" || !name.trim()) {
+        return bad(res, "Name is required");
+      }
+      const level = Number(circleLevel);
+      if (!VALID_CIRCLE_LEVELS.includes(level as 1 | 2 | 3)) {
+        return bad(res, "circleLevel must be 1, 2, or 3");
+      }
+      const safe = pickContactFields(body);
       const contact = await storage.createContact({
-        ...req.body,
+        ...safe,
+        name: name.trim(),
+        circleLevel: level,
         userId: req.session.userId!,
-        lastContacted: req.body.lastContacted ?? new Date().toISOString(),
-      });
+        lastContacted: (safe.lastContacted as string | undefined) ?? new Date().toISOString(),
+      } as any);
       res.status(201).json(contact);
     } catch (err) {
       console.error("Error creating contact:", err);
@@ -312,7 +342,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (!existing || existing.userId !== req.session.userId) {
         return res.status(404).json({ message: "Contact not found" });
       }
-      const contact = await storage.updateContact(id, req.body);
+      const body = req.body as Record<string, unknown>;
+      if ("name" in body) {
+        if (!body.name || typeof body.name !== "string" || !(body.name as string).trim()) {
+          return bad(res, "Name must be a non-empty string");
+        }
+      }
+      if ("circleLevel" in body) {
+        const level = Number(body.circleLevel);
+        if (!VALID_CIRCLE_LEVELS.includes(level as 1 | 2 | 3)) {
+          return bad(res, "circleLevel must be 1, 2, or 3");
+        }
+      }
+      const safe = pickContactFields(body);
+      const contact = await storage.updateContact(id, safe as any);
       res.json(contact);
     } catch (err) {
       console.error("Error updating contact:", err);
@@ -454,8 +497,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ message: "Hangout not found" });
       }
       const { title, description, status, finalizedOptionId, inviteeNames } = req.body;
+      if (title !== undefined && (typeof title !== "string" || !title.trim())) {
+        return bad(res, "Title must be a non-empty string");
+      }
+      if (status !== undefined && !VALID_HANGOUT_STATUSES.includes(status)) {
+        return bad(res, `Status must be one of: ${VALID_HANGOUT_STATUSES.join(", ")}`);
+      }
+      if (inviteeNames !== undefined && !Array.isArray(inviteeNames)) {
+        return bad(res, "inviteeNames must be an array");
+      }
       const updateData: any = {};
-      if (title !== undefined) updateData.title = title;
+      if (title !== undefined) updateData.title = title.trim();
       if (description !== undefined) updateData.description = description;
       if (status !== undefined) updateData.status = status;
       if (finalizedOptionId !== undefined) updateData.finalizedOptionId = finalizedOptionId;
@@ -593,8 +645,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       const { voterName, votes, bringsGuests, plusOneCount } = req.body;
-      if (!voterName || !votes || !Array.isArray(votes)) {
-        return res.status(400).json({ message: "Voter name and votes are required" });
+      if (!voterName || typeof voterName !== "string" || !voterName.trim()) {
+        return bad(res, "Voter name is required");
+      }
+      if (!votes || !Array.isArray(votes) || votes.length === 0) {
+        return bad(res, "Votes must be a non-empty array");
+      }
+      for (const v of votes) {
+        if (!v.optionId || typeof v.optionId !== "string") {
+          return bad(res, "Each vote must include a valid optionId");
+        }
+        if (v.rank !== null && v.rank !== undefined && (typeof v.rank !== "number" || !Number.isInteger(v.rank) || v.rank < 0)) {
+          return bad(res, "Vote rank must be a non-negative integer or null");
+        }
       }
 
       // Check deadline
