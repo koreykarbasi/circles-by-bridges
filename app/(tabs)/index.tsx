@@ -382,7 +382,7 @@ export default function HomeScreen() {
       <CirclesVisualization contacts={contacts} user={user} />
 
       <Pressable
-        onPress={() => router.push("/hangouts")}
+        onPress={() => router.push("/create-hangout")}
         style={({ pressed }) => [styles.hangoutBanner, pressed && { opacity: 0.8 }]}
       >
         <View style={styles.hangoutBannerLeft}>

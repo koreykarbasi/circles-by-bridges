@@ -1,5 +1,5 @@
 import { db } from "./db";
-import { contacts, users } from "@shared/schema";
+import { contacts, users, hangoutPlans, hangoutOptions, hangoutVotes } from "@shared/schema";
 import { eq } from "drizzle-orm";
 import bcrypt from "bcryptjs";
 
@@ -188,6 +188,32 @@ const TEST1_CONTACTS = [
   { name: "Rowan Kemp", circleLevel: 3, interests: ["Sports", "Movies"], labels: [] },
 ];
 
+// complete@bridges.app — Stage 2: 3 Core (all with birthdays), 2 Close, 1 Acquaintance, past finalized hangout
+const COMPLETE_CONTACTS = [
+  { name: "Jamie Rivera", circleLevel: 1, interests: ["Hiking", "Coffee", "Travel"], labels: ["College Friend"], birthday: "04/12", lastContacted: new Date(Date.now() - 1 * DAY).toISOString(), lastHangout: new Date(Date.now() - 4 * DAY).toISOString(), notes: "Best friend. Always up for an adventure.", avatarColor: AVATAR_COLORS[0] },
+  { name: "Taylor Kim", circleLevel: 1, interests: ["Music", "Cooking", "Yoga"], labels: ["Childhood Friend"], birthday: "08/25", lastContacted: new Date(Date.now() - 3 * DAY).toISOString(), lastHangout: new Date(Date.now() - 7 * DAY).toISOString(), notes: "Known each other since 5th grade.", avatarColor: AVATAR_COLORS[1] },
+  { name: "Morgan Lee", circleLevel: 1, interests: ["Gaming", "Tech", "Movies"], labels: ["Work Friend"], birthday: "11/03", lastContacted: new Date(Date.now() - 2 * DAY).toISOString(), lastHangout: new Date(Date.now() - 6 * DAY).toISOString(), notes: "Great colleague and friend.", avatarColor: AVATAR_COLORS[2] },
+  { name: "Casey Nguyen", circleLevel: 2, interests: ["Photography", "Art", "Travel"], labels: ["Gym Buddy"], birthday: "02/14", lastContacted: new Date(Date.now() - 8 * DAY).toISOString(), lastHangout: new Date(Date.now() - 14 * DAY).toISOString(), avatarColor: AVATAR_COLORS[3] },
+  { name: "Drew Patel", circleLevel: 2, interests: ["Running", "Podcasts", "Reading"], labels: ["Neighbor"], birthday: "06/30", lastContacted: new Date(Date.now() - 12 * DAY).toISOString(), lastHangout: new Date(Date.now() - 20 * DAY).toISOString(), avatarColor: AVATAR_COLORS[4] },
+  { name: "Sam Brooks", circleLevel: 3, interests: ["Sports", "Movies"], labels: [], birthday: "09/15", lastContacted: new Date(Date.now() - 25 * DAY).toISOString(), lastHangout: new Date(Date.now() - 60 * DAY).toISOString(), avatarColor: AVATAR_COLORS[5] },
+];
+
+// half@bridges.app — Stage 1: 2 Core (one missing birthday), 1 Close, 0 Acquaintances
+const HALF_CONTACTS = [
+  { name: "Alex Foster", circleLevel: 1, interests: ["Fitness", "Cooking", "Music"], labels: ["College Friend"], birthday: "07/19", lastContacted: new Date(Date.now() - 4 * DAY).toISOString(), lastHangout: new Date(Date.now() - 10 * DAY).toISOString(), notes: "Great study partner from college.", avatarColor: AVATAR_COLORS[6] },
+  { name: "Robin Chen", circleLevel: 1, interests: ["Art", "Travel", "Reading"], labels: ["Work Friend"], lastContacted: new Date(Date.now() - 6 * DAY).toISOString(), lastHangout: new Date(Date.now() - 15 * DAY).toISOString(), notes: "Creative soul. No birthday on file yet.", avatarColor: AVATAR_COLORS[7] },
+  { name: "Jordan Walsh", circleLevel: 2, interests: ["Outdoors", "Gaming", "Sports"], labels: ["Gym Buddy"], birthday: "03/08", lastContacted: new Date(Date.now() - 20 * DAY).toISOString(), lastHangout: new Date(Date.now() - 30 * DAY).toISOString(), avatarColor: AVATAR_COLORS[8] },
+];
+
+function makeShareCode(): string {
+  const chars = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789";
+  let code = "";
+  for (let i = 0; i < 8; i++) {
+    code += chars[Math.floor(Math.random() * chars.length)];
+  }
+  return code;
+}
+
 export async function seedDatabase() {
   try {
     const existingUsers = await db.select().from(users);
@@ -245,6 +271,101 @@ export async function seedDatabase() {
         });
       }
       console.log(`Seeded test1 user (test1@bridges.app / test123) with ${TEST1_CONTACTS.length} contacts`);
+    }
+
+    // complete@bridges.app — Stage 2, full profile, past finalized hangout
+    const completeExists = existingUsers.some((u) => u.email === "complete@bridges.app");
+    if (!completeExists) {
+      console.log("Seeding complete@bridges.app user...");
+      const hashedPassword = await bcrypt.hash("test123", 10);
+      const [completeUser] = await db
+        .insert(users)
+        .values({
+          email: "complete@bridges.app",
+          password: hashedPassword,
+          username: "Complete User",
+        })
+        .returning();
+
+      for (const contact of COMPLETE_CONTACTS) {
+        await db.insert(contacts).values({
+          ...contact,
+          userId: completeUser.id,
+        });
+      }
+
+      // Create a past finalized hangout
+      const shareCode = makeShareCode();
+      const [plan] = await db.insert(hangoutPlans).values({
+        userId: completeUser.id,
+        title: "Friday Night Dinner",
+        description: "Let's catch up over dinner!",
+        status: "finalized",
+        shareCode,
+        inviteeNames: ["Jamie Rivera", "Taylor Kim", "Morgan Lee"],
+        surveyMode: "standard",
+        includePlusOne: false,
+      }).returning();
+
+      const [opt1] = await db.insert(hangoutOptions).values({
+        planId: plan.id,
+        label: "Friday 7pm at Casa Luna",
+        questionType: "time",
+      }).returning();
+
+      await db.insert(hangoutOptions).values({
+        planId: plan.id,
+        label: "Saturday 6pm at The Terrace",
+        questionType: "time",
+      });
+
+      // Finalize on opt1
+      await db.update(hangoutPlans).set({ finalizedOptionId: opt1.id }).where(eq(hangoutPlans.id, plan.id));
+
+      // Add some votes
+      for (const voter of ["Jamie Rivera", "Taylor Kim", "Morgan Lee"]) {
+        await db.insert(hangoutVotes).values({ optionId: opt1.id, planId: plan.id, voterName: voter, rank: 1 });
+      }
+
+      console.log(`Seeded complete@bridges.app / test123 with ${COMPLETE_CONTACTS.length} contacts + 1 finalized hangout`);
+    }
+
+    // half@bridges.app — Stage 1, mid-funnel
+    const halfExists = existingUsers.some((u) => u.email === "half@bridges.app");
+    if (!halfExists) {
+      console.log("Seeding half@bridges.app user...");
+      const hashedPassword = await bcrypt.hash("test123", 10);
+      const [halfUser] = await db
+        .insert(users)
+        .values({
+          email: "half@bridges.app",
+          password: hashedPassword,
+          username: "Half User",
+        })
+        .returning();
+
+      for (const contact of HALF_CONTACTS) {
+        await db.insert(contacts).values({
+          ...contact,
+          userId: halfUser.id,
+        });
+      }
+      console.log(`Seeded half@bridges.app / test123 with ${HALF_CONTACTS.length} contacts`);
+    }
+
+    // fresh@bridges.app — Brand new, 0 contacts
+    const freshExists = existingUsers.some((u) => u.email === "fresh@bridges.app");
+    if (!freshExists) {
+      console.log("Seeding fresh@bridges.app user...");
+      const hashedPassword = await bcrypt.hash("test123", 10);
+      await db
+        .insert(users)
+        .values({
+          email: "fresh@bridges.app",
+          password: hashedPassword,
+          username: "Fresh User",
+        });
+      console.log("Seeded fresh@bridges.app / test123 with 0 contacts");
     }
   } catch (err) {
     console.error("Error seeding database:", err);
