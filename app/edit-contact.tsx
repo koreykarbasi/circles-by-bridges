@@ -9,6 +9,7 @@ import {
   Platform,
   Alert,
   Image,
+  Linking,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
@@ -40,6 +41,7 @@ export default function EditContactScreen() {
   const [selectedInterests, setSelectedInterests] = useState<string[]>(contact?.interests ?? []);
   const [selectedLabels, setSelectedLabels] = useState<string[]>(contact?.labels ?? []);
   const [customLabelInput, setCustomLabelInput] = useState("");
+  const [phone, setPhone] = useState(contact?.phone ?? "");
   const [birthday, setBirthday] = useState(contact?.birthday ?? "");
   const [birthdayError, setBirthdayError] = useState(false);
   const [notes, setNotes] = useState(contact?.notes ?? "");
@@ -140,6 +142,7 @@ export default function EditContactScreen() {
       labels: selectedLabels,
       birthday: birthday.trim() || undefined,
       notes: notes.trim() || undefined,
+      phone: phone.trim() || undefined,
       photoUri,
     });
 
@@ -233,6 +236,31 @@ export default function EditContactScreen() {
             onChangeText={setName}
             autoCapitalize="words"
           />
+        </View>
+
+        <View style={styles.inputGroup}>
+          <Text style={styles.label}>Phone</Text>
+          <View style={styles.phoneRow}>
+            <TextInput
+              style={[styles.input, styles.phoneInput]}
+              placeholder="Enter phone number"
+              placeholderTextColor={Colors.textTertiary}
+              value={phone}
+              onChangeText={setPhone}
+              keyboardType="phone-pad"
+            />
+            {phone.trim().length > 0 && (
+              <Pressable
+                onPress={() => {
+                  const cleaned = phone.replace(/\s/g, "");
+                  Linking.openURL(`tel:${cleaned}`);
+                }}
+                style={({ pressed }) => [styles.callButton, pressed && { opacity: 0.7 }]}
+              >
+                <Ionicons name="call" size={20} color="#fff" />
+              </Pressable>
+            )}
+          </View>
         </View>
 
         <View style={styles.inputGroup}>
@@ -592,6 +620,22 @@ const styles = StyleSheet.create({
   },
   addLabelBtnDisabled: {
     borderColor: Colors.borderLight,
+  },
+  phoneRow: {
+    flexDirection: "row" as const,
+    alignItems: "center" as const,
+    gap: 8,
+  },
+  phoneInput: {
+    flex: 1,
+  },
+  callButton: {
+    width: 48,
+    height: 48,
+    borderRadius: 12,
+    backgroundColor: Colors.success,
+    alignItems: "center" as const,
+    justifyContent: "center" as const,
   },
   inputError: {
     borderColor: Colors.danger,

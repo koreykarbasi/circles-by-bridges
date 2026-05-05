@@ -1,5 +1,5 @@
-import React, { useState, useMemo } from "react";
-import { View, Text, StyleSheet, ScrollView, Pressable, Alert, Platform } from "react-native";
+import React, { useState, useMemo, useEffect, useRef } from "react";
+import { View, Text, StyleSheet, ScrollView, Pressable, TextInput, Platform } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import Colors from "@/constants/colors";
@@ -16,8 +16,20 @@ export default function CirclesScreen() {
   const insets = useSafeAreaInsets();
   const { contacts, getCircleContacts, markContacted, deleteContact } = useContacts();
   const [activeCircle, setActiveCircle] = useState<1 | 2 | 3>(1);
+  const [searchQuery, setSearchQuery] = useState("");
+  const searchRef = useRef<TextInput>(null);
+
+  useEffect(() => {
+    setSearchQuery("");
+  }, [activeCircle]);
 
   const circleContacts = getCircleContacts(activeCircle);
+  const filteredContacts = useMemo(() => {
+    const q = searchQuery.trim().toLowerCase();
+    if (!q) return circleContacts;
+    return circleContacts.filter((c) => c.name.toLowerCase().includes(q));
+  }, [circleContacts, searchQuery]);
+
   const config = CIRCLE_CONFIG[activeCircle];
   const profileCompletion = useMemo(() => computeProfileCompletion(contacts), [contacts]);
   const webTopInset = Platform.OS === "web" ? 67 : 0;
@@ -31,6 +43,7 @@ export default function CirclesScreen() {
         ]}
         showsVerticalScrollIndicator={false}
         contentInsetAdjustmentBehavior="automatic"
+        keyboardShouldPersistTaps="handled"
       >
         <View style={styles.header}>
           <Text style={styles.title}>Circles</Text>
@@ -93,6 +106,27 @@ export default function CirclesScreen() {
 
         <Text style={styles.circleDescription}>{config.description}</Text>
 
+        {circleContacts.length > 0 && (
+          <View style={styles.searchRow}>
+            <Ionicons name="search-outline" size={16} color={Colors.textTertiary} style={styles.searchIcon} />
+            <TextInput
+              ref={searchRef}
+              style={styles.searchInput}
+              placeholder={`Search ${config.label}...`}
+              placeholderTextColor={Colors.textTertiary}
+              value={searchQuery}
+              onChangeText={setSearchQuery}
+              returnKeyType="search"
+              clearButtonMode="while-editing"
+            />
+            {searchQuery.length > 0 && Platform.OS !== "ios" && (
+              <Pressable onPress={() => setSearchQuery("")} hitSlop={8}>
+                <Ionicons name="close-circle" size={16} color={Colors.textTertiary} />
+              </Pressable>
+            )}
+          </View>
+        )}
+
         {profileCompletion.stage === 2 && (
           <View style={styles.encouragementCard}>
             <View style={{ flex: 1 }}>
@@ -115,9 +149,13 @@ export default function CirclesScreen() {
             actionLabel="Add someone"
             onAction={() => router.push({ pathname: "/add-contact", params: { circle: String(activeCircle) } })}
           />
+        ) : filteredContacts.length === 0 ? (
+          <View style={styles.noResults}>
+            <Text style={styles.noResultsText}>No contacts match "{searchQuery}"</Text>
+          </View>
         ) : (
           <>
-            {circleContacts.map((contact) => (
+            {filteredContacts.map((contact) => (
               <View key={contact.id}>
                 <ContactCard
                   contact={contact}
@@ -142,7 +180,7 @@ export default function CirclesScreen() {
                 )}
               </View>
             ))}
-            {circleContacts.length < config.max && (
+            {!searchQuery && circleContacts.length < config.max && (
               <Pressable
                 onPress={() => {
                   Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -243,8 +281,38 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontFamily: "Nunito_400Regular",
     color: Colors.textSecondary,
-    marginBottom: 16,
+    marginBottom: 12,
     textAlign: "center",
+  },
+  searchRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: Colors.surface,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: Colors.borderLight,
+    paddingHorizontal: 12,
+    marginBottom: 14,
+    height: 40,
+  },
+  searchIcon: {
+    marginRight: 8,
+  },
+  searchInput: {
+    flex: 1,
+    fontSize: 14,
+    fontFamily: "Nunito_400Regular",
+    color: Colors.text,
+    height: 40,
+  },
+  noResults: {
+    paddingVertical: 32,
+    alignItems: "center",
+  },
+  noResultsText: {
+    fontSize: 14,
+    fontFamily: "Nunito_400Regular",
+    color: Colors.textSecondary,
   },
   addSomeoneButton: {
     flexDirection: "row",

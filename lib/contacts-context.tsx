@@ -88,8 +88,11 @@ export function ContactsProvider({ children }: { children: ReactNode }) {
   }, [fetchContacts]);
 
   const markContactedFn = useCallback(async (id: string) => {
-    await apiRequest("POST", `/api/contacts/${id}/mark-contacted`);
-    await fetchContacts();
+    const now = new Date().toISOString();
+    setContacts((prev) =>
+      prev.map((c) => (c.id === id ? { ...c, lastContacted: now } : c)),
+    );
+    apiRequest("POST", `/api/contacts/${id}/mark-contacted`).then(fetchContacts);
   }, [fetchContacts]);
 
   const markHangoutFn = useCallback(async (id: string) => {

@@ -37,6 +37,7 @@ export default function AddContactScreen() {
   const [selectedInterests, setSelectedInterests] = useState<string[]>([]);
   const [selectedLabels, setSelectedLabels] = useState<string[]>([]);
   const [customLabelInput, setCustomLabelInput] = useState("");
+  const [phone, setPhone] = useState("");
   const [birthday, setBirthday] = useState("");
   const [birthdayError, setBirthdayError] = useState(false);
   const [notes, setNotes] = useState("");
@@ -117,6 +118,7 @@ export default function AddContactScreen() {
       labels: selectedLabels,
       birthday: birthday.trim() || undefined,
       notes: notes.trim() || undefined,
+      phone: phone.trim() || undefined,
       lastContacted: undefined,
       photoUri: photoUri || undefined,
     });
@@ -180,6 +182,18 @@ export default function AddContactScreen() {
             onChangeText={setName}
             autoFocus
             autoCapitalize="words"
+          />
+        </View>
+
+        <View style={styles.inputGroup}>
+          <Text style={styles.label}>Phone (optional)</Text>
+          <TextInput
+            style={styles.input}
+            placeholder="Enter phone number"
+            placeholderTextColor={Colors.textTertiary}
+            value={phone}
+            onChangeText={setPhone}
+            keyboardType="phone-pad"
           />
         </View>
 

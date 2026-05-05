@@ -1,5 +1,5 @@
-import React from "react";
-import { View, Text, StyleSheet, Pressable } from "react-native";
+import React, { useRef } from "react";
+import { View, Text, StyleSheet, Pressable, Animated } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { Avatar } from "./Avatar";
 import Colors from "@/constants/colors";
@@ -19,6 +19,21 @@ interface ContactCardProps {
 export function ContactCard({ contact, onPress, onMarkContacted, onPlanHangout, showCircleLabel }: ContactCardProps) {
   const urgency = getContactUrgency(contact.circleLevel as 1 | 2 | 3, contact.lastContacted ?? undefined);
   const circleColor = CIRCLE_CONFIG[contact.circleLevel as 1 | 2 | 3]?.color ?? Colors.primary;
+  const flashAnim = useRef(new Animated.Value(0)).current;
+
+  const handleMarkContacted = () => {
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    Animated.sequence([
+      Animated.timing(flashAnim, { toValue: 1, duration: 150, useNativeDriver: true }),
+      Animated.timing(flashAnim, { toValue: 0, duration: 400, useNativeDriver: true }),
+    ]).start();
+    onMarkContacted?.();
+  };
+
+  const flashOpacity = flashAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: [0, 0.6],
+  });
 
   return (
     <Pressable
@@ -28,7 +43,15 @@ export function ContactCard({ contact, onPress, onMarkContacted, onPlanHangout, 
         pressed && styles.pressed,
       ]}
     >
-      <Avatar name={contact.name} color={contact.avatarColor} size={48} photoUri={contact.photoUri} />
+      <View style={styles.avatarWrapper}>
+        <Avatar name={contact.name} color={contact.avatarColor} size={48} photoUri={contact.photoUri} />
+        <Animated.View
+          style={[
+            styles.avatarFlash,
+            { opacity: flashOpacity },
+          ]}
+        />
+      </View>
       <View style={styles.info}>
         <View style={styles.nameRow}>
           <Text style={styles.name} numberOfLines={1}>
@@ -84,10 +107,7 @@ export function ContactCard({ contact, onPress, onMarkContacted, onPlanHangout, 
         )}
         {onMarkContacted && (
           <Pressable
-            onPress={() => {
-              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-              onMarkContacted();
-            }}
+            onPress={handleMarkContacted}
             hitSlop={8}
             style={({ pressed }) => [
               styles.actionButton,
@@ -117,6 +137,20 @@ const styles = StyleSheet.create({
   pressed: {
     opacity: 0.7,
     transform: [{ scale: 0.98 }],
+  },
+  avatarWrapper: {
+    position: "relative",
+    width: 48,
+    height: 48,
+  },
+  avatarFlash: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: Colors.success,
   },
   info: {
     flex: 1,
