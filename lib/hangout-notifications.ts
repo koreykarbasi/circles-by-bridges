@@ -1,29 +1,31 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import type { HangoutPlan } from "./types";
 
-const STORAGE_KEY = "bridges_hangout_viewed_v1";
-
 type ViewedMap = Record<string, string>;
 
-async function getViewedMap(): Promise<ViewedMap> {
+function storageKey(userId: string): string {
+  return `bridges_hangout_viewed_v1:${userId}`;
+}
+
+async function getViewedMap(userId: string): Promise<ViewedMap> {
   try {
-    const raw = await AsyncStorage.getItem(STORAGE_KEY);
+    const raw = await AsyncStorage.getItem(storageKey(userId));
     return raw ? JSON.parse(raw) : {};
   } catch {
     return {};
   }
 }
 
-export async function markHangoutViewed(hangoutId: string): Promise<void> {
+export async function markHangoutViewed(hangoutId: string, userId: string): Promise<void> {
   try {
-    const map = await getViewedMap();
+    const map = await getViewedMap(userId);
     map[hangoutId] = new Date().toISOString();
-    await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(map));
+    await AsyncStorage.setItem(storageKey(userId), JSON.stringify(map));
   } catch {}
 }
 
-export async function getViewedTimestamps(): Promise<ViewedMap> {
-  return getViewedMap();
+export async function getViewedTimestamps(userId: string): Promise<ViewedMap> {
+  return getViewedMap(userId);
 }
 
 export function getMostRecentVoteAt(plan: HangoutPlan): string | null {

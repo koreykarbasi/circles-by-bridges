@@ -92,8 +92,8 @@ export default function HomeScreen() {
 
   useFocusEffect(
     useCallback(() => {
-      getViewedTimestamps().then(setHangoutViewedMap);
-    }, []),
+      getViewedTimestamps(user?.id ?? "").then(setHangoutViewedMap);
+    }, [user?.id]),
   );
 
   const allReminders = useMemo(() => generateReminders(contacts), [contacts]);

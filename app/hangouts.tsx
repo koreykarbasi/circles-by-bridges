@@ -11,6 +11,7 @@ import Colors from "@/constants/colors";
 import { EmptyState } from "@/components/EmptyState";
 import type { HangoutPlan } from "@/lib/types";
 import { getViewedTimestamps, hasUnreadVotes, countNewVoters } from "@/lib/hangout-notifications";
+import { useAuth } from "@/lib/auth-context";
 
 function HangoutCard({ plan, viewedAt }: { plan: HangoutPlan; viewedAt: string | undefined }) {
   const isFinalized = plan.status === "finalized";
@@ -83,6 +84,7 @@ function HangoutCard({ plan, viewedAt }: { plan: HangoutPlan; viewedAt: string |
 
 export default function HangoutsScreen() {
   const insets = useSafeAreaInsets();
+  const { user } = useAuth();
   const webTopInset = Platform.OS === "web" ? 67 : 0;
   const [viewedMap, setViewedMap] = useState<Record<string, string>>({});
 
@@ -92,8 +94,8 @@ export default function HangoutsScreen() {
 
   useFocusEffect(
     useCallback(() => {
-      getViewedTimestamps().then(setViewedMap);
-    }, []),
+      getViewedTimestamps(user?.id ?? "").then(setViewedMap);
+    }, [user?.id]),
   );
 
   const activeHangouts = (hangouts || []).filter((h) => h.status !== "finalized");

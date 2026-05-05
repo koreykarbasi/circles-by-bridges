@@ -11,6 +11,7 @@ import Colors from "@/constants/colors";
 import { apiRequest, getApiUrl, queryClient } from "@/lib/query-client";
 import type { HangoutPlan, HangoutOption } from "@/lib/types";
 import { markHangoutViewed } from "@/lib/hangout-notifications";
+import { useAuth } from "@/lib/auth-context";
 
 function getBordaColor(rank: number, total: number): string {
   if (total <= 1) return Colors.primary;
@@ -102,6 +103,7 @@ function SurveySection({
 
 export default function HangoutDetailScreen() {
   const insets = useSafeAreaInsets();
+  const { user } = useAuth();
   const { id } = useLocalSearchParams<{ id: string }>();
   const webTopInset = Platform.OS === "web" ? 67 : 0;
   const [linkCopied, setLinkCopied] = useState(false);
@@ -115,7 +117,7 @@ export default function HangoutDetailScreen() {
 
   useEffect(() => {
     if (plan?.id) {
-      markHangoutViewed(plan.id);
+      markHangoutViewed(plan.id, user?.id ?? "");
     }
   }, [plan?.id]);
 
