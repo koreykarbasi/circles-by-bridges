@@ -673,6 +673,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return bad(res, "Votes must be a non-empty array");
       }
       for (const v of votes) {
+        if (typeof v !== "object" || v === null) {
+          return bad(res, "Each vote must be an object");
+        }
         if (!v.optionId || typeof v.optionId !== "string") {
           return bad(res, "Each vote must include a valid optionId");
         }
