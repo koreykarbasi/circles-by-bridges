@@ -637,26 +637,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const options = await storage.getOptionsByPlanId(plan.id);
       const calVotes = await storage.getVotesByPlanId(plan.id);
       // Use finalizedTimeOptionId for time (new two-pick flow), fallback to best-scored time option
+      // bordaScore helper: higher score = more preferred (rank 1 = n pts, rank n = 1 pt, rank 0/rejected = 0)
+      const calBorda = (optId: string, total: number) => {
+        const votes = calVotes.filter((v) => v.optionId === optId && v.rank && v.rank > 0);
+        return votes.reduce((s, v) => s + Math.max(0, total - (v.rank || 0) + 1), 0);
+      };
+      const timeOptions = options.filter((o) => o.questionType === "time");
       const timeOption = options.find((o) => o.id === plan.finalizedTimeOptionId)
-        || options
-          .filter((o) => o.questionType === "time")
-          .map((o) => {
-            const score = calVotes
-              .filter((v) => v.optionId === o.id && v.rank && v.rank > 0)
-              .reduce((s, v) => s + (v.rank || 0), 0);
-            return { o, score };
-          })
-          .sort((a, b) => a.score - b.score)[0]?.o;
-      // Pick the highest-scoring location option deterministically
-      const locationOption = options
-        .filter((o) => o.questionType === "location")
-        .map((o) => {
-          const score = calVotes
-            .filter((v) => v.optionId === o.id && v.rank && v.rank > 0)
-            .reduce((s, v) => s + (v.rank || 0), 0);
-          return { o, score };
-        })
-        .sort((a, b) => a.score - b.score)[0]?.o || null;
+        || [...timeOptions]
+          .sort((a, b) => calBorda(b.id, timeOptions.length) - calBorda(a.id, timeOptions.length))[0];
+      const locationOptionsForCal = options.filter((o) => o.questionType === "location");
+      const locationOption = [...locationOptionsForCal]
+        .sort((a, b) => calBorda(b.id, locationOptionsForCal.length) - calBorda(a.id, locationOptionsForCal.length))[0] || null;
 
       const timeLabel = timeOption?.label || "TBD";
       const locationLabel = locationOption?.label || null;
