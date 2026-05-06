@@ -556,6 +556,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (finalizedTimeOptionId !== undefined) updateData.finalizedTimeOptionId = finalizedTimeOptionId;
       if (inviteeNames !== undefined) updateData.inviteeNames = inviteeNames;
 
+      // Server-side guard: status=finalized requires required picks to be present
+      if (updateData.status === "finalized") {
+        const existingOptions = await storage.getOptionsByPlanId(id);
+        const hasActivityOptions = existingOptions.some((o) => o.questionType === "activity");
+        const effectiveActivityId = updateData.finalizedOptionId ?? existing.finalizedOptionId;
+        const effectiveTimeId = updateData.finalizedTimeOptionId ?? existing.finalizedTimeOptionId;
+        if (!effectiveTimeId) {
+          return bad(res, "Cannot finalize: a time slot must be locked in first");
+        }
+        if (hasActivityOptions && !effectiveActivityId) {
+          return bad(res, "Cannot finalize: an activity must be locked in first");
+        }
+      }
+
       const plan = await storage.updateHangoutPlan(id, updateData);
       const options = await storage.getOptionsByPlanId(plan!.id);
       const votes = await storage.getVotesByPlanId(plan!.id);
@@ -621,10 +635,28 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ message: "No finalized hangout found" });
       }
       const options = await storage.getOptionsByPlanId(plan.id);
-      // Use finalizedTimeOptionId for time (new two-pick flow), fallback to any time option
+      const calVotes = await storage.getVotesByPlanId(plan.id);
+      // Use finalizedTimeOptionId for time (new two-pick flow), fallback to best-scored time option
       const timeOption = options.find((o) => o.id === plan.finalizedTimeOptionId)
-        || options.find((o) => o.questionType === "time");
-      const locationOption = options.find((o) => o.questionType === "location");
+        || options
+          .filter((o) => o.questionType === "time")
+          .map((o) => {
+            const score = calVotes
+              .filter((v) => v.optionId === o.id && v.rank && v.rank > 0)
+              .reduce((s, v) => s + (v.rank || 0), 0);
+            return { o, score };
+          })
+          .sort((a, b) => a.score - b.score)[0]?.o;
+      // Pick the highest-scoring location option deterministically
+      const locationOption = options
+        .filter((o) => o.questionType === "location")
+        .map((o) => {
+          const score = calVotes
+            .filter((v) => v.optionId === o.id && v.rank && v.rank > 0)
+            .reduce((s, v) => s + (v.rank || 0), 0);
+          return { o, score };
+        })
+        .sort((a, b) => a.score - b.score)[0]?.o || null;
 
       const timeLabel = timeOption?.label || "TBD";
       const locationLabel = locationOption?.label || null;

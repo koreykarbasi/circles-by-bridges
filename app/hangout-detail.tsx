@@ -1,7 +1,8 @@
 import React, { useState, useCallback, useEffect } from "react";
 import {
-  View, Text, StyleSheet, ScrollView, Pressable, Platform, Alert, Share, Linking,
+  View, Text, StyleSheet, ScrollView, Pressable, Platform, Alert, Linking,
 } from "react-native";
+import * as Clipboard from "expo-clipboard";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { router, useLocalSearchParams } from "expo-router";
@@ -180,11 +181,7 @@ export default function HangoutDetailScreen() {
 
   const copyToClipboard = useCallback(async (text: string): Promise<boolean> => {
     try {
-      if (Platform.OS === "web" && typeof navigator !== "undefined" && navigator.clipboard) {
-        await navigator.clipboard.writeText(text);
-        return true;
-      }
-      await Share.share({ message: text });
+      await Clipboard.setStringAsync(text);
       return true;
     } catch {
       return false;
