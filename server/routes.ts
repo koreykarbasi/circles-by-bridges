@@ -7,6 +7,7 @@ import connectPgSimple from "connect-pg-simple";
 import { pool } from "./db";
 import { getPrompts, syncFromSheet } from "./prompts-sync";
 import type { InsertContact } from "@shared/schema";
+import * as chrono from "chrono-node";
 
 declare module "express-session" {
   interface SessionData {
@@ -102,12 +103,12 @@ function generateIcs(title: string, timeLabel: string, locationLabel: string | n
   const dtStamp = now.toISOString().replace(/[-:]/g, "").split(".")[0] + "Z";
   const uid = `bridges-${Date.now()}@bridges.app`;
 
-  // Try to parse a date from the time label, fallback to 1 week from now
+  // Try to parse a natural-language date from the time label, fallback to 1 week from now
   let dtStart = "";
   let dtEnd = "";
   try {
-    const parsed = new Date(timeLabel);
-    if (!isNaN(parsed.getTime())) {
+    const parsed = chrono.parseDate(timeLabel, new Date(), { forwardDate: true });
+    if (parsed && !isNaN(parsed.getTime())) {
       dtStart = parsed.toISOString().replace(/[-:]/g, "").split(".")[0] + "Z";
       const end = new Date(parsed.getTime() + 2 * 60 * 60 * 1000);
       dtEnd = end.toISOString().replace(/[-:]/g, "").split(".")[0] + "Z";
@@ -537,7 +538,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (!existing || existing.userId !== req.session.userId) {
         return res.status(404).json({ message: "Hangout not found" });
       }
-      const { title, description, status, finalizedOptionId, inviteeNames } = req.body;
+      const { title, description, status, finalizedOptionId, finalizedTimeOptionId, inviteeNames } = req.body;
       if (title !== undefined && (typeof title !== "string" || !title.trim())) {
         return bad(res, "Title must be a non-empty string");
       }
@@ -552,6 +553,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (description !== undefined) updateData.description = description;
       if (status !== undefined) updateData.status = status;
       if (finalizedOptionId !== undefined) updateData.finalizedOptionId = finalizedOptionId;
+      if (finalizedTimeOptionId !== undefined) updateData.finalizedTimeOptionId = finalizedTimeOptionId;
       if (inviteeNames !== undefined) updateData.inviteeNames = inviteeNames;
 
       const plan = await storage.updateHangoutPlan(id, updateData);
@@ -615,19 +617,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const { id } = req.params as { id: string };
       const plan = await storage.getHangoutPlan(id);
-      if (!plan || plan.status !== "finalized" || !plan.finalizedOptionId) {
+      if (!plan || plan.status !== "finalized") {
         return res.status(404).json({ message: "No finalized hangout found" });
       }
       const options = await storage.getOptionsByPlanId(plan.id);
-      const finalizedOption = options.find((o) => o.id === plan.finalizedOptionId);
-      const timeOption = options.find((o) => o.questionType === "time" && o.id === plan.finalizedOptionId)
+      // Use finalizedTimeOptionId for time (new two-pick flow), fallback to any time option
+      const timeOption = options.find((o) => o.id === plan.finalizedTimeOptionId)
         || options.find((o) => o.questionType === "time");
       const locationOption = options.find((o) => o.questionType === "location");
 
-      const timeLabel = finalizedOption?.label || timeOption?.label || "TBD";
-      const locationLabel = plan.fixedActivity
-        ? (locationOption?.label || null)
-        : (finalizedOption?.activity || finalizedOption?.location || null);
+      const timeLabel = timeOption?.label || "TBD";
+      const locationLabel = locationOption?.label || null;
 
       const icsContent = generateIcs(plan.title, timeLabel, locationLabel);
       const filename = plan.title.replace(/[^a-z0-9]/gi, "-").toLowerCase() + ".ics";

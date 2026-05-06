@@ -25,13 +25,13 @@ function getBordaColor(rank: number, total: number): string {
 function SurveySection({
   title,
   options,
-  finalizedOptionId,
+  lockedOptionId,
   isFinalized,
   onFinalize,
 }: {
   title: string;
   options: HangoutOption[];
-  finalizedOptionId?: string | null;
+  lockedOptionId?: string | null;
   isFinalized: boolean;
   onFinalize?: (id: string, label: string) => void;
 }) {
@@ -43,27 +43,35 @@ function SurveySection({
     <View style={ss.block}>
       <Text style={ss.sectionTitle}>{title}</Text>
       {sorted.map((opt, idx) => {
-        const isWinner = isFinalized && opt.id === finalizedOptionId;
+        const isWinner = isFinalized && opt.id === lockedOptionId;
+        const isLocked = !isFinalized && opt.id === lockedOptionId;
         const barPct = maxScore > 0 ? ((opt.bordaScore || 0) / maxScore) * 100 : 0;
         const rankColor = getBordaColor(idx + 1, sorted.length);
 
         return (
           <View
             key={opt.id}
-            style={[ss.optionCard, isWinner && ss.optionCardWinner, idx === 0 && !isFinalized && maxScore > 0 && ss.optionCardTop]}
+            style={[
+              ss.optionCard,
+              isWinner && ss.optionCardWinner,
+              isLocked && ss.optionCardLocked,
+              idx === 0 && !isFinalized && !lockedOptionId && maxScore > 0 && ss.optionCardTop,
+            ]}
           >
             <View style={ss.optionHeaderRow}>
               <View style={[ss.rankDot, { backgroundColor: rankColor + "25", borderColor: rankColor + "50" }]}>
                 {isWinner
                   ? <Ionicons name="trophy" size={13} color={Colors.warning} />
-                  : <Text style={[ss.rankNum, { color: rankColor }]}>{idx + 1}</Text>
+                  : isLocked
+                    ? <Ionicons name="checkmark" size={13} color={Colors.success} />
+                    : <Text style={[ss.rankNum, { color: rankColor }]}>{idx + 1}</Text>
                 }
               </View>
               <View style={{ flex: 1 }}>
                 <Text style={ss.optionLabel}>{opt.label}</Text>
               </View>
               <View style={ss.scoreBox}>
-                <Text style={[ss.scoreNum, isWinner && { color: Colors.warning }]}>
+                <Text style={[ss.scoreNum, isWinner && { color: Colors.warning }, isLocked && { color: Colors.success }]}>
                   {opt.bordaScore || 0}
                 </Text>
                 <Text style={ss.scoreSub}>pts</Text>
@@ -72,7 +80,10 @@ function SurveySection({
 
             {maxScore > 0 && (
               <View style={ss.barTrack}>
-                <View style={[ss.barFill, { width: `${barPct}%` as any, backgroundColor: isWinner ? Colors.warning : rankColor }]} />
+                <View style={[
+                  ss.barFill,
+                  { width: `${barPct}%` as any, backgroundColor: isWinner ? Colors.warning : isLocked ? Colors.success : rankColor },
+                ]} />
               </View>
             )}
 
@@ -85,7 +96,14 @@ function SurveySection({
               ))}
             </View>
 
-            {!isFinalized && onFinalize && (opt.bordaScore || 0) > 0 && (
+            {isLocked && (
+              <View style={ss.lockedBadge}>
+                <Ionicons name="checkmark-circle" size={13} color={Colors.success} />
+                <Text style={ss.lockedBadgeText}>Locked in</Text>
+              </View>
+            )}
+
+            {!isFinalized && !lockedOptionId && onFinalize && (opt.bordaScore || 0) > 0 && (
               <Pressable
                 onPress={() => onFinalize(opt.id, opt.label)}
                 style={({ pressed }) => [ss.lockBtn, pressed && { opacity: 0.8 }]}
@@ -108,6 +126,7 @@ export default function HangoutDetailScreen() {
   const webTopInset = Platform.OS === "web" ? 67 : 0;
   const [linkCopied, setLinkCopied] = useState(false);
   const [msgCopied, setMsgCopied] = useState(false);
+  const [guestsCopied, setGuestsCopied] = useState(false);
 
   const { data: plan, isLoading } = useQuery<HangoutPlan>({
     queryKey: ["/api/hangouts", id],
@@ -121,9 +140,23 @@ export default function HangoutDetailScreen() {
     }
   }, [plan?.id]);
 
-  const finalizeMutation = useMutation({
+  const finalizeActivityMutation = useMutation({
     mutationFn: async (optionId: string) => {
-      await apiRequest("PUT", `/api/hangouts/${id}`, { status: "finalized", finalizedOptionId: optionId });
+      await apiRequest("PUT", `/api/hangouts/${id}`, { finalizedOptionId: optionId });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/hangouts"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/hangouts", id] });
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    },
+  });
+
+  const finalizeTimeMutation = useMutation({
+    mutationFn: async ({ optionId, finalizePlan }: { optionId: string; finalizePlan: boolean }) => {
+      await apiRequest("PUT", `/api/hangouts/${id}`, {
+        finalizedTimeOptionId: optionId,
+        ...(finalizePlan ? { status: "finalized" } : {}),
+      });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/hangouts"] });
@@ -151,7 +184,6 @@ export default function HangoutDetailScreen() {
         await navigator.clipboard.writeText(text);
         return true;
       }
-      // Native fallback via Share
       await Share.share({ message: text });
       return true;
     } catch {
@@ -161,8 +193,7 @@ export default function HangoutDetailScreen() {
 
   const handleCopyLink = useCallback(async () => {
     if (!plan) return;
-    const url = getVoteUrl();
-    const ok = await copyToClipboard(url);
+    const ok = await copyToClipboard(getVoteUrl());
     if (ok) {
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
       setLinkCopied(true);
@@ -182,14 +213,6 @@ export default function HangoutDetailScreen() {
     }
   }, [plan, getVoteUrl, copyToClipboard]);
 
-  const handleShare = useCallback(async () => {
-    if (!plan) return;
-    const url = getVoteUrl();
-    try {
-      await Share.share({ message: `"${plan.title}" — rank your options: ${url}`, url });
-    } catch { /* cancelled */ }
-  }, [plan, getVoteUrl]);
-
   const handleCalendarInvite = useCallback(() => {
     if (!plan) return;
     const base = getApiUrl();
@@ -201,16 +224,49 @@ export default function HangoutDetailScreen() {
     }
   }, [plan]);
 
-  const handleFinalize = useCallback((optionId: string, label: string) => {
+  const handleShareWithGuests = useCallback(async (timeLabel: string, locationLabel: string | null) => {
+    if (!plan) return;
+    const locationLine = locationLabel ? `\nWhere: ${locationLabel}` : "";
+    const msg = `Join us for ${plan.title}!\nWhen: ${timeLabel}${locationLine}\n\nSee you there!`;
+    const ok = await copyToClipboard(msg);
+    if (ok) {
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+      setGuestsCopied(true);
+      setTimeout(() => setGuestsCopied(false), 2500);
+    }
+  }, [plan, copyToClipboard]);
+
+  const handleFinalizeActivity = useCallback((optionId: string, label: string) => {
     Alert.alert(
-      "Finalize Plan",
-      `Lock in "${label}" as the chosen option?`,
+      "Lock in Activity",
+      `Choose "${label}" as the activity?`,
       [
         { text: "Cancel", style: "cancel" },
-        { text: "Finalize", onPress: () => finalizeMutation.mutate(optionId) },
+        { text: "Lock in", onPress: () => finalizeActivityMutation.mutate(optionId) },
       ],
     );
-  }, [finalizeMutation]);
+  }, [finalizeActivityMutation]);
+
+  const handleFinalizeTime = useCallback((optionId: string, label: string) => {
+    if (!plan) return;
+    const hasActivityOptions = (plan.options || []).some(o => o.questionType === "activity");
+    const activityAlreadyLocked = !!plan.finalizedOptionId;
+
+    if (hasActivityOptions && !activityAlreadyLocked) {
+      Alert.alert("Lock in Activity First", "Please choose an activity before locking in a time slot.");
+      return;
+    }
+
+    const finalizePlan = !hasActivityOptions || activityAlreadyLocked;
+    Alert.alert(
+      "Lock in Time",
+      `Choose "${label}" as the time?${finalizePlan ? " This will finalize the plan." : ""}`,
+      [
+        { text: "Cancel", style: "cancel" },
+        { text: "Lock in", onPress: () => finalizeTimeMutation.mutate({ optionId, finalizePlan }) },
+      ],
+    );
+  }, [plan, finalizeTimeMutation]);
 
   const handleDelete = useCallback(() => {
     Alert.alert(
@@ -234,6 +290,7 @@ export default function HangoutDetailScreen() {
   }
 
   const isFinalized = plan.status === "finalized";
+  const activityLocked = !!plan.finalizedOptionId && !isFinalized;
   const rec = plan.bestRecommendation;
   const totalVoters = rec?.totalVoters || 0;
 
@@ -242,6 +299,14 @@ export default function HangoutDetailScreen() {
   const locationOptions = (plan.options || []).filter((o) => o.questionType === "location");
 
   const isDeadlinePassed = plan.deadline ? new Date(plan.deadline) < new Date() : false;
+
+  const lockedTimeOption = (plan.options || []).find(o => o.id === plan.finalizedTimeOptionId);
+  const lockedLocationOption = locationOptions.length > 0
+    ? [...locationOptions].sort((a, b) => (b.bordaScore || 0) - (a.bordaScore || 0))[0]
+    : null;
+
+  const timeLabel = lockedTimeOption?.label || "TBD";
+  const locationLabel = lockedLocationOption?.label || null;
 
   return (
     <View style={styles.screen}>
@@ -260,11 +325,39 @@ export default function HangoutDetailScreen() {
         contentContainerStyle={[styles.scrollContent, { paddingBottom: 40 + (Platform.OS === "web" ? 34 : 0) }]}
         showsVerticalScrollIndicator={false}
       >
-        {/* Status banner */}
+        {/* Finalized summary card */}
         {isFinalized && (
-          <View style={styles.finalizedBanner}>
-            <Ionicons name="checkmark-circle" size={20} color={Colors.success} />
-            <Text style={styles.finalizedText}>Plan finalized</Text>
+          <View style={styles.finalizedCard}>
+            <View style={styles.finalizedCardHeader}>
+              <Ionicons name="checkmark-circle" size={20} color={Colors.success} />
+              <Text style={styles.finalizedCardTitle}>{plan.title}</Text>
+            </View>
+            <View style={styles.finalizedCardDetail}>
+              <Ionicons name="calendar-outline" size={15} color={Colors.textSecondary} />
+              <Text style={styles.finalizedCardDetailText}>{timeLabel}</Text>
+            </View>
+            {locationLabel && (
+              <View style={styles.finalizedCardDetail}>
+                <Ionicons name="location-outline" size={15} color={Colors.textSecondary} />
+                <Text style={styles.finalizedCardDetailText}>{locationLabel}</Text>
+              </View>
+            )}
+            <View style={styles.finalizedCardActions}>
+              <Pressable
+                onPress={handleCalendarInvite}
+                style={({ pressed }) => [styles.calendarBtn, pressed && { opacity: 0.8 }]}
+              >
+                <Ionicons name="calendar" size={16} color={Colors.success} />
+                <Text style={styles.calendarBtnText}>Add to my calendar</Text>
+              </Pressable>
+              <Pressable
+                onPress={() => handleShareWithGuests(timeLabel, locationLabel)}
+                style={({ pressed }) => [styles.shareGuestsBtn, pressed && { opacity: 0.8 }]}
+              >
+                <Ionicons name={guestsCopied ? "checkmark" : "share-outline"} size={16} color={Colors.primaryLight} />
+                <Text style={styles.shareGuestsBtnText}>{guestsCopied ? "Copied!" : "Share with guests"}</Text>
+              </Pressable>
+            </View>
           </View>
         )}
 
@@ -311,7 +404,7 @@ export default function HangoutDetailScreen() {
         )}
 
         {/* Best recommendation banner */}
-        {rec && (rec.bestActivity || rec.bestTime || rec.bestLocation) && (
+        {!isFinalized && rec && (rec.bestActivity || rec.bestTime || rec.bestLocation) && (
           <View style={styles.recBanner}>
             <Text style={styles.recBannerTitle}>Best picks so far</Text>
             {rec.bestActivity && (
@@ -341,7 +434,7 @@ export default function HangoutDetailScreen() {
           </View>
         )}
 
-        {/* Share buttons */}
+        {/* Share buttons (pre-finalization) */}
         {!isFinalized && (
           <View style={styles.shareRow}>
             <Pressable
@@ -363,39 +456,36 @@ export default function HangoutDetailScreen() {
           </View>
         )}
 
+        {/* Progress hint: activity locked, time still needed */}
+        {activityLocked && timeOptions.length > 0 && (
+          <View style={styles.progressHint}>
+            <Ionicons name="checkmark-circle" size={15} color={Colors.success} />
+            <Text style={styles.progressHintText}>Activity chosen — now lock in a time slot below</Text>
+          </View>
+        )}
+
         {/* Results by question type */}
         <SurveySection
           title="Activity"
           options={activityOptions}
-          finalizedOptionId={plan.finalizedOptionId}
+          lockedOptionId={plan.finalizedOptionId}
           isFinalized={isFinalized}
-          onFinalize={handleFinalize}
+          onFinalize={handleFinalizeActivity}
         />
         <SurveySection
           title="When"
           options={timeOptions}
-          finalizedOptionId={plan.finalizedOptionId}
+          lockedOptionId={plan.finalizedTimeOptionId}
           isFinalized={isFinalized}
-          onFinalize={handleFinalize}
+          onFinalize={handleFinalizeTime}
         />
         <SurveySection
           title="Where"
           options={locationOptions}
-          finalizedOptionId={plan.finalizedOptionId}
+          lockedOptionId={null}
           isFinalized={isFinalized}
-          onFinalize={handleFinalize}
+          onFinalize={undefined}
         />
-
-        {/* Calendar invite after finalization */}
-        {isFinalized && (
-          <Pressable
-            onPress={handleCalendarInvite}
-            style={({ pressed }) => [styles.calendarBtn, pressed && { opacity: 0.8 }]}
-          >
-            <Ionicons name="calendar-outline" size={18} color={Colors.success} />
-            <Text style={styles.calendarBtnText}>Get calendar invite (.ics)</Text>
-          </Pressable>
-        )}
       </ScrollView>
     </View>
   );
@@ -411,6 +501,7 @@ const ss = StyleSheet.create({
     marginBottom: 8, borderWidth: 1, borderColor: Colors.border,
   },
   optionCardWinner: { borderColor: Colors.warning + "50", backgroundColor: Colors.warning + "06" },
+  optionCardLocked: { borderColor: Colors.success + "50", backgroundColor: Colors.success + "06" },
   optionCardTop: { borderColor: Colors.primary + "40" },
   optionHeaderRow: { flexDirection: "row", alignItems: "center", gap: 10, marginBottom: 8 },
   rankDot: {
@@ -434,6 +525,10 @@ const ss = StyleSheet.create({
     backgroundColor: Colors.success + "12",
   },
   lockBtnText: { fontSize: 13, fontFamily: "Nunito_700Bold", color: Colors.success },
+  lockedBadge: {
+    flexDirection: "row", alignItems: "center", gap: 5, marginTop: 8,
+  },
+  lockedBadgeText: { fontSize: 12, fontFamily: "Nunito_600SemiBold", color: Colors.success },
 });
 
 const styles = StyleSheet.create({
@@ -452,12 +547,40 @@ const styles = StyleSheet.create({
   loadingText: { fontSize: 15, fontFamily: "Nunito_400Regular", color: Colors.textSecondary },
   scrollContainer: { flex: 1 },
   scrollContent: { paddingHorizontal: 20, paddingTop: 16 },
-  finalizedBanner: {
-    flexDirection: "row", alignItems: "center", gap: 8,
-    backgroundColor: Colors.success + "15", borderRadius: 12,
-    paddingHorizontal: 14, paddingVertical: 10, marginBottom: 16,
+  finalizedCard: {
+    backgroundColor: Colors.success + "10",
+    borderRadius: 16, borderWidth: 1, borderColor: Colors.success + "30",
+    paddingHorizontal: 16, paddingVertical: 14, marginBottom: 20,
   },
-  finalizedText: { fontSize: 14, fontFamily: "Nunito_700Bold", color: Colors.success },
+  finalizedCardHeader: {
+    flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 10,
+  },
+  finalizedCardTitle: {
+    fontSize: 17, fontFamily: "Nunito_800ExtraBold", color: Colors.text, flex: 1,
+  },
+  finalizedCardDetail: {
+    flexDirection: "row", alignItems: "center", gap: 7, marginBottom: 6,
+  },
+  finalizedCardDetailText: {
+    fontSize: 14, fontFamily: "Nunito_600SemiBold", color: Colors.textSecondary, flex: 1,
+  },
+  finalizedCardActions: {
+    flexDirection: "row", gap: 10, marginTop: 12,
+  },
+  calendarBtn: {
+    flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "center",
+    gap: 6, paddingVertical: 10, borderRadius: 10,
+    backgroundColor: Colors.success + "18",
+    borderWidth: 1, borderColor: Colors.success + "40",
+  },
+  calendarBtnText: { fontSize: 13, fontFamily: "Nunito_700Bold", color: Colors.success },
+  shareGuestsBtn: {
+    flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "center",
+    gap: 6, paddingVertical: 10, borderRadius: 10,
+    backgroundColor: Colors.primary + "15",
+    borderWidth: 1, borderColor: Colors.primary + "40",
+  },
+  shareGuestsBtnText: { fontSize: 13, fontFamily: "Nunito_700Bold", color: Colors.primaryLight },
   description: {
     fontSize: 15, fontFamily: "Nunito_400Regular",
     color: Colors.textSecondary, lineHeight: 22, marginBottom: 14,
@@ -500,11 +623,13 @@ const styles = StyleSheet.create({
     borderWidth: 1, borderColor: Colors.primary + "40",
   },
   shareBtnText: { fontSize: 14, fontFamily: "Nunito_700Bold", color: "#fff" },
-  calendarBtn: {
-    flexDirection: "row", alignItems: "center", justifyContent: "center",
-    gap: 8, backgroundColor: Colors.success + "12",
-    borderWidth: 1, borderColor: Colors.success + "30",
-    borderRadius: 14, paddingVertical: 14, marginTop: 8,
+  progressHint: {
+    flexDirection: "row", alignItems: "center", gap: 7,
+    backgroundColor: Colors.success + "10", borderRadius: 10,
+    paddingHorizontal: 12, paddingVertical: 8, marginBottom: 20,
+    borderWidth: 1, borderColor: Colors.success + "25",
   },
-  calendarBtnText: { fontSize: 15, fontFamily: "Nunito_700Bold", color: Colors.success },
+  progressHintText: {
+    fontSize: 13, fontFamily: "Nunito_600SemiBold", color: Colors.success, flex: 1,
+  },
 });

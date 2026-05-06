@@ -44,9 +44,10 @@ h1.title{font-size:24px;font-weight:800;text-align:center;margin-bottom:4px;line
 .rank-card.drag-over{transform:translateY(-2px)}
 .rank-card.rejected{opacity:.35;border-color:#3A2A48}
 .rank-num{
-  min-width:30px;height:30px;border-radius:10px;
+  min-width:32px;height:32px;border-radius:10px;
   display:flex;align-items:center;justify-content:center;
   font-size:14px;font-weight:800;flex-shrink:0;
+  border-width:1.5px;border-style:solid;
 }
 .rank-card-content{flex:1;min-width:0}
 .rank-card-label{font-size:14px;font-weight:700;color:#F0ECF8;margin-bottom:0}
@@ -284,9 +285,23 @@ function renderVoteForm() {
   return html;
 }
 
+function cardGradient(idx, total, isRejected) {
+  if (isRejected) {
+    return { numBg: '#2A2148', numColor: '#5E5580', borderColor: '#2A1A38' };
+  }
+  const gradientPct = Math.max(0, 1 - idx / Math.max(total - 1, 1));
+  const r = Math.round(155 * gradientPct + 50 * (1 - gradientPct));
+  const g = Math.round(125 * gradientPct + 40 * (1 - gradientPct));
+  const b = Math.round(255 * gradientPct + 80 * (1 - gradientPct));
+  return {
+    numBg: `rgba(${r},${g},${b},0.4)`,
+    numColor: `rgb(${r},${g},${b})`,
+    borderColor: `rgba(${r},${g},${b},0.55)`,
+  };
+}
+
 function renderRankSection(type, title, subtitle) {
   const order = rankings[type] || [];
-  const maxScore = order.length;
   let html = `
     <div class="section" id="section-${type}">
       <div class="section-header">
@@ -300,14 +315,8 @@ function renderRankSection(type, title, subtitle) {
     const opt = planData.options.find(o => o.id === optId);
     if (!opt) return;
     const isRejected = !!rejected[optId];
+    const { numBg, numColor, borderColor } = cardGradient(idx, order.length, isRejected);
     const rank = idx + 1;
-    const gradientPct = Math.max(0, 1 - idx / Math.max(order.length - 1, 1));
-    const r = Math.round(155 * gradientPct + 50 * (1 - gradientPct));
-    const g = Math.round(125 * gradientPct + 40 * (1 - gradientPct));
-    const b = Math.round(255 * gradientPct + 80 * (1 - gradientPct));
-    const numBg = isRejected ? '#2A2148' : `rgba(${r},${g},${b},0.2)`;
-    const numColor = isRejected ? '#5E5580' : `rgb(${r},${g},${b})`;
-    const borderColor = isRejected ? '#2A1A38' : `rgba(${r},${g},${b},0.3)`;
 
     html += `
       <div class="rank-card${isRejected ? ' rejected' : ''}"
@@ -316,7 +325,7 @@ function renderRankSection(type, title, subtitle) {
            data-type="${type}"
            draggable="${!isRejected}"
            style="border-color:${borderColor}">
-        <div class="rank-num" style="background:${numBg};color:${numColor}">
+        <div class="rank-num" style="background:${numBg};color:${numColor};border-color:${borderColor}">
           ${isRejected ? '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>' : rank}
         </div>
         <div class="rank-card-content">
@@ -518,34 +527,20 @@ function attachTouchHandlers() {
   });
 }
 
+// renderSection: updates ONLY the card list inside an existing section element.
+// The section header (title + subtitle) is left untouched — it was rendered once
+// by renderRankSection on initial load and must NOT be re-added on every drag/reject.
 function renderSection(type) {
-  const section = document.getElementById('section-' + type);
-  if (!section) return;
-  const titles = { activity: 'Activity', time: 'When', location: 'Where' };
-  const subtitles = { activity: 'Drag to rank your preferred activity', time: 'Drag to rank your preferred time', location: 'Drag to rank your preferred location' };
-  section.innerHTML = `
-    <div class="section-header">
-      <div class="section-title">${titles[type] || type}</div>
-      <div class="section-subtitle">${subtitles[type] || ''} — top is best</div>
-    </div>
-  ` + document.getElementById('section-' + type).innerHTML.split('</div>').slice(1).join('</div>');
-
-  // Re-render just the list
   const list = document.getElementById('list-' + type);
   if (!list) return;
   const order = rankings[type] || [];
   list.innerHTML = '';
+
   order.forEach((optId, idx) => {
     const opt = planData.options.find(o => o.id === optId);
     if (!opt) return;
     const isRejected = !!rejected[optId];
-    const gradientPct = Math.max(0, 1 - idx / Math.max(order.length - 1, 1));
-    const r = Math.round(155 * gradientPct + 50 * (1 - gradientPct));
-    const g = Math.round(125 * gradientPct + 40 * (1 - gradientPct));
-    const b = Math.round(255 * gradientPct + 80 * (1 - gradientPct));
-    const numBg = isRejected ? '#2A2148' : `rgba(${r},${g},${b},0.2)`;
-    const numColor = isRejected ? '#5E5580' : `rgb(${r},${g},${b})`;
-    const borderColor = isRejected ? '#2A1A38' : `rgba(${r},${g},${b},0.3)`;
+    const { numBg, numColor, borderColor } = cardGradient(idx, order.length, isRejected);
 
     const cardEl = document.createElement('div');
     cardEl.className = 'rank-card' + (isRejected ? ' rejected' : '');
@@ -555,7 +550,7 @@ function renderSection(type) {
     cardEl.draggable = !isRejected;
     cardEl.style.borderColor = borderColor;
     cardEl.innerHTML = `
-      <div class="rank-num" style="background:${numBg};color:${numColor}">
+      <div class="rank-num" style="background:${numBg};color:${numColor};border-color:${borderColor}">
         ${isRejected ? '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>' : (idx + 1)}
       </div>
       <div class="rank-card-content">

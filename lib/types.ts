@@ -30,8 +30,9 @@ export interface HangoutPlan {
   status: string;
   shareCode: string;
   finalizedOptionId?: string | null;
+  finalizedTimeOptionId?: string | null;
   inviteeNames: string[];
-  surveyMode: string; // 'standard' | 'fixed-activity'
+  surveyMode: string;
   fixedActivity?: string | null;
   deadline?: string | null;
   includePlusOne: boolean;
@@ -48,7 +49,7 @@ export interface HangoutOption {
   dateTime?: string | null;
   activity?: string | null;
   location?: string | null;
-  questionType: string; // 'activity' | 'time' | 'location'
+  questionType: string;
   votes?: HangoutVote[];
   voteCount?: number;
   bordaScore?: number;
@@ -59,7 +60,7 @@ export interface HangoutVote {
   optionId?: string | null;
   planId?: string | null;
   voterName: string;
-  rank?: number | null; // 1 = top pick, 0/null = rejected
+  rank?: number | null;
   bringsGuests?: boolean | null;
   plusOneCount?: number | null;
   createdAt?: string | null;

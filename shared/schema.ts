@@ -44,9 +44,9 @@ export const hangoutPlans = pgTable("hangout_plans", {
   status: text("status").notNull().default("draft"),
   shareCode: text("share_code").notNull().unique(),
   finalizedOptionId: varchar("finalized_option_id"),
+  finalizedTimeOptionId: varchar("finalized_time_option_id"),
   inviteeNames: text("invitee_names").array().notNull().default(sql`'{}'::text[]`),
-  // New survey fields
-  surveyMode: text("survey_mode").notNull().default("standard"), // 'standard' | 'fixed-activity'
+  surveyMode: text("survey_mode").notNull().default("standard"),
   fixedActivity: text("fixed_activity"),
   deadline: text("deadline"),
   includePlusOne: boolean("include_plus_one").notNull().default(false),
@@ -63,7 +63,7 @@ export const hangoutOptions = pgTable("hangout_options", {
   dateTime: text("date_time"),
   activity: text("activity"),
   location: text("location"),
-  questionType: text("question_type").notNull().default("option"), // 'activity' | 'time' | 'location'
+  questionType: text("question_type").notNull().default("option"),
 });
 
 export const hangoutVotes = pgTable("hangout_votes", {
@@ -73,7 +73,7 @@ export const hangoutVotes = pgTable("hangout_votes", {
   optionId: varchar("option_id").references(() => hangoutOptions.id),
   planId: varchar("plan_id").references(() => hangoutPlans.id),
   voterName: text("voter_name").notNull(),
-  rank: integer("rank"), // 1 = top pick, 0 or null = rejected. Replaces boolean vote.
+  rank: integer("rank"),
   bringsGuests: boolean("brings_guests"),
   plusOneCount: integer("plus_one_count"),
   createdAt: timestamp("created_at").defaultNow(),
