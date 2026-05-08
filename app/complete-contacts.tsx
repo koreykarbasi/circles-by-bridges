@@ -18,18 +18,30 @@ import * as Haptics from "expo-haptics";
 
 export default function CompleteContactsScreen() {
   const insets = useSafeAreaInsets();
-  const params = useLocalSearchParams<{ count?: string }>();
+  const params = useLocalSearchParams<{ count?: string; importedIds?: string }>();
   const count = parseInt(params.count ?? "0", 10);
   const { contacts } = useContacts();
   const webTopInset = Platform.OS === "web" ? 67 : 0;
+
+  const importedIdSet = useMemo<Set<string>>(() => {
+    if (!params.importedIds) return new Set();
+    try {
+      const ids: string[] = JSON.parse(params.importedIds);
+      return new Set(ids);
+    } catch {
+      return new Set();
+    }
+  }, [params.importedIds]);
 
   const incomplete = useMemo(
     () =>
       contacts.filter(
         (c) =>
-          (c.circleLevel === 1 || c.circleLevel === 2) && !c.birthday,
+          importedIdSet.size > 0
+            ? importedIdSet.has(c.id) && (c.circleLevel === 1 || c.circleLevel === 2) && !c.birthday
+            : (c.circleLevel === 1 || c.circleLevel === 2) && !c.birthday,
       ),
-    [contacts],
+    [contacts, importedIdSet],
   );
 
   const handleDone = () => {

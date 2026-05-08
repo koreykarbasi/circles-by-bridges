@@ -12,7 +12,7 @@ interface ContactsContextValue {
   contacts: Contact[];
   isLoading: boolean;
   refreshContacts: () => Promise<void>;
-  addContact: (data: Omit<Contact, "id" | "avatarColor" | "createdAt">) => Promise<void>;
+  addContact: (data: Omit<Contact, "id" | "avatarColor" | "createdAt">) => Promise<Contact>;
   updateContact: (contact: Contact) => Promise<void>;
   deleteContact: (id: string) => Promise<void>;
   markContacted: (id: string) => Promise<void>;
@@ -56,13 +56,14 @@ export function ContactsProvider({ children }: { children: ReactNode }) {
     }
   }, [user, fetchContacts]);
 
-  const addContactFn = useCallback(async (data: Omit<Contact, "id" | "avatarColor" | "createdAt">) => {
+  const addContactFn = useCallback(async (data: Omit<Contact, "id" | "avatarColor" | "createdAt">): Promise<Contact> => {
     const body = {
       ...data,
       avatarColor: AVATAR_COLORS[Math.floor(Math.random() * AVATAR_COLORS.length)],
     };
-    await apiRequest("POST", "/api/contacts", body);
+    const created = await apiRequest("POST", "/api/contacts", body) as Contact;
     await fetchContacts();
+    return created;
   }, [fetchContacts]);
 
   const updateContactFn = useCallback(async (contact: Contact) => {

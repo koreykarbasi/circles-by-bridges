@@ -48,6 +48,7 @@ export default function ImportContactsScreen() {
           prefillName: c.name,
           prefillPhone: c.phone ?? "",
           prefillBirthday: c.birthday ?? "",
+          prefillPhotoUri: c.photoUri ?? "",
         },
       });
       return;
@@ -68,23 +69,29 @@ export default function ImportContactsScreen() {
         return;
       }
 
+      const importedIds: string[] = [];
       for (const c of toImport) {
-        await addContact({
+        const created = await addContact({
           name: c.name,
           circleLevel: activeCircle,
           interests: [],
           labels: [],
           birthday: c.birthday ?? undefined,
           phone: c.phone ?? undefined,
+          photoUri: c.photoUri ?? undefined,
           notes: undefined,
           lastContacted: undefined,
         });
+        importedIds.push(created.id);
       }
 
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       router.replace({
         pathname: "/complete-contacts",
-        params: { count: String(toImport.length) },
+        params: {
+          count: String(toImport.length),
+          importedIds: JSON.stringify(importedIds),
+        },
       });
     } catch (err) {
       Alert.alert("Import failed", "Something went wrong. Please try again.");

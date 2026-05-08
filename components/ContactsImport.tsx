@@ -20,6 +20,7 @@ export interface ImportedContact {
   name: string;
   phone?: string;
   birthday?: string;
+  photoUri?: string;
 }
 
 interface ContactsImportProps {
@@ -34,6 +35,7 @@ interface DeviceContact {
   name: string;
   phone?: string;
   birthday?: string;
+  photoUri?: string;
 }
 
 export function ContactsImport({ selectedContacts, onSelect, onDeselect, maxSelections }: ContactsImportProps) {
@@ -53,19 +55,31 @@ export function ContactsImport({ selectedContacts, onSelect, onDeselect, maxSele
       setPermission({ status, granted: status === "granted", canAskAgain: true, expires: "never" } as Contacts.PermissionResponse);
       if (status === "granted") {
         const { data } = await Contacts.getContactsAsync({
-          fields: [Contacts.Fields.Name, Contacts.Fields.PhoneNumbers, Contacts.Fields.Birthday],
+          fields: [
+            Contacts.Fields.Name,
+            Contacts.Fields.PhoneNumbers,
+            Contacts.Fields.Birthday,
+            Contacts.Fields.Image,
+          ],
           sort: Contacts.SortTypes.FirstName,
         });
         const mapped: DeviceContact[] = data
           .filter((c) => c.name)
-          .map((c) => ({
-            id: c.id ?? c.name ?? "",
-            name: c.name ?? "",
-            phone: c.phoneNumbers?.[0]?.number,
-            birthday: c.birthday
-              ? `${String(c.birthday.month! + 1).padStart(2, "0")}/${String(c.birthday.day!).padStart(2, "0")}`
-              : undefined,
-          }));
+          .map((c) => {
+            let birthday: string | undefined;
+            if (c.birthday) {
+              const rawMonth = c.birthday.month ?? 0;
+              const month = rawMonth < 12 ? rawMonth + 1 : rawMonth;
+              birthday = `${String(month).padStart(2, "0")}/${String(c.birthday.day ?? 1).padStart(2, "0")}`;
+            }
+            return {
+              id: c.id ?? c.name ?? "",
+              name: c.name ?? "",
+              phone: c.phoneNumbers?.[0]?.number,
+              birthday,
+              photoUri: (c as any).image?.uri ?? (c as any).imageAvailable ? (c as any).image?.uri : undefined,
+            };
+          });
         setDeviceContacts(mapped);
       }
     } catch (err) {
@@ -92,6 +106,7 @@ export function ContactsImport({ selectedContacts, onSelect, onDeselect, maxSele
         name: contact.name,
         phone: contact.phone,
         birthday: contact.birthday,
+        photoUri: contact.photoUri,
       });
     }
   };

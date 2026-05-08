@@ -49,6 +49,7 @@ export default function AddContactScreen() {
     prefillName?: string;
     prefillPhone?: string;
     prefillBirthday?: string;
+    prefillPhotoUri?: string;
   }>();
   const initialCircle = params.circle ? (parseInt(params.circle) as 1 | 2 | 3) : 1;
 
@@ -62,7 +63,9 @@ export default function AddContactScreen() {
   const [birthday, setBirthday] = useState(params.prefillBirthday ?? "");
   const [birthdayError, setBirthdayError] = useState(false);
   const [notes, setNotes] = useState("");
-  const [photoUri, setPhotoUri] = useState<string | null>(null);
+  const [photoUri, setPhotoUri] = useState<string | null>(
+    params.prefillPhotoUri ? params.prefillPhotoUri : null,
+  );
   const [saving, setSaving] = useState(false);
   const [showBirthdayPicker, setShowBirthdayPicker] = useState(
     !!params.prefillBirthday || initialCircle === 1,
@@ -226,41 +229,6 @@ export default function AddContactScreen() {
         </View>
 
         <View style={styles.inputGroup}>
-          <Text style={styles.label}>Circle</Text>
-          <View style={styles.circleOptions}>
-            {([1, 2, 3] as const).map((level) => {
-              const cfg = CIRCLE_CONFIG[level];
-              const isActive = circleLevel === level;
-              const count = getCircleContacts(level).length;
-              return (
-                <Pressable
-                  key={level}
-                  onPress={() => {
-                    Haptics.selectionAsync();
-                    setCircleLevel(level);
-                  }}
-                  style={[
-                    styles.circleOption,
-                    isActive && { backgroundColor: cfg.color + "15", borderColor: cfg.color + "50" },
-                  ]}
-                >
-                  <View style={[styles.circleOptionDot, { backgroundColor: cfg.color }]} />
-                  <Text
-                    style={[styles.circleOptionLabel, isActive && { color: cfg.color }]}
-                    numberOfLines={1}
-                  >
-                    {cfg.label}
-                  </Text>
-                  <Text style={[styles.circleOptionCount, isActive && { color: cfg.color }]}>
-                    {count}/{cfg.max}
-                  </Text>
-                </Pressable>
-              );
-            })}
-          </View>
-        </View>
-
-        <View style={styles.inputGroup}>
           <View style={styles.birthdayHeader}>
             <Text style={styles.label}>
               Birthday{circleLevel === 1 ? " (required)" : " (optional)"}
@@ -336,6 +304,54 @@ export default function AddContactScreen() {
               )}
             </View>
           )}
+        </View>
+
+        <View style={styles.inputGroup}>
+          <Text style={styles.label}>Circle</Text>
+          <View style={styles.circleOptions}>
+            {([1, 2, 3] as const).map((level) => {
+              const cfg = CIRCLE_CONFIG[level];
+              const isActive = circleLevel === level;
+              const count = getCircleContacts(level).length;
+              return (
+                <Pressable
+                  key={level}
+                  onPress={() => {
+                    Haptics.selectionAsync();
+                    setCircleLevel(level);
+                  }}
+                  style={[
+                    styles.circleOption,
+                    isActive && { backgroundColor: cfg.color + "15", borderColor: cfg.color + "50" },
+                  ]}
+                >
+                  <View style={[styles.circleOptionDot, { backgroundColor: cfg.color }]} />
+                  <Text
+                    style={[styles.circleOptionLabel, isActive && { color: cfg.color }]}
+                    numberOfLines={1}
+                  >
+                    {cfg.label}
+                  </Text>
+                  <Text style={[styles.circleOptionCount, isActive && { color: cfg.color }]}>
+                    {count}/{cfg.max}
+                  </Text>
+                </Pressable>
+              );
+            })}
+          </View>
+        </View>
+
+        <View style={styles.inputGroup}>
+          <Text style={styles.label}>Email (optional)</Text>
+          <TextInput
+            style={styles.input}
+            placeholder="Enter email address"
+            placeholderTextColor={Colors.textTertiary}
+            value={email}
+            onChangeText={setEmail}
+            keyboardType="email-address"
+            autoCapitalize="none"
+          />
         </View>
 
         <View style={styles.inputGroup}>
@@ -456,7 +472,7 @@ export default function AddContactScreen() {
             color={Colors.textTertiary}
           />
           <Text style={styles.moreDetailsText}>
-            {showMoreDetails ? "Fewer details" : "More details (phone, email)"}
+            {showMoreDetails ? "Fewer details" : "Add phone number"}
           </Text>
         </Pressable>
 
@@ -471,18 +487,6 @@ export default function AddContactScreen() {
                 value={phone}
                 onChangeText={setPhone}
                 keyboardType="phone-pad"
-              />
-            </View>
-            <View style={styles.inputGroup}>
-              <Text style={styles.label}>Email (optional)</Text>
-              <TextInput
-                style={styles.input}
-                placeholder="Enter email address"
-                placeholderTextColor={Colors.textTertiary}
-                value={email}
-                onChangeText={setEmail}
-                keyboardType="email-address"
-                autoCapitalize="none"
               />
             </View>
           </View>

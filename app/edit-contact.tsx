@@ -263,38 +263,6 @@ export default function EditContactScreen() {
         </View>
 
         <View style={styles.inputGroup}>
-          <Text style={styles.label}>Circle</Text>
-          <View style={styles.circleOptions}>
-            {([1, 2, 3] as const).map((level) => {
-              const cfg = CIRCLE_CONFIG[level];
-              const isActive = circleLevel === level;
-              const count = getCircleContacts(level).filter((c) => c.id !== contact.id).length;
-              return (
-                <Pressable
-                  key={level}
-                  onPress={() => {
-                    Haptics.selectionAsync();
-                    setCircleLevel(level);
-                  }}
-                  style={[
-                    styles.circleOption,
-                    isActive && { backgroundColor: cfg.color + "15", borderColor: cfg.color + "50" },
-                  ]}
-                >
-                  <View style={[styles.circleOptionDot, { backgroundColor: cfg.color }]} />
-                  <Text style={[styles.circleOptionLabel, isActive && { color: cfg.color }]} numberOfLines={1}>
-                    {cfg.label}
-                  </Text>
-                  <Text style={[styles.circleOptionCount, isActive && { color: cfg.color }]}>
-                    {count}/{cfg.max}
-                  </Text>
-                </Pressable>
-              );
-            })}
-          </View>
-        </View>
-
-        <View style={styles.inputGroup}>
           <View style={styles.birthdayHeader}>
             <Text style={styles.label}>
               Birthday{circleLevel === 1 ? " (required)" : ""}
@@ -370,6 +338,51 @@ export default function EditContactScreen() {
               )}
             </View>
           )}
+        </View>
+
+        <View style={styles.inputGroup}>
+          <Text style={styles.label}>Circle</Text>
+          <View style={styles.circleOptions}>
+            {([1, 2, 3] as const).map((level) => {
+              const cfg = CIRCLE_CONFIG[level];
+              const isActive = circleLevel === level;
+              const count = getCircleContacts(level).filter((c) => c.id !== contact.id).length;
+              return (
+                <Pressable
+                  key={level}
+                  onPress={() => {
+                    Haptics.selectionAsync();
+                    setCircleLevel(level);
+                  }}
+                  style={[
+                    styles.circleOption,
+                    isActive && { backgroundColor: cfg.color + "15", borderColor: cfg.color + "50" },
+                  ]}
+                >
+                  <View style={[styles.circleOptionDot, { backgroundColor: cfg.color }]} />
+                  <Text style={[styles.circleOptionLabel, isActive && { color: cfg.color }]} numberOfLines={1}>
+                    {cfg.label}
+                  </Text>
+                  <Text style={[styles.circleOptionCount, isActive && { color: cfg.color }]}>
+                    {count}/{cfg.max}
+                  </Text>
+                </Pressable>
+              );
+            })}
+          </View>
+        </View>
+
+        <View style={styles.inputGroup}>
+          <Text style={styles.label}>Email</Text>
+          <TextInput
+            style={styles.input}
+            placeholder="Enter email address"
+            placeholderTextColor={Colors.textTertiary}
+            value={email}
+            onChangeText={setEmail}
+            keyboardType="email-address"
+            autoCapitalize="none"
+          />
         </View>
 
         <View style={styles.inputGroup}>
@@ -490,7 +503,7 @@ export default function EditContactScreen() {
             color={Colors.textTertiary}
           />
           <Text style={styles.moreDetailsText}>
-            {showMoreDetails ? "Fewer details" : "More details (phone, email)"}
+            {showMoreDetails ? "Fewer details" : "Add phone number"}
           </Text>
         </Pressable>
 
@@ -519,18 +532,6 @@ export default function EditContactScreen() {
                   </Pressable>
                 )}
               </View>
-            </View>
-            <View style={styles.inputGroup}>
-              <Text style={styles.label}>Email</Text>
-              <TextInput
-                style={styles.input}
-                placeholder="Enter email address"
-                placeholderTextColor={Colors.textTertiary}
-                value={email}
-                onChangeText={setEmail}
-                keyboardType="email-address"
-                autoCapitalize="none"
-              />
             </View>
           </View>
         )}
