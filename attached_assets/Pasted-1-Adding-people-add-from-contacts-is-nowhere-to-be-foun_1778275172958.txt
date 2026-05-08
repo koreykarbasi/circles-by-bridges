@@ -1,0 +1,14 @@
+1. Adding people: add from contacts is nowhere to be found yes in the circles page when you click “Add someone” in a circle. 
+2. takes too long to add people when you press save. 
+3. why is phone number the second entry it should be birthday. phone number is not required at all this is not a contacts app. 
+4. birthday should be calendar selection field not a string the user can just type that doesn’t enforce the format. lets use this calendar selection tool for planning hangouts too. also seems like the reminders are not even linked to the birthday. when i add a new friend, put in their birthday, a reminder shows up and says “its Xs birthday in NaN weeks” 
+5. Lets rethink if suggestions page is even needed and if we just put suggestions and reminders under the circles in the main page. how many to include in each. 
+6. Remove hangout planning from circles page and suggestions page. doesn’t have to be everywhere. 
+7. We need to simplify the onboarding page and add how hangouts planning and surveys work
+8. why does the home page have a big forehead?
+9. Where is the checklist for completing your circles? tell me so i look for it. 
+10. Also if its “your circles are taking shape” message that u cant x out its annoying and weird. we should encourage it. remove that please. 
+11. Lets use a calendar selection field for all date related fields everywhere but with different defaults. the birthday should default to march 23, 1999 and they can change the year and date from there. should be a simple design. the hangout date ahould default to the next weekend from todays date and they can change it from there. same with deadline for survey if chosen. 
+12. When you copy a Suggestion for texting a friend its always the generic “Hey Alessandro, it's been too long! I'd love to catch up sometime. What's new with you?” and not based on the suggestion. Also please say “text copied” as a pop ip message when you press copy. 
+13. Create survey error. screenshots provided.
+14. We need to simplify the whole thing and figure out what we should put behind a paywall in the future after launching a completely free version and accumulating users. 
