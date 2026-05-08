@@ -8,7 +8,7 @@ import { ContactCard } from "@/components/ContactCard";
 import { EmptyState } from "@/components/EmptyState";
 import { CIRCLE_CONFIG } from "@/lib/types";
 import type { Contact } from "@/lib/types";
-import { router } from "expo-router";
+import { router, useLocalSearchParams } from "expo-router";
 import * as Haptics from "expo-haptics";
 import { computeProfileCompletion } from "@/lib/profile-completion";
 import { BellSheet, computeBellDotColor } from "@/components/BellSheet";
@@ -16,10 +16,18 @@ import { BellSheet, computeBellDotColor } from "@/components/BellSheet";
 export default function CirclesScreen() {
   const insets = useSafeAreaInsets();
   const { contacts, getCircleContacts, markContacted, deleteContact } = useContacts();
+  const { circle: circleParam } = useLocalSearchParams<{ circle?: string }>();
   const [activeCircle, setActiveCircle] = useState<1 | 2 | 3>(1);
   const [searchQuery, setSearchQuery] = useState("");
   const [bellSheetOpen, setBellSheetOpen] = useState(false);
   const searchRef = useRef<TextInput>(null);
+
+  useEffect(() => {
+    const parsed = parseInt(circleParam ?? "", 10);
+    if (parsed === 1 || parsed === 2 || parsed === 3) {
+      setActiveCircle(parsed);
+    }
+  }, [circleParam]);
 
   useEffect(() => {
     setSearchQuery("");

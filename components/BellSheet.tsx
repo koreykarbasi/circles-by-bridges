@@ -4,6 +4,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import Colors from "@/constants/colors";
 import type { Contact } from "@/lib/types";
+import { STAGE1_GOALS } from "@/lib/profile-completion";
 import { router } from "expo-router";
 import * as Haptics from "expo-haptics";
 
@@ -35,14 +36,16 @@ export function computeBellDotColor(contacts: Contact[], isComplete: boolean): s
 export function BellSheet({ visible, onClose, contacts, isComplete }: BellSheetProps) {
   const insets = useSafeAreaInsets();
 
-  const tasks = useMemo((): BellTask[] => {
-    const result: BellTask[] = [];
+  const { urgent, recommended } = useMemo(() => {
+    const urgent: BellTask[] = [];
+    const recommended: BellTask[] = [];
+
     const circle1 = contacts.filter((c) => c.circleLevel === 1);
     const circle2 = contacts.filter((c) => c.circleLevel === 2);
     const circle3 = contacts.filter((c) => c.circleLevel === 3);
 
     circle1.filter((c) => !c.birthday).forEach((c) => {
-      result.push({
+      urgent.push({
         id: `c1-bday-${c.id}`,
         priority: "red",
         title: `Add ${c.name.split(" ")[0]}'s birthday`,
@@ -55,7 +58,7 @@ export function BellSheet({ visible, onClose, contacts, isComplete }: BellSheetP
     });
 
     circle2.filter((c) => !c.birthday).forEach((c) => {
-      result.push({
+      recommended.push({
         id: `c2-bday-${c.id}`,
         priority: "yellow",
         title: `Add ${c.name.split(" ")[0]}'s birthday`,
@@ -68,55 +71,78 @@ export function BellSheet({ visible, onClose, contacts, isComplete }: BellSheetP
     });
 
     const c1WithBday = circle1.filter((c) => !!c.birthday).length;
-    const C1_GOAL = 3;
-    const C2_GOAL = 2;
-    const C3_GOAL = 1;
 
-    if (c1WithBday < C1_GOAL) {
-      const needed = C1_GOAL - c1WithBday;
-      result.push({
+    if (c1WithBday < STAGE1_GOALS.circle1WithBirthday) {
+      const needed = STAGE1_GOALS.circle1WithBirthday - c1WithBday;
+      recommended.push({
         id: "fill-c1",
         priority: "yellow",
         title: "Fill your Core Circle",
         subtitle: `${needed} more Core friend${needed !== 1 ? "s" : ""} with birthdays needed`,
         onPress: () => {
           onClose();
-          router.push({ pathname: "/(tabs)/circles" });
+          router.push({ pathname: "/(tabs)/circles", params: { circle: "1" } });
         },
       });
     }
 
-    if (circle2.length < C2_GOAL) {
-      const needed = C2_GOAL - circle2.length;
-      result.push({
+    if (circle2.length < STAGE1_GOALS.circle2) {
+      const needed = STAGE1_GOALS.circle2 - circle2.length;
+      recommended.push({
         id: "fill-c2",
         priority: "yellow",
         title: "Add Close Friends",
         subtitle: `${needed} more person${needed !== 1 ? "s" : ""} needed`,
         onPress: () => {
           onClose();
-          router.push({ pathname: "/(tabs)/circles" });
+          router.push({ pathname: "/(tabs)/circles", params: { circle: "2" } });
         },
       });
     }
 
-    if (circle3.length < C3_GOAL) {
-      result.push({
+    if (circle3.length < STAGE1_GOALS.circle3) {
+      recommended.push({
         id: "fill-c3",
         priority: "yellow",
         title: "Add an Acquaintance",
         subtitle: "Start building your outer circle",
         onPress: () => {
           onClose();
-          router.push({ pathname: "/(tabs)/circles" });
+          router.push({ pathname: "/(tabs)/circles", params: { circle: "3" } });
         },
       });
     }
 
-    return result;
+    return { urgent, recommended };
   }, [contacts, onClose]);
 
+  const totalTasks = urgent.length + recommended.length;
   const dotColor = computeBellDotColor(contacts, isComplete);
+
+  function renderTask(task: BellTask) {
+    return (
+      <Pressable
+        key={task.id}
+        onPress={() => {
+          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+          task.onPress();
+        }}
+        style={({ pressed }) => [styles.taskItem, pressed && { opacity: 0.7 }]}
+      >
+        <View
+          style={[
+            styles.taskDot,
+            { backgroundColor: task.priority === "red" ? Colors.danger : Colors.warning },
+          ]}
+        />
+        <View style={styles.taskContent}>
+          <Text style={styles.taskTitle}>{task.title}</Text>
+          <Text style={styles.taskSubtitle}>{task.subtitle}</Text>
+        </View>
+        <Ionicons name="chevron-forward" size={16} color={Colors.textTertiary} />
+      </Pressable>
+    );
+  }
 
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
@@ -125,7 +151,7 @@ export function BellSheet({ visible, onClose, contacts, isComplete }: BellSheetP
         <View style={styles.handle} />
         <View style={styles.sheetHeader}>
           {dotColor ? (
-            <View style={[styles.dotIndicator, { backgroundColor: tasks.length === 0 ? Colors.success : dotColor }]} />
+            <View style={[styles.dotIndicator, { backgroundColor: totalTasks === 0 ? Colors.success : dotColor }]} />
           ) : null}
           <Text style={styles.sheetTitle}>Profile Completion</Text>
           <Pressable
@@ -137,7 +163,7 @@ export function BellSheet({ visible, onClose, contacts, isComplete }: BellSheetP
           </Pressable>
         </View>
 
-        {tasks.length === 0 ? (
+        {totalTasks === 0 ? (
           <View style={styles.allDoneContainer}>
             <Ionicons name="checkmark-circle" size={40} color={Colors.success} />
             <Text style={styles.allDoneTitle}>Your circles are complete</Text>
@@ -145,28 +171,18 @@ export function BellSheet({ visible, onClose, contacts, isComplete }: BellSheetP
           </View>
         ) : (
           <ScrollView showsVerticalScrollIndicator={false} style={styles.taskList}>
-            {tasks.map((task) => (
-              <Pressable
-                key={task.id}
-                onPress={() => {
-                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                  task.onPress();
-                }}
-                style={({ pressed }) => [styles.taskItem, pressed && { opacity: 0.7 }]}
-              >
-                <View
-                  style={[
-                    styles.taskDot,
-                    { backgroundColor: task.priority === "red" ? Colors.danger : Colors.warning },
-                  ]}
-                />
-                <View style={styles.taskContent}>
-                  <Text style={styles.taskTitle}>{task.title}</Text>
-                  <Text style={styles.taskSubtitle}>{task.subtitle}</Text>
-                </View>
-                <Ionicons name="chevron-forward" size={16} color={Colors.textTertiary} />
-              </Pressable>
-            ))}
+            {urgent.length > 0 && (
+              <>
+                <Text style={styles.groupLabel}>Action Required</Text>
+                {urgent.map(renderTask)}
+              </>
+            )}
+            {recommended.length > 0 && (
+              <>
+                <Text style={[styles.groupLabel, urgent.length > 0 && { marginTop: 16 }]}>Recommended</Text>
+                {recommended.map(renderTask)}
+              </>
+            )}
           </ScrollView>
         )}
       </View>
@@ -233,6 +249,14 @@ const styles = StyleSheet.create({
   },
   taskList: {
     maxHeight: 420,
+  },
+  groupLabel: {
+    fontSize: 11,
+    fontFamily: "Nunito_700Bold",
+    color: Colors.textTertiary,
+    letterSpacing: 0.5,
+    textTransform: "uppercase",
+    marginBottom: 4,
   },
   taskItem: {
     flexDirection: "row",
