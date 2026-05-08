@@ -60,7 +60,9 @@ export default function AddContactScreen() {
   const [customLabelInput, setCustomLabelInput] = useState("");
   const [phone, setPhone] = useState(params.prefillPhone ?? "");
   const [email, setEmail] = useState("");
-  const [birthday, setBirthday] = useState(params.prefillBirthday ?? "");
+  const [birthday, setBirthday] = useState(
+    params.prefillBirthday ?? (initialCircle === 1 ? "03/23" : ""),
+  );
   const [birthdayError, setBirthdayError] = useState(false);
   const [notes, setNotes] = useState("");
   const [photoUri, setPhotoUri] = useState<string | null>(
@@ -294,6 +296,11 @@ export default function AddContactScreen() {
                       if (birthdayError) setBirthdayError(false);
                     }}
                   />
+                  {birthdayError && (
+                    <Text style={styles.birthdayInlineError}>
+                      Birthday is required for Core Circle
+                    </Text>
+                  )}
                   <Pressable
                     onPress={() => setShowBirthdayPicker(false)}
                     style={({ pressed }) => [styles.pickerDoneBtn, pressed && { opacity: 0.7 }]}
@@ -643,6 +650,13 @@ const styles = StyleSheet.create({
     color: Colors.accent,
     marginBottom: 10,
     textAlign: "center",
+  },
+  birthdayInlineError: {
+    fontSize: 12,
+    fontFamily: "Nunito_600SemiBold",
+    color: Colors.danger,
+    marginTop: 8,
+    marginBottom: 4,
   },
   pickerDoneBtn: {
     marginTop: 10,

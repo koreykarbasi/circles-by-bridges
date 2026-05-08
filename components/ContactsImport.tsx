@@ -67,17 +67,17 @@ export function ContactsImport({ selectedContacts, onSelect, onDeselect, maxSele
           .filter((c) => c.name)
           .map((c) => {
             let birthday: string | undefined;
-            if (c.birthday) {
-              const rawMonth = c.birthday.month ?? 0;
-              const month = rawMonth < 12 ? rawMonth + 1 : rawMonth;
-              birthday = `${String(month).padStart(2, "0")}/${String(c.birthday.day ?? 1).padStart(2, "0")}`;
+            if (c.birthday && c.birthday.month != null && c.birthday.day != null) {
+              const month = c.birthday.month + 1;
+              birthday = `${String(month).padStart(2, "0")}/${String(c.birthday.day).padStart(2, "0")}`;
             }
+            const photoUri = c.imageAvailable && c.image?.uri ? c.image.uri : undefined;
             return {
               id: c.id ?? c.name ?? "",
               name: c.name ?? "",
               phone: c.phoneNumbers?.[0]?.number,
               birthday,
-              photoUri: (c as any).image?.uri ?? (c as any).imageAvailable ? (c as any).image?.uri : undefined,
+              photoUri,
             };
           });
         setDeviceContacts(mapped);

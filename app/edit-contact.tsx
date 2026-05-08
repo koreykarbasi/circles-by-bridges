@@ -328,6 +328,11 @@ export default function EditContactScreen() {
                       if (birthdayError) setBirthdayError(false);
                     }}
                   />
+                  {birthdayError && (
+                    <Text style={styles.birthdayInlineError}>
+                      Birthday is required for Core Circle
+                    </Text>
+                  )}
                   <Pressable
                     onPress={() => setShowBirthdayPicker(false)}
                     style={({ pressed }) => [styles.pickerDoneBtn, pressed && { opacity: 0.7 }]}
@@ -722,6 +727,13 @@ const styles = StyleSheet.create({
     color: Colors.accent,
     marginBottom: 10,
     textAlign: "center",
+  },
+  birthdayInlineError: {
+    fontSize: 12,
+    fontFamily: "Nunito_600SemiBold",
+    color: Colors.danger,
+    marginTop: 8,
+    marginBottom: 4,
   },
   pickerDoneBtn: {
     marginTop: 10,
