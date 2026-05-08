@@ -10,6 +10,7 @@ export interface Contact {
   labels: string[];
   notes?: string | null;
   phone?: string | null;
+  email?: string | null;
   avatarColor: string;
   photoUri?: string | null;
   createdAt?: string | null;

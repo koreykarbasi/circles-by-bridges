@@ -29,6 +29,7 @@ export const contacts = pgTable("contacts", {
   labels: text("labels").array().notNull().default(sql`'{}'::text[]`),
   notes: text("notes"),
   phone: text("phone"),
+  email: text("email"),
   avatarColor: text("avatar_color").notNull(),
   photoUri: text("photo_uri"),
   createdAt: timestamp("created_at").defaultNow(),

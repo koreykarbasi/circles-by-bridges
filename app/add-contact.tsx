@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import {
   View,
   Text,
@@ -18,6 +18,7 @@ import Colors from "@/constants/colors";
 import { useContacts } from "@/lib/contacts-context";
 import { CIRCLE_CONFIG } from "@/lib/types";
 import { AVAILABLE_INTERESTS } from "@/lib/prompts";
+import { DateWheelPicker } from "@/components/DateWheelPicker";
 import * as Haptics from "expo-haptics";
 
 const PREDEFINED_LABELS = [
@@ -26,23 +27,55 @@ const PREDEFINED_LABELS = [
   "Mentor", "Mentee",
 ];
 
+const MONTH_NAMES = [
+  "January", "February", "March", "April", "May", "June",
+  "July", "August", "September", "October", "November", "December",
+];
+
+function formatBirthdayDisplay(birthday: string): string {
+  const mmdd = birthday.match(/^(\d{1,2})\/(\d{1,2})$/);
+  if (!mmdd) return birthday;
+  const m = parseInt(mmdd[1], 10) - 1;
+  const d = parseInt(mmdd[2], 10);
+  if (m < 0 || m > 11) return birthday;
+  return `${MONTH_NAMES[m]} ${d}`;
+}
+
 export default function AddContactScreen() {
   const insets = useSafeAreaInsets();
   const { addContact, getCircleContacts } = useContacts();
-  const params = useLocalSearchParams<{ circle?: string }>();
+  const params = useLocalSearchParams<{
+    circle?: string;
+    prefillName?: string;
+    prefillPhone?: string;
+    prefillBirthday?: string;
+  }>();
   const initialCircle = params.circle ? (parseInt(params.circle) as 1 | 2 | 3) : 1;
 
-  const [name, setName] = useState("");
+  const [name, setName] = useState(params.prefillName ?? "");
   const [circleLevel, setCircleLevel] = useState<1 | 2 | 3>(initialCircle);
   const [selectedInterests, setSelectedInterests] = useState<string[]>([]);
   const [selectedLabels, setSelectedLabels] = useState<string[]>([]);
   const [customLabelInput, setCustomLabelInput] = useState("");
-  const [phone, setPhone] = useState("");
-  const [birthday, setBirthday] = useState("");
+  const [phone, setPhone] = useState(params.prefillPhone ?? "");
+  const [email, setEmail] = useState("");
+  const [birthday, setBirthday] = useState(params.prefillBirthday ?? "");
   const [birthdayError, setBirthdayError] = useState(false);
   const [notes, setNotes] = useState("");
   const [photoUri, setPhotoUri] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const [showBirthdayPicker, setShowBirthdayPicker] = useState(
+    !!params.prefillBirthday || initialCircle === 1,
+  );
+  const [showMoreDetails, setShowMoreDetails] = useState(
+    !!(params.prefillPhone),
+  );
+
+  useEffect(() => {
+    if (circleLevel === 1 && !birthday) {
+      setShowBirthdayPicker(true);
+    }
+  }, [circleLevel]);
 
   const pickPhoto = async () => {
     const result = await ImagePicker.launchImageLibraryAsync({
@@ -99,6 +132,7 @@ export default function AddContactScreen() {
 
     if (circleLevel === 1 && !birthday.trim()) {
       setBirthdayError(true);
+      setShowBirthdayPicker(true);
       Alert.alert("Birthday required", "Birthday is required for Core Circle contacts.");
       return;
     }
@@ -124,6 +158,7 @@ export default function AddContactScreen() {
       birthday: birthday.trim() || undefined,
       notes: notes.trim() || undefined,
       phone: phone.trim() || undefined,
+      email: email.trim() || undefined,
       lastContacted: undefined,
       photoUri: photoUri || undefined,
     });
@@ -185,20 +220,8 @@ export default function AddContactScreen() {
             placeholderTextColor={Colors.textTertiary}
             value={name}
             onChangeText={setName}
-            autoFocus
+            autoFocus={!params.prefillName}
             autoCapitalize="words"
-          />
-        </View>
-
-        <View style={styles.inputGroup}>
-          <Text style={styles.label}>Phone (optional)</Text>
-          <TextInput
-            style={styles.input}
-            placeholder="Enter phone number"
-            placeholderTextColor={Colors.textTertiary}
-            value={phone}
-            onChangeText={setPhone}
-            keyboardType="phone-pad"
           />
         </View>
 
@@ -235,6 +258,84 @@ export default function AddContactScreen() {
               );
             })}
           </View>
+        </View>
+
+        <View style={styles.inputGroup}>
+          <View style={styles.birthdayHeader}>
+            <Text style={styles.label}>
+              Birthday{circleLevel === 1 ? " (required)" : " (optional)"}
+            </Text>
+            {birthday ? (
+              <Pressable
+                onPress={() => {
+                  setBirthday("");
+                  setBirthdayError(false);
+                  setShowBirthdayPicker(false);
+                }}
+                hitSlop={8}
+              >
+                <Text style={styles.clearText}>Clear</Text>
+              </Pressable>
+            ) : null}
+          </View>
+
+          {!showBirthdayPicker && !birthday ? (
+            <Pressable
+              onPress={() => {
+                Haptics.selectionAsync();
+                setShowBirthdayPicker(true);
+                if (!birthday) setBirthday("03/23");
+              }}
+              style={({ pressed }) => [
+                styles.birthdayTrigger,
+                birthdayError && styles.birthdayTriggerError,
+                pressed && { opacity: 0.7 },
+              ]}
+            >
+              <Ionicons name="gift-outline" size={18} color={birthdayError ? Colors.danger : Colors.textTertiary} />
+              <Text style={[styles.birthdayTriggerText, birthdayError && { color: Colors.danger }]}>
+                {birthdayError ? "Birthday is required for Core Circle" : "Set birthday"}
+              </Text>
+            </Pressable>
+          ) : (
+            <View>
+              {birthday && !showBirthdayPicker && (
+                <Pressable
+                  onPress={() => {
+                    Haptics.selectionAsync();
+                    setShowBirthdayPicker(true);
+                  }}
+                  style={({ pressed }) => [styles.birthdayDisplay, pressed && { opacity: 0.7 }]}
+                >
+                  <Ionicons name="gift-outline" size={18} color={Colors.accent} />
+                  <Text style={styles.birthdayDisplayText}>{formatBirthdayDisplay(birthday)}</Text>
+                  <Ionicons name="pencil-outline" size={15} color={Colors.textTertiary} />
+                </Pressable>
+              )}
+              {showBirthdayPicker && (
+                <>
+                  {birthday && (
+                    <Text style={styles.birthdaySelectedText}>
+                      {formatBirthdayDisplay(birthday)}
+                    </Text>
+                  )}
+                  <DateWheelPicker
+                    value={birthday || "03/23"}
+                    onChange={(val) => {
+                      setBirthday(val);
+                      if (birthdayError) setBirthdayError(false);
+                    }}
+                  />
+                  <Pressable
+                    onPress={() => setShowBirthdayPicker(false)}
+                    style={({ pressed }) => [styles.pickerDoneBtn, pressed && { opacity: 0.7 }]}
+                  >
+                    <Text style={styles.pickerDoneText}>Confirm</Text>
+                  </Pressable>
+                </>
+              )}
+            </View>
+          )}
         </View>
 
         <View style={styles.inputGroup}>
@@ -330,26 +431,6 @@ export default function AddContactScreen() {
         </View>
 
         <View style={styles.inputGroup}>
-          <Text style={styles.label}>
-            Birthday{circleLevel === 1 ? " (required)" : " (optional)"}
-          </Text>
-          <TextInput
-            style={[styles.input, birthdayError && styles.inputError]}
-            placeholder="MM/DD (e.g. 03/15)"
-            placeholderTextColor={Colors.textTertiary}
-            value={birthday}
-            onChangeText={(text) => {
-              setBirthday(text);
-              if (birthdayError) setBirthdayError(false);
-            }}
-            keyboardType="numbers-and-punctuation"
-          />
-          {birthdayError && (
-            <Text style={styles.errorHint}>Birthday is required for Core Circle</Text>
-          )}
-        </View>
-
-        <View style={styles.inputGroup}>
           <Text style={styles.label}>Notes (optional)</Text>
           <TextInput
             style={[styles.input, styles.multilineInput]}
@@ -361,6 +442,51 @@ export default function AddContactScreen() {
             numberOfLines={3}
           />
         </View>
+
+        <Pressable
+          onPress={() => {
+            Haptics.selectionAsync();
+            setShowMoreDetails((v) => !v);
+          }}
+          style={({ pressed }) => [styles.moreDetailsToggle, pressed && { opacity: 0.7 }]}
+        >
+          <Ionicons
+            name={showMoreDetails ? "chevron-up" : "chevron-down"}
+            size={16}
+            color={Colors.textTertiary}
+          />
+          <Text style={styles.moreDetailsText}>
+            {showMoreDetails ? "Fewer details" : "More details (phone, email)"}
+          </Text>
+        </Pressable>
+
+        {showMoreDetails && (
+          <View>
+            <View style={styles.inputGroup}>
+              <Text style={styles.label}>Phone (optional)</Text>
+              <TextInput
+                style={styles.input}
+                placeholder="Enter phone number"
+                placeholderTextColor={Colors.textTertiary}
+                value={phone}
+                onChangeText={setPhone}
+                keyboardType="phone-pad"
+              />
+            </View>
+            <View style={styles.inputGroup}>
+              <Text style={styles.label}>Email (optional)</Text>
+              <TextInput
+                style={styles.input}
+                placeholder="Enter email address"
+                placeholderTextColor={Colors.textTertiary}
+                value={email}
+                onChangeText={setEmail}
+                keyboardType="email-address"
+                autoCapitalize="none"
+              />
+            </View>
+          </View>
+        )}
 
         <Pressable
           onPress={handleSave}
@@ -458,6 +584,74 @@ const styles = StyleSheet.create({
     fontFamily: "Nunito_600SemiBold",
     color: Colors.textTertiary,
   },
+  birthdayHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: 8,
+  },
+  clearText: {
+    fontSize: 13,
+    fontFamily: "Nunito_600SemiBold",
+    color: Colors.textTertiary,
+  },
+  birthdayTrigger: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    backgroundColor: Colors.surface,
+    borderRadius: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    borderWidth: 1,
+    borderColor: Colors.borderLight,
+  },
+  birthdayTriggerError: {
+    borderColor: Colors.danger,
+    borderWidth: 1.5,
+  },
+  birthdayTriggerText: {
+    fontSize: 15,
+    fontFamily: "Nunito_400Regular",
+    color: Colors.textTertiary,
+  },
+  birthdayDisplay: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    backgroundColor: Colors.accent + "12",
+    borderRadius: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderWidth: 1,
+    borderColor: Colors.accent + "30",
+    marginBottom: 10,
+  },
+  birthdayDisplayText: {
+    flex: 1,
+    fontSize: 15,
+    fontFamily: "Nunito_600SemiBold",
+    color: Colors.accent,
+  },
+  birthdaySelectedText: {
+    fontSize: 14,
+    fontFamily: "Nunito_600SemiBold",
+    color: Colors.accent,
+    marginBottom: 10,
+    textAlign: "center",
+  },
+  pickerDoneBtn: {
+    marginTop: 10,
+    paddingVertical: 10,
+    alignItems: "center",
+    backgroundColor: Colors.primary + "15",
+    borderRadius: 10,
+  },
+  pickerDoneText: {
+    fontSize: 14,
+    fontFamily: "Nunito_700Bold",
+    color: Colors.primary,
+  },
   interestsGrid: {
     flexDirection: "row",
     flexWrap: "wrap",
@@ -527,15 +721,17 @@ const styles = StyleSheet.create({
   addLabelBtnDisabled: {
     borderColor: Colors.borderLight,
   },
-  inputError: {
-    borderColor: Colors.danger,
-    borderWidth: 1.5,
+  moreDetailsToggle: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    marginBottom: 20,
+    paddingVertical: 8,
   },
-  errorHint: {
-    fontSize: 12,
+  moreDetailsText: {
+    fontSize: 14,
     fontFamily: "Nunito_600SemiBold",
-    color: Colors.danger,
-    marginTop: 6,
+    color: Colors.textSecondary,
   },
   photoSection: {
     alignItems: "center",

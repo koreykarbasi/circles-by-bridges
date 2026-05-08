@@ -16,10 +16,17 @@ interface ContactCardProps {
   showCircleLabel?: boolean;
 }
 
+function isMissingBirthday(contact: Contact): boolean {
+  return (contact.circleLevel === 1 || contact.circleLevel === 2) && !contact.birthday;
+}
+
 export function ContactCard({ contact, onPress, onMarkContacted, onPlanHangout, showCircleLabel }: ContactCardProps) {
   const urgency = getContactUrgency(contact.circleLevel as 1 | 2 | 3, contact.lastContacted ?? undefined);
   const circleColor = CIRCLE_CONFIG[contact.circleLevel as 1 | 2 | 3]?.color ?? Colors.primary;
   const flashAnim = useRef(new Animated.Value(0)).current;
+
+  const incomplete = isMissingBirthday(contact);
+  const badgeColor = contact.circleLevel === 1 ? Colors.danger : Colors.warning;
 
   const handleMarkContacted = () => {
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
@@ -40,17 +47,18 @@ export function ContactCard({ contact, onPress, onMarkContacted, onPlanHangout, 
       onPress={onPress}
       style={({ pressed }) => [
         styles.container,
+        incomplete && { borderColor: badgeColor + "55", borderWidth: 1.5 },
         pressed && styles.pressed,
       ]}
     >
       <View style={styles.avatarWrapper}>
         <Avatar name={contact.name} color={contact.avatarColor} size={48} photoUri={contact.photoUri} />
-        <Animated.View
-          style={[
-            styles.avatarFlash,
-            { opacity: flashOpacity },
-          ]}
-        />
+        <Animated.View style={[styles.avatarFlash, { opacity: flashOpacity }]} />
+        {incomplete && (
+          <View style={[styles.incompleteBadge, { backgroundColor: badgeColor }]}>
+            <Text style={styles.incompleteBadgeText}>!</Text>
+          </View>
+        )}
       </View>
       <View style={styles.info}>
         <View style={styles.nameRow}>
@@ -88,36 +96,37 @@ export function ContactCard({ contact, onPress, onMarkContacted, onPlanHangout, 
             </Text>
           )}
         </View>
-      </View>
-      <View style={styles.actions}>
-        {onPlanHangout && (
-          <Pressable
-            onPress={() => {
-              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-              onPlanHangout();
-            }}
-            hitSlop={8}
-            style={({ pressed }) => [
-              styles.actionButton,
-              pressed && { opacity: 0.5 },
-            ]}
-          >
-            <Ionicons name="calendar-outline" size={22} color={Colors.primary} />
-          </Pressable>
-        )}
-        {onMarkContacted && (
-          <Pressable
-            onPress={handleMarkContacted}
-            hitSlop={8}
-            style={({ pressed }) => [
-              styles.actionButton,
-              pressed && { opacity: 0.5 },
-            ]}
-          >
-            <Ionicons name="checkmark-circle-outline" size={26} color={Colors.primaryLight} />
-          </Pressable>
+        {incomplete && (
+          <Text style={[styles.incompleteHint, { color: badgeColor }]}>
+            Add birthday to unlock reminders
+          </Text>
         )}
       </View>
+      {!incomplete && (
+        <View style={styles.actions}>
+          {onPlanHangout && (
+            <Pressable
+              onPress={() => {
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                onPlanHangout();
+              }}
+              hitSlop={8}
+              style={({ pressed }) => [styles.actionButton, pressed && { opacity: 0.5 }]}
+            >
+              <Ionicons name="calendar-outline" size={22} color={Colors.primary} />
+            </Pressable>
+          )}
+          {onMarkContacted && (
+            <Pressable
+              onPress={handleMarkContacted}
+              hitSlop={8}
+              style={({ pressed }) => [styles.actionButton, pressed && { opacity: 0.5 }]}
+            >
+              <Ionicons name="checkmark-circle-outline" size={26} color={Colors.primaryLight} />
+            </Pressable>
+          )}
+        </View>
+      )}
     </Pressable>
   );
 }
@@ -198,6 +207,29 @@ const styles = StyleSheet.create({
     color: Colors.textTertiary,
     marginLeft: 4,
     flexShrink: 1,
+  },
+  incompleteBadge: {
+    position: "absolute",
+    top: -3,
+    right: -3,
+    width: 18,
+    height: 18,
+    borderRadius: 9,
+    alignItems: "center",
+    justifyContent: "center",
+    borderWidth: 1.5,
+    borderColor: Colors.background,
+  },
+  incompleteBadgeText: {
+    fontSize: 11,
+    fontFamily: "Nunito_800ExtraBold",
+    color: "#fff",
+    lineHeight: 13,
+  },
+  incompleteHint: {
+    fontSize: 11,
+    fontFamily: "Nunito_600SemiBold",
+    marginTop: 3,
   },
   actions: {
     flexDirection: "row",

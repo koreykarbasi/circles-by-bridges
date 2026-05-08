@@ -33,7 +33,7 @@ const MAX_PHOTO_CHARS = 7 * 1024 * 1024;
 
 const CONTACT_WRITABLE_FIELDS = new Set([
   "name", "circleLevel", "interests", "labels", "birthday",
-  "lastContacted", "lastHangout", "notes", "phone", "photoUri",
+  "lastContacted", "lastHangout", "notes", "phone", "email", "photoUri",
 ]);
 
 type SafeContactUpdate = Partial<Omit<InsertContact, "userId" | "avatarColor">>;

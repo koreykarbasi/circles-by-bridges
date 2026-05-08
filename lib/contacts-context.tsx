@@ -76,6 +76,7 @@ export function ContactsProvider({ children }: { children: ReactNode }) {
       lastHangout: contact.lastHangout,
       notes: contact.notes,
       phone: contact.phone,
+      email: contact.email,
       avatarColor: contact.avatarColor,
       photoUri: contact.photoUri,
     });

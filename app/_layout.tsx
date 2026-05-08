@@ -138,6 +138,14 @@ function RootLayoutNav() {
         name="hangout-detail"
         options={{ headerShown: false, presentation: "modal" }}
       />
+      <Stack.Screen
+        name="import-contacts"
+        options={{ headerShown: false, presentation: "modal" }}
+      />
+      <Stack.Screen
+        name="complete-contacts"
+        options={{ headerShown: false, presentation: "modal" }}
+      />
     </Stack>
   );
 }

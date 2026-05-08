@@ -16,8 +16,19 @@ export function getDaysSince(dateStr?: string): number | null {
 export function getDaysUntilBirthday(birthday?: string): number | null {
   if (!birthday) return null;
   const now = new Date();
-  const bday = new Date(birthday);
-  const thisYear = new Date(now.getFullYear(), bday.getMonth(), bday.getDate());
+  let month: number, day: number;
+  const mmdd = birthday.match(/^(\d{1,2})\/(\d{1,2})$/);
+  if (mmdd) {
+    month = parseInt(mmdd[1], 10) - 1;
+    day = parseInt(mmdd[2], 10);
+  } else {
+    const bday = new Date(birthday);
+    if (isNaN(bday.getTime())) return null;
+    month = bday.getMonth();
+    day = bday.getDate();
+  }
+  if (isNaN(month) || isNaN(day)) return null;
+  const thisYear = new Date(now.getFullYear(), month, day);
   if (thisYear < now) {
     thisYear.setFullYear(thisYear.getFullYear() + 1);
   }

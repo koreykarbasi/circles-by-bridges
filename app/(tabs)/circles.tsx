@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useEffect, useRef } from "react";
-import { View, Text, StyleSheet, ScrollView, Pressable, TextInput, Platform } from "react-native";
+import { View, Text, StyleSheet, ScrollView, Pressable, TextInput, Platform, Alert } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import Colors from "@/constants/colors";
@@ -34,6 +34,27 @@ export default function CirclesScreen() {
   const profileCompletion = useMemo(() => computeProfileCompletion(contacts), [contacts]);
   const webTopInset = Platform.OS === "web" ? 67 : 0;
 
+  const showAddOptions = () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    Alert.alert(
+      `Add to ${config.label}`,
+      undefined,
+      [
+        {
+          text: "Import from Contacts",
+          onPress: () =>
+            router.push({ pathname: "/import-contacts", params: { circle: String(activeCircle) } }),
+        },
+        {
+          text: "Add Manually",
+          onPress: () =>
+            router.push({ pathname: "/add-contact", params: { circle: String(activeCircle) } }),
+        },
+        { text: "Cancel", style: "cancel" },
+      ],
+    );
+  };
+
   return (
     <View style={styles.container}>
       <ScrollView
@@ -58,10 +79,7 @@ export default function CirclesScreen() {
               <Ionicons name="calendar-outline" size={22} color={Colors.primaryLight} />
             </Pressable>
             <Pressable
-              onPress={() => {
-                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-                router.push({ pathname: "/add-contact", params: { circle: String(activeCircle) } });
-              }}
+              onPress={showAddOptions}
               style={({ pressed }) => [styles.addButton, pressed && { opacity: 0.7 }]}
             >
               <Ionicons name="add" size={24} color="#fff" />
@@ -147,7 +165,7 @@ export default function CirclesScreen() {
             title={`No one in ${config.label}`}
             subtitle={`Add up to ${config.max} people to this circle`}
             actionLabel="Add someone"
-            onAction={() => router.push({ pathname: "/add-contact", params: { circle: String(activeCircle) } })}
+            onAction={showAddOptions}
           />
         ) : filteredContacts.length === 0 ? (
           <View style={styles.noResults}>
@@ -182,10 +200,7 @@ export default function CirclesScreen() {
             ))}
             {!searchQuery && circleContacts.length < config.max && (
               <Pressable
-                onPress={() => {
-                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                  router.push({ pathname: "/add-contact", params: { circle: String(activeCircle) } });
-                }}
+                onPress={showAddOptions}
                 style={({ pressed }) => [styles.addSomeoneButton, pressed && { opacity: 0.7 }]}
               >
                 <View style={styles.addSomeoneIcon}>
