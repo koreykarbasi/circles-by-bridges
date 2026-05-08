@@ -434,6 +434,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  app.post("/api/contacts/:id/mark-hangout", requireAuth, async (req, res) => {
+    try {
+      const { id } = req.params as { id: string };
+      const existing = await storage.getContact(id);
+      if (!existing || existing.userId !== req.session.userId) {
+        return res.status(404).json({ message: "Contact not found" });
+      }
+      const contact = await storage.updateContact(id, {
+        lastHangout: new Date().toISOString(),
+      });
+      res.json(contact);
+    } catch (err) {
+      console.error("Error marking hangout:", err);
+      res.status(500).json({ message: "Failed to mark hangout" });
+    }
+  });
+
   // ---- Hangout Plans ----
 
   app.get("/api/hangouts", requireAuth, async (req, res) => {

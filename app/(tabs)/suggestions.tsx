@@ -424,23 +424,32 @@ export default function SuggestionsScreen() {
           subtitle="You've completed all suggestions. Tap below for new ones."
         />
       ) : (
-        allSuggestions.map((s) => (
-          <SuggestionCard
-            key={s.contact.id + "-" + (s.isCircle3Nudge ? "nudge" : refreshKey)}
-            contactName={s.contact.name}
-            avatarColor={s.contact.avatarColor}
-            photoUri={s.contact.photoUri}
-            prompt={s.prompt}
-            type={s.type}
-            circleLevel={s.contact.circleLevel as 1 | 2 | 3}
-            urgency={s.urgency}
-            birthdayLabel={s.birthdayLabel}
-            lastContactedLabel={s.lastContactedLabel}
-            onDone={() => handleDone(s.contact.id)}
-            onRefresh={() => handleRefreshSingle(s.contact.id, s.prompt)}
-            onCopyText={s.type === "text" ? () => handleCopyText(s.contact.id) : undefined}
-          />
-        ))
+        allSuggestions.map((s) => {
+          const daysSinceContact = getDaysSince(s.contact.lastContacted ?? undefined);
+          const daysUntilBday = getDaysUntilBirthday(s.contact.birthday ?? undefined);
+          const hasBirthdaySoon = daysUntilBday !== null && daysUntilBday <= 14;
+          return (
+            <SuggestionCard
+              key={s.contact.id + "-" + (s.isCircle3Nudge ? "nudge" : refreshKey)}
+              contactName={s.contact.name}
+              avatarColor={s.contact.avatarColor}
+              photoUri={s.contact.photoUri}
+              prompt={s.prompt}
+              type={s.type}
+              circleLevel={s.contact.circleLevel as 1 | 2 | 3}
+              urgency={s.urgency}
+              birthdayLabel={s.birthdayLabel}
+              lastContactedLabel={s.lastContactedLabel}
+              interests={s.contact.interests}
+              labels={s.contact.labels}
+              daysSinceContact={daysSinceContact}
+              hasBirthdaySoon={hasBirthdaySoon}
+              onDone={() => handleDone(s.contact.id)}
+              onRefresh={() => handleRefreshSingle(s.contact.id, s.prompt)}
+              onCopyText={s.type === "text" ? () => handleCopyText(s.contact.id) : undefined}
+            />
+          );
+        })
       )}
 
       <Pressable

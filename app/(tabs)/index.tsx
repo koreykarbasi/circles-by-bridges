@@ -1,5 +1,5 @@
 import React, { useState, useCallback, useMemo, useEffect, useRef } from "react";
-import { View, Text, StyleSheet, ScrollView, Platform, RefreshControl, Pressable, Image } from "react-native";
+import { View, Text, StyleSheet, ScrollView, Platform, RefreshControl, Pressable, Image, Animated } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import Colors from "@/constants/colors";
@@ -82,6 +82,9 @@ export default function HomeScreen() {
   const [lastSuggestedDates, setLastSuggestedDates] = useState<Record<string, string>>({});
   const [bellSheetOpen, setBellSheetOpen] = useState(false);
   const [shuffleCount, setShuffleCount] = useState(0);
+  const [copiedToast, setCopiedToast] = useState(false);
+  const copiedToastAnim = useRef(new Animated.Value(0)).current;
+  const copiedToastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const { data: hangouts } = useQuery<HangoutPlan[]>({
     queryKey: ["/api/hangouts"],
@@ -302,18 +305,42 @@ export default function HomeScreen() {
     [contacts],
   );
 
+  const showCopiedToast = useCallback(() => {
+    if (copiedToastTimer.current) clearTimeout(copiedToastTimer.current);
+    setCopiedToast(true);
+    Animated.timing(copiedToastAnim, { toValue: 1, duration: 180, useNativeDriver: true }).start();
+    copiedToastTimer.current = setTimeout(() => {
+      Animated.timing(copiedToastAnim, { toValue: 0, duration: 280, useNativeDriver: true }).start(() => {
+        setCopiedToast(false);
+      });
+    }, 1800);
+  }, [copiedToastAnim]);
+
   const handleSuggestionCopyText = useCallback(
     async (suggestion: Suggestion) => {
-      const message = getTextCopyMessage(suggestion.contactName);
+      const contact = contacts.find((c) => c.id === suggestion.contactId);
+      const daysSinceContact = getDaysSince(contact?.lastContacted ?? undefined);
+      const daysUntilBday = getDaysUntilBirthday(contact?.birthday ?? undefined);
+      const hasBirthdaySoon = daysUntilBday !== null && daysUntilBday <= 30;
+
+      const message = getTextCopyMessage(suggestion.contactName, {
+        prompt: suggestion.prompt,
+        interests: contact?.interests ?? [],
+        labels: contact?.labels ?? [],
+        daysSinceContact,
+        hasBirthdaySoon,
+        circleLevel: suggestion.circleLevel,
+      });
       if (Platform.OS === "web") {
         try { await navigator.clipboard.writeText(message); } catch {}
       } else {
         await Clipboard.setStringAsync(message);
       }
+      showCopiedToast();
       setDismissedSuggestions((prev) => new Set(prev).add(suggestion.contactId));
       await markContacted(suggestion.contactId);
     },
-    [markContacted],
+    [markContacted, contacts, showCopiedToast],
   );
 
   const handleSuggestionHangout = useCallback(
@@ -351,6 +378,7 @@ export default function HomeScreen() {
   }, [hangouts, hangoutViewedMap]);
 
   return (
+    <View style={styles.screenWrapper}>
     <ScrollView
       style={styles.container}
       contentContainerStyle={[
@@ -581,6 +609,23 @@ export default function HomeScreen() {
         isComplete={profileCompletion.isComplete}
       />
     </ScrollView>
+
+    {copiedToast && (
+      <Animated.View
+        style={[
+          styles.copiedToast,
+          {
+            opacity: copiedToastAnim,
+            bottom: insets.bottom + 90 + (Platform.OS === "web" ? 34 : 0),
+          },
+        ]}
+        pointerEvents="none"
+      >
+        <Ionicons name="checkmark-circle" size={16} color={Colors.success} />
+        <Text style={styles.copiedToastText}>Text copied</Text>
+      </Animated.View>
+    )}
+    </View>
   );
 }
 
@@ -881,5 +926,32 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.primary,
     alignItems: "center",
     justifyContent: "center",
+  },
+  screenWrapper: {
+    flex: 1,
+    backgroundColor: Colors.background,
+  },
+  copiedToast: {
+    position: "absolute",
+    alignSelf: "center",
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    backgroundColor: Colors.surface,
+    borderWidth: 1,
+    borderColor: Colors.success + "40",
+    borderRadius: 20,
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.15,
+    shadowRadius: 6,
+    elevation: 4,
+  },
+  copiedToastText: {
+    fontSize: 13,
+    fontFamily: "Nunito_600SemiBold",
+    color: Colors.success,
   },
 });

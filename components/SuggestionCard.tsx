@@ -1,4 +1,4 @@
-import React, { useCallback } from "react";
+import React, { useCallback, useState, useEffect, useRef } from "react";
 import { View, Text, StyleSheet, Pressable, Platform } from "react-native";
 import Animated, { useSharedValue, useAnimatedStyle, withTiming, withSequence, runOnJS, Easing } from "react-native-reanimated";
 import { Ionicons } from "@expo/vector-icons";
@@ -17,6 +17,10 @@ interface SuggestionCardProps {
   urgency?: "overdue" | "soon" | "ok";
   birthdayLabel?: string;
   lastContactedLabel?: string;
+  interests?: string[];
+  labels?: string[];
+  daysSinceContact?: number | null;
+  hasBirthdaySoon?: boolean;
   onDone: () => void;
   onRefresh: () => void;
   onCopyText?: () => void;
@@ -35,27 +39,110 @@ const URGENCY_CONFIG = {
   ok: { color: Colors.success, label: "On track" },
 };
 
-const TEXT_COPY_TEMPLATES = [
-  "Hey {name}, I was just thinking about you — it's been a while! How have you been?",
-  "Hey {name}, randomly thought of you today. Hope everything's going well on your end!",
-  "Hey {name}, you crossed my mind — wanted to reach out. How's life treating you?",
-  "Hey {name}, it's been too long! I'd love to catch up sometime. What's new with you?",
-  "Hey {name}, just thinking about you and wanted to say hi. How are things?",
-  "Hey {name}, hope you're doing well! Was reminiscing the other day and thought of you.",
-  "Hey {name}, you've been on my mind lately. Hope everything's going your way!",
-  "Hey {name}, just wanted to reach out and check in. How has everything been?",
-  "Hey {name}, thinking of you today. Let's catch up soon!",
-  "Hey {name}, hope life's been treating you well. Would love to hear what's new with you.",
-  "Hey {name}, wanted to let you know I was thinking about you. How's everything going?",
-  "Hey {name}, it's been a minute! What's been keeping you busy lately?",
-  "Hey {name}, hope you're having a great week. Just wanted to say hi!",
-  "Hey {name}, feel like we haven't talked in forever. Hope you're doing amazing!",
-  "Hey {name}, just thought of you and had to say hello. How are you doing these days?",
+const OPENERS = [
+  "Hey {name}, I was just thinking about you",
+  "Hey {name}, you crossed my mind today",
+  "Hey {name}, randomly thought of you",
+  "Hey {name}, just wanted to reach out",
+  "Hey {name}, you've been on my mind",
 ];
 
-export function getTextCopyMessage(contactName: string): string {
-  const template = TEXT_COPY_TEMPLATES[Math.floor(Math.random() * TEXT_COPY_TEMPLATES.length)];
-  return template.replace("{name}", contactName);
+const GENERIC_CLOSINGS = [
+  "— hope you're doing well!",
+  "— hope life's been treating you well. How are things?",
+  "— just wanted to say hi. How's everything going?",
+  "— just wanted to check in. What's new?",
+  "— it would be great to catch up soon!",
+];
+
+const OVERDUE_CLOSINGS = [
+  "— it's been a while and I've been meaning to reach out!",
+  "— it's been too long! Would love to catch up.",
+  "— feels like ages! How have you been?",
+  "— I know it's been a minute. Hope everything's good!",
+];
+
+const BIRTHDAY_CLOSINGS = [
+  "— just wanted to wish you an early happy birthday! Hope it's a great one.",
+  "— your birthday is coming up and I didn't want to miss it. Hope you have an amazing day!",
+  "— had to reach out before your birthday. Hope you have the best one!",
+];
+
+function pick<T>(arr: T[]): T {
+  return arr[Math.floor(Math.random() * arr.length)];
+}
+
+export function getTextCopyMessage(
+  contactName: string,
+  options?: {
+    prompt?: string;
+    interests?: string[];
+    labels?: string[];
+    daysSinceContact?: number | null;
+    hasBirthdaySoon?: boolean;
+    circleLevel?: 1 | 2 | 3;
+  },
+): string {
+  const opener = pick(OPENERS).replace("{name}", contactName);
+  const {
+    prompt = "",
+    interests = [],
+    labels = [],
+    daysSinceContact,
+    hasBirthdaySoon,
+  } = options ?? {};
+
+  if (hasBirthdaySoon) {
+    return `${opener} ${pick(BIRTHDAY_CLOSINGS)}`;
+  }
+
+  const promptLower = prompt.toLowerCase();
+
+  if (interests.length > 0) {
+    for (const interest of interests) {
+      if (promptLower.includes(interest.toLowerCase())) {
+        return `${opener} — how's the ${interest.toLowerCase()} been going lately?`;
+      }
+    }
+    const hasInterestContext =
+      promptLower.includes("training") ||
+      promptLower.includes("recipe") ||
+      promptLower.includes("listen") ||
+      promptLower.includes("trip") ||
+      promptLower.includes("playing") ||
+      promptLower.includes("reading") ||
+      promptLower.includes("creat") ||
+      promptLower.includes("game") ||
+      promptLower.includes("workout") ||
+      promptLower.includes("hike");
+
+    if (hasInterestContext) {
+      const interest = pick(interests).toLowerCase();
+      return `${opener} — how's the ${interest} been going lately?`;
+    }
+  }
+
+  if (daysSinceContact !== null && daysSinceContact !== undefined && daysSinceContact > 45) {
+    return `${opener} ${pick(OVERDUE_CLOSINGS)}`;
+  }
+
+  if (labels.length > 0) {
+    const label = labels[0].toLowerCase();
+    if (label.includes("childhood") || label.includes("college")) {
+      return `${opener} — was just reminiscing about the old days!`;
+    }
+    if (label.includes("work")) {
+      return `${opener} — hope work has been going well for you!`;
+    }
+    if (label.includes("neighbor")) {
+      return `${opener} — hope things are good on your end!`;
+    }
+    if (label.includes("travel")) {
+      return `${opener} — been thinking about our last trip. Hope you're doing great!`;
+    }
+  }
+
+  return `${opener} ${pick(GENERIC_CLOSINGS)}`;
 }
 
 export function SuggestionCard({
@@ -68,6 +155,10 @@ export function SuggestionCard({
   urgency = "ok",
   birthdayLabel,
   lastContactedLabel,
+  interests = [],
+  labels = [],
+  daysSinceContact,
+  hasBirthdaySoon,
   onDone,
   onRefresh,
   onCopyText,
@@ -76,6 +167,10 @@ export function SuggestionCard({
   const circleColor = circleLevel === 1 ? Colors.circle1 : circleLevel === 2 ? Colors.circle2 : Colors.circle3;
   const typeConfig = TYPE_CONFIG[type];
   const urgencyConfig = URGENCY_CONFIG[urgency];
+
+  const [copiedVisible, setCopiedVisible] = useState(false);
+  const copiedTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const copiedOpacity = useSharedValue(0);
 
   const opacity = useSharedValue(1);
   const translateX = useSharedValue(0);
@@ -94,6 +189,27 @@ export function SuggestionCard({
   const refreshStyle = useAnimatedStyle(() => ({
     transform: [{ scale: refreshScale.value }],
   }));
+
+  const copiedStyle = useAnimatedStyle(() => ({
+    opacity: copiedOpacity.value,
+  }));
+
+  useEffect(() => {
+    return () => {
+      if (copiedTimer.current) clearTimeout(copiedTimer.current);
+    };
+  }, []);
+
+  const showCopiedToast = useCallback(() => {
+    setCopiedVisible(true);
+    copiedOpacity.value = withTiming(1, { duration: 180 });
+    if (copiedTimer.current) clearTimeout(copiedTimer.current);
+    copiedTimer.current = setTimeout(() => {
+      copiedOpacity.value = withTiming(0, { duration: 300 }, () => {
+        runOnJS(setCopiedVisible)(false);
+      });
+    }, 1600);
+  }, []);
 
   const handleDone = useCallback(() => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
@@ -122,7 +238,14 @@ export function SuggestionCard({
 
   const handleCopyText = useCallback(async () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    const message = getTextCopyMessage(contactName);
+    const message = getTextCopyMessage(contactName, {
+      prompt,
+      interests,
+      labels,
+      daysSinceContact,
+      hasBirthdaySoon,
+      circleLevel,
+    });
     if (Platform.OS === "web") {
       try {
         await navigator.clipboard.writeText(message);
@@ -130,8 +253,9 @@ export function SuggestionCard({
     } else {
       await Clipboard.setStringAsync(message);
     }
+    showCopiedToast();
     onCopyText?.();
-  }, [contactName, onCopyText]);
+  }, [contactName, prompt, interests, labels, daysSinceContact, hasBirthdaySoon, circleLevel, onCopyText, showCopiedToast]);
 
   const handlePlanHangout = useCallback(() => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -194,6 +318,15 @@ export function SuggestionCard({
           >
             <Ionicons name="calendar-outline" size={20} color={Colors.primaryLight} />
           </Pressable>
+        )}
+
+        <View style={{ flex: 1 }} />
+
+        {copiedVisible && (
+          <Animated.View style={[styles.copiedBadge, copiedStyle]}>
+            <Ionicons name="checkmark" size={12} color={Colors.success} />
+            <Text style={styles.copiedText}>Text copied</Text>
+          </Animated.View>
         )}
 
         <Pressable
@@ -285,11 +418,26 @@ const styles = StyleSheet.create({
   actions: {
     flexDirection: "row",
     alignItems: "center",
-    justifyContent: "flex-end",
-    gap: 8,
+    gap: 4,
   },
   iconButton: {
     padding: 8,
+  },
+  copiedBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 8,
+    backgroundColor: Colors.success + "15",
+    borderWidth: 1,
+    borderColor: Colors.success + "30",
+  },
+  copiedText: {
+    fontSize: 12,
+    fontFamily: "Nunito_600SemiBold",
+    color: Colors.success,
   },
   primaryButton: {
     flexDirection: "row",

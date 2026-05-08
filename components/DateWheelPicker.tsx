@@ -23,7 +23,7 @@ function daysInMonth(month1Based: number, year: number): number {
   return new Date(year, month1Based, 0).getDate();
 }
 
-function buildYears(): string[] {
+function buildBirthdayYears(): string[] {
   const result: string[] = [];
   for (let y = 1940; y <= new Date().getFullYear(); y++) {
     result.push(String(y));
@@ -31,7 +31,17 @@ function buildYears(): string[] {
   return result;
 }
 
-const ALL_YEARS = buildYears();
+function buildDeadlineYears(): string[] {
+  const result: string[] = [];
+  const current = new Date().getFullYear();
+  for (let y = current; y <= current + 4; y++) {
+    result.push(String(y));
+  }
+  return result;
+}
+
+const BIRTHDAY_YEARS = buildBirthdayYears();
+const DEADLINE_YEARS = buildDeadlineYears();
 
 interface WheelColumnProps {
   items: string[];
@@ -128,10 +138,11 @@ function WheelColumn({ items, selectedIndex, onIndexChange, width }: WheelColumn
 export interface DateWheelPickerProps {
   value?: string;
   onChange: (value: string) => void;
+  mode?: "birthday" | "deadline";
 }
 
-function parseValue(v?: string): { monthIdx: number; dayIdx: number; yearIdx: number } {
-  const defaultYear = ALL_YEARS.indexOf("1999");
+function parseBirthdayValue(v?: string): { monthIdx: number; dayIdx: number; yearIdx: number } {
+  const defaultYear = BIRTHDAY_YEARS.indexOf("1999");
   if (!v) return { monthIdx: 2, dayIdx: 22, yearIdx: defaultYear >= 0 ? defaultYear : 59 };
   const mmdd = v.match(/^(\d{1,2})\/(\d{1,2})$/);
   if (mmdd) {
@@ -146,13 +157,40 @@ function parseValue(v?: string): { monthIdx: number; dayIdx: number; yearIdx: nu
   return { monthIdx: 2, dayIdx: 22, yearIdx: defaultYear >= 0 ? defaultYear : 59 };
 }
 
-export function DateWheelPicker({ value, onChange }: DateWheelPickerProps) {
-  const initial = parseValue(value);
+function parseDeadlineValue(v?: string): { monthIdx: number; dayIdx: number; yearIdx: number } {
+  if (!v) {
+    const d = new Date();
+    d.setDate(d.getDate() + 3);
+    return {
+      monthIdx: d.getMonth(),
+      dayIdx: d.getDate() - 1,
+      yearIdx: 0,
+    };
+  }
+  const parsed = new Date(v);
+  if (!isNaN(parsed.getTime())) {
+    const yearStr = String(parsed.getFullYear());
+    const yIdx = DEADLINE_YEARS.indexOf(yearStr);
+    return {
+      monthIdx: parsed.getMonth(),
+      dayIdx: parsed.getDate() - 1,
+      yearIdx: yIdx >= 0 ? yIdx : 0,
+    };
+  }
+  const d = new Date();
+  d.setDate(d.getDate() + 3);
+  return { monthIdx: d.getMonth(), dayIdx: d.getDate() - 1, yearIdx: 0 };
+}
+
+export function DateWheelPicker({ value, onChange, mode = "birthday" }: DateWheelPickerProps) {
+  const ALL_YEARS = mode === "deadline" ? DEADLINE_YEARS : BIRTHDAY_YEARS;
+  const initial = mode === "deadline" ? parseDeadlineValue(value) : parseBirthdayValue(value);
+
   const [monthIdx, setMonthIdx] = useState(initial.monthIdx);
   const [dayIdx, setDayIdx] = useState(initial.dayIdx);
   const [yearIdx, setYearIdx] = useState(initial.yearIdx);
 
-  const currentYear = parseInt(ALL_YEARS[yearIdx] ?? "1999", 10);
+  const currentYear = parseInt(ALL_YEARS[yearIdx] ?? (mode === "deadline" ? String(new Date().getFullYear()) : "1999"), 10);
   const numDays = daysInMonth(monthIdx + 1, currentYear);
   const days = Array.from({ length: numDays }, (_, i) =>
     String(i + 1).padStart(2, "0"),
@@ -161,12 +199,19 @@ export function DateWheelPicker({ value, onChange }: DateWheelPickerProps) {
   const clampedDayIdx = Math.min(dayIdx, numDays - 1);
 
   const emitChange = useCallback(
-    (mIdx: number, dIdx: number) => {
-      const mm = String(mIdx + 1).padStart(2, "0");
-      const dd = String(dIdx + 1).padStart(2, "0");
-      onChange(`${mm}/${dd}`);
+    (mIdx: number, dIdx: number, yIdx: number) => {
+      if (mode === "deadline") {
+        const year = ALL_YEARS[yIdx] ?? String(new Date().getFullYear());
+        const monthName = MONTHS[mIdx];
+        const day = dIdx + 1;
+        onChange(`${monthName} ${day}, ${year}`);
+      } else {
+        const mm = String(mIdx + 1).padStart(2, "0");
+        const dd = String(dIdx + 1).padStart(2, "0");
+        onChange(`${mm}/${dd}`);
+      }
     },
-    [onChange],
+    [onChange, mode, ALL_YEARS],
   );
 
   const handleMonthChange = useCallback(
@@ -175,29 +220,29 @@ export function DateWheelPicker({ value, onChange }: DateWheelPickerProps) {
       const nd = daysInMonth(idx + 1, currentYear);
       const newDay = Math.min(dayIdx, nd - 1);
       setDayIdx(newDay);
-      emitChange(idx, newDay);
+      emitChange(idx, newDay, yearIdx);
     },
-    [dayIdx, currentYear, emitChange],
+    [dayIdx, currentYear, emitChange, yearIdx],
   );
 
   const handleDayChange = useCallback(
     (idx: number) => {
       setDayIdx(idx);
-      emitChange(monthIdx, idx);
+      emitChange(monthIdx, idx, yearIdx);
     },
-    [monthIdx, emitChange],
+    [monthIdx, yearIdx, emitChange],
   );
 
   const handleYearChange = useCallback(
     (idx: number) => {
       setYearIdx(idx);
-      const yr = parseInt(ALL_YEARS[idx] ?? "1999", 10);
+      const yr = parseInt(ALL_YEARS[idx] ?? String(currentYear), 10);
       const nd = daysInMonth(monthIdx + 1, yr);
       const newDay = Math.min(dayIdx, nd - 1);
       setDayIdx(newDay);
-      emitChange(monthIdx, newDay);
+      emitChange(monthIdx, newDay, idx);
     },
-    [monthIdx, dayIdx, emitChange],
+    [monthIdx, dayIdx, currentYear, emitChange, ALL_YEARS],
   );
 
   if (Platform.OS === "web") {
@@ -243,6 +288,28 @@ export function DateWheelPicker({ value, onChange }: DateWheelPickerProps) {
             ))}
           </select>
         </View>
+        {mode === "deadline" && (
+          <View style={styles.webSelect}>
+            <Text style={styles.webSelectLabel}>Year</Text>
+            <select
+              value={yearIdx}
+              onChange={(e) => handleYearChange(Number(e.target.value))}
+              style={{
+                background: "transparent",
+                border: "none",
+                color: Colors.text,
+                fontSize: 16,
+                fontFamily: "Nunito_400Regular",
+                outline: "none",
+                width: "100%",
+              }}
+            >
+              {ALL_YEARS.map((y, i) => (
+                <option key={y} value={i}>{y}</option>
+              ))}
+            </select>
+          </View>
+        )}
       </View>
     );
   }
@@ -253,7 +320,7 @@ export function DateWheelPicker({ value, onChange }: DateWheelPickerProps) {
         items={MONTHS}
         selectedIndex={monthIdx}
         onIndexChange={handleMonthChange}
-        width={140}
+        width={mode === "deadline" ? 120 : 140}
       />
       <View style={styles.separator} />
       <WheelColumn
@@ -262,13 +329,28 @@ export function DateWheelPicker({ value, onChange }: DateWheelPickerProps) {
         onIndexChange={handleDayChange}
         width={60}
       />
-      <View style={styles.separator} />
-      <WheelColumn
-        items={ALL_YEARS}
-        selectedIndex={yearIdx}
-        onIndexChange={handleYearChange}
-        width={80}
-      />
+      {mode === "deadline" && (
+        <>
+          <View style={styles.separator} />
+          <WheelColumn
+            items={ALL_YEARS}
+            selectedIndex={yearIdx}
+            onIndexChange={handleYearChange}
+            width={80}
+          />
+        </>
+      )}
+      {mode === "birthday" && (
+        <>
+          <View style={styles.separator} />
+          <WheelColumn
+            items={BIRTHDAY_YEARS}
+            selectedIndex={yearIdx}
+            onIndexChange={handleYearChange}
+            width={80}
+          />
+        </>
+      )}
     </View>
   );
 }

@@ -61,7 +61,7 @@ export function ContactsProvider({ children }: { children: ReactNode }) {
       ...data,
       avatarColor: AVATAR_COLORS[Math.floor(Math.random() * AVATAR_COLORS.length)],
     };
-    const created = await apiRequest("POST", "/api/contacts", body) as Contact;
+    const created = await apiRequest("POST", "/api/contacts", body) as unknown as Contact;
     await fetchContacts();
     return created;
   }, [fetchContacts]);
@@ -98,10 +98,11 @@ export function ContactsProvider({ children }: { children: ReactNode }) {
   }, [fetchContacts]);
 
   const markHangoutFn = useCallback(async (id: string) => {
-    await apiRequest("PUT", `/api/contacts/${id}`, {
-      lastHangout: new Date().toISOString(),
-    });
-    await fetchContacts();
+    const now = new Date().toISOString();
+    setContacts((prev) =>
+      prev.map((c) => (c.id === id ? { ...c, lastHangout: now } : c)),
+    );
+    apiRequest("POST", `/api/contacts/${id}/mark-hangout`).then(fetchContacts);
   }, [fetchContacts]);
 
   const getCircleContacts = useCallback(

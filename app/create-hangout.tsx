@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useEffect } from "react";
+import React, { useState, useCallback, useEffect, useMemo } from "react";
 import {
   View, Text, StyleSheet, ScrollView, Pressable, TextInput, Platform, Alert, Switch,
 } from "react-native";
@@ -10,6 +10,7 @@ import Colors from "@/constants/colors";
 import { useContacts } from "@/lib/contacts-context";
 import { apiRequest, queryClient } from "@/lib/query-client";
 import { Avatar } from "@/components/Avatar";
+import { DateWheelPicker } from "@/components/DateWheelPicker";
 
 type SurveyMode = "standard" | "fixed-activity";
 
@@ -62,10 +63,16 @@ export default function CreateHangoutScreen() {
   ]);
   const [includeLocation, setIncludeLocation] = useState(false);
   const [includePlusOne, setIncludePlusOne] = useState(false);
-  const [deadline, setDeadline] = useState("");
+  const [deadline, setDeadline] = useState<string>("");
 
   const [submitting, setSubmitting] = useState(false);
   const webTopInset = Platform.OS === "web" ? 67 : 0;
+
+  const defaultDeadline = useMemo(() => {
+    const d = new Date();
+    d.setDate(d.getDate() + 3);
+    return `${["January","February","March","April","May","June","July","August","September","October","November","December"][d.getMonth()]} ${d.getDate()}, ${d.getFullYear()}`;
+  }, []);
 
   const toggleContact = useCallback((id: string) => {
     Haptics.selectionAsync();
@@ -364,15 +371,30 @@ export default function CreateHangoutScreen() {
 
       {/* Deadline */}
       <View style={styles.sectionCard}>
-        <Text style={styles.sectionCardTitle}>Voting deadline (optional)</Text>
-        <Text style={styles.fieldHint}>Closes voting automatically after this date</Text>
-        <TextInput
-          style={[styles.textInput, { marginTop: 10 }]}
-          value={deadline}
-          onChangeText={setDeadline}
-          placeholder="e.g. June 5, 2025 or 2025-06-05"
-          placeholderTextColor={Colors.textTertiary}
-        />
+        <View style={styles.toggleRow}>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.sectionCardTitle}>Voting deadline (optional)</Text>
+            <Text style={styles.fieldHint}>Closes voting automatically after this date</Text>
+          </View>
+          <Switch
+            value={deadline !== ""}
+            onValueChange={(v) => {
+              Haptics.selectionAsync();
+              setDeadline(v ? defaultDeadline : "");
+            }}
+            trackColor={{ false: Colors.border, true: Colors.primary + "60" }}
+            thumbColor={deadline !== "" ? Colors.primary : Colors.textTertiary}
+          />
+        </View>
+        {deadline !== "" && (
+          <View style={{ marginTop: 12 }}>
+            <DateWheelPicker
+              mode="deadline"
+              value={deadline}
+              onChange={setDeadline}
+            />
+          </View>
+        )}
       </View>
 
       <View style={styles.bottomActions}>
