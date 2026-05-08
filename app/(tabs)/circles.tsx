@@ -11,12 +11,14 @@ import type { Contact } from "@/lib/types";
 import { router } from "expo-router";
 import * as Haptics from "expo-haptics";
 import { computeProfileCompletion } from "@/lib/profile-completion";
+import { BellSheet, computeBellDotColor } from "@/components/BellSheet";
 
 export default function CirclesScreen() {
   const insets = useSafeAreaInsets();
   const { contacts, getCircleContacts, markContacted, deleteContact } = useContacts();
   const [activeCircle, setActiveCircle] = useState<1 | 2 | 3>(1);
   const [searchQuery, setSearchQuery] = useState("");
+  const [bellSheetOpen, setBellSheetOpen] = useState(false);
   const searchRef = useRef<TextInput>(null);
 
   useEffect(() => {
@@ -32,6 +34,10 @@ export default function CirclesScreen() {
 
   const config = CIRCLE_CONFIG[activeCircle];
   const profileCompletion = useMemo(() => computeProfileCompletion(contacts), [contacts]);
+  const bellDotColor = useMemo(
+    () => computeBellDotColor(contacts, profileCompletion.isComplete),
+    [contacts, profileCompletion.isComplete],
+  );
   const webTopInset = Platform.OS === "web" ? 67 : 0;
 
   const showAddOptions = () => {
@@ -63,7 +69,6 @@ export default function CirclesScreen() {
           { paddingTop: insets.top + 16 + webTopInset, paddingBottom: 100 + (Platform.OS === "web" ? 34 : 0) },
         ]}
         showsVerticalScrollIndicator={false}
-        contentInsetAdjustmentBehavior="automatic"
         keyboardShouldPersistTaps="handled"
       >
         <View style={styles.header}>
@@ -77,6 +82,20 @@ export default function CirclesScreen() {
               style={({ pressed }) => [styles.iconButton, pressed && { opacity: 0.7 }]}
             >
               <Ionicons name="calendar-outline" size={22} color={Colors.primaryLight} />
+            </Pressable>
+            <Pressable
+              onPress={() => {
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                setBellSheetOpen(true);
+              }}
+              style={({ pressed }) => [pressed && { opacity: 0.7 }]}
+            >
+              <View style={styles.bellBtn}>
+                <Ionicons name="notifications-outline" size={20} color={Colors.primaryLight} />
+                {bellDotColor && (
+                  <View style={[styles.bellDot, { backgroundColor: bellDotColor }]} />
+                )}
+              </View>
             </Pressable>
             <Pressable
               onPress={showAddOptions}
@@ -145,20 +164,6 @@ export default function CirclesScreen() {
           </View>
         )}
 
-        {profileCompletion.stage === 2 && (
-          <View style={styles.encouragementCard}>
-            <View style={{ flex: 1 }}>
-              <Text style={styles.encouragementTitle}>Your circles are taking shape</Text>
-              <Text style={styles.encouragementSub}>
-                <Text style={{ fontFamily: "Nunito_700Bold" }}>Close friends</Text>
-                {" — old roommates, college friends, former colleagues you'd grab coffee with.\n"}
-                <Text style={{ fontFamily: "Nunito_700Bold" }}>Acquaintances</Text>
-                {" — former coworkers, distant family, interesting people worth keeping in touch with."}
-              </Text>
-            </View>
-          </View>
-        )}
-
         {circleContacts.length === 0 ? (
           <EmptyState
             icon="person-add-outline"
@@ -212,6 +217,13 @@ export default function CirclesScreen() {
           </>
         )}
       </ScrollView>
+
+      <BellSheet
+        visible={bellSheetOpen}
+        onClose={() => setBellSheetOpen(false)}
+        contacts={contacts}
+        isComplete={profileCompletion.isComplete}
+      />
     </View>
   );
 }
@@ -258,6 +270,26 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     zIndex: 10,
+  },
+  bellBtn: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: Colors.primary + "18",
+    borderWidth: 1,
+    borderColor: Colors.primary + "30",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  bellDot: {
+    position: "absolute",
+    top: 8,
+    right: 8,
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    borderWidth: 1.5,
+    borderColor: Colors.background,
   },
   tabs: {
     flexDirection: "row",

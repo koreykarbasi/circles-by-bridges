@@ -237,18 +237,6 @@ export default function SuggestionsScreen() {
     [markContacted],
   );
 
-  const handlePlanHangout = useCallback(
-    (contact: Contact) => {
-      markContacted(contact.id);
-      setCompletedIds((prev) => new Set(prev).add(contact.id));
-      router.push({
-        pathname: "/create-hangout",
-        params: { contactName: contact.name },
-      });
-    },
-    [markContacted],
-  );
-
   const handleReminderComplete = useCallback(
     async (reminder: Reminder) => {
       setCompletedReminderIds((prev) => new Set(prev).add(reminder.id));
@@ -315,15 +303,6 @@ export default function SuggestionsScreen() {
           <Text style={styles.title}>Suggestions</Text>
           <Text style={styles.subtitle}>People who'd love to hear from you</Text>
         </View>
-        <Pressable
-          onPress={() => {
-            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-            router.push("/hangouts");
-          }}
-          style={({ pressed }) => [styles.hangoutButton, pressed && { opacity: 0.7 }]}
-        >
-          <Ionicons name="calendar-outline" size={18} color={Colors.primaryLight} />
-        </Pressable>
       </View>
 
       <ScrollView
@@ -460,7 +439,6 @@ export default function SuggestionsScreen() {
             onDone={() => handleDone(s.contact.id)}
             onRefresh={() => handleRefreshSingle(s.contact.id, s.prompt)}
             onCopyText={s.type === "text" ? () => handleCopyText(s.contact.id) : undefined}
-            onPlanHangout={s.type === "hangout" ? () => handlePlanHangout(s.contact) : undefined}
           />
         ))
       )}

@@ -5,7 +5,9 @@ import { Ionicons } from "@expo/vector-icons";
 import Colors from "@/constants/colors";
 import { useContacts } from "@/lib/contacts-context";
 import { useAuth } from "@/lib/auth-context";
-import { computeProfileCompletion, STAGE1_GOALS } from "@/lib/profile-completion";
+import { computeProfileCompletion } from "@/lib/profile-completion";
+import { BellSheet, computeBellDotColor } from "@/components/BellSheet";
+import * as Haptics from "expo-haptics";
 import { CirclesVisualization } from "@/components/CirclesVisualization";
 import { ChecklistItem } from "@/components/ChecklistItem";
 import { EmptyState } from "@/components/EmptyState";
@@ -20,8 +22,8 @@ import { router, useFocusEffect } from "expo-router";
 import { useQuery } from "@tanstack/react-query";
 import { getViewedTimestamps, hasUnreadVotes } from "@/lib/hangout-notifications";
 
-const MAX_REMINDERS = 3;
-const MAX_SUGGESTIONS = 2;
+const MAX_REMINDERS = 5;
+const MAX_SUGGESTIONS = 3;
 
 function getReminderIcon(reminder: Reminder): keyof typeof Ionicons.glyphMap {
   switch (reminder.type) {
@@ -72,12 +74,14 @@ interface Suggestion {
 export default function HomeScreen() {
   const insets = useSafeAreaInsets();
   const { user } = useAuth();
-  const { contacts, markContacted, markHangout, isLoading, refreshContacts } = useContacts();
+  const { contacts, markContacted, markHangout, refreshContacts } = useContacts();
   const [refreshing, setRefreshing] = useState(false);
   const [dismissedReminders, setDismissedReminders] = useState<Set<string>>(new Set());
   const [dismissedSuggestions, setDismissedSuggestions] = useState<Set<string>>(new Set());
   const [suggestionPrompts, setSuggestionPrompts] = useState<Map<string, string>>(new Map());
   const [lastSuggestedDates, setLastSuggestedDates] = useState<Record<string, string>>({});
+  const [bellSheetOpen, setBellSheetOpen] = useState(false);
+  const [shuffleCount, setShuffleCount] = useState(0);
 
   const { data: hangouts } = useQuery<HangoutPlan[]>({
     queryKey: ["/api/hangouts"],
@@ -209,7 +213,7 @@ export default function HomeScreen() {
     }
 
     return result;
-  }, [contacts, dismissedSuggestions, visibleReminders, getSuggestionForContact, lastSuggestedDates]);
+  }, [contacts, dismissedSuggestions, visibleReminders, getSuggestionForContact, lastSuggestedDates, shuffleCount]);
 
   useEffect(() => {
     const key = suggestions.map((s) => s.contactId).join(",");
@@ -324,8 +328,19 @@ export default function HomeScreen() {
     [markContacted],
   );
 
-  const totalItems = visibleReminders.length + suggestions.length;
+  const handleShuffleSuggestions = useCallback(() => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    shownSuggestionIds.current = [];
+    setDismissedSuggestions(new Set());
+    setSuggestionPrompts(new Map());
+    setShuffleCount((c) => c + 1);
+  }, []);
+
   const profileCompletion = useMemo(() => computeProfileCompletion(contacts), [contacts]);
+  const bellDotColor = useMemo(
+    () => computeBellDotColor(contacts, profileCompletion.isComplete),
+    [contacts, profileCompletion.isComplete],
+  );
   const webTopInset = Platform.OS === "web" ? 67 : 0;
 
   const hangoutWithNewVotes = useMemo(() => {
@@ -343,7 +358,6 @@ export default function HomeScreen() {
         { paddingTop: insets.top + 16 + webTopInset, paddingBottom: 100 + (Platform.OS === "web" ? 34 : 0) },
       ]}
       showsVerticalScrollIndicator={false}
-      contentInsetAdjustmentBehavior="automatic"
       refreshControl={
         <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={Colors.primaryLight} />
       }
@@ -376,6 +390,21 @@ export default function HomeScreen() {
           >
             <Ionicons name="calendar-outline" size={20} color={Colors.primaryLight} />
           </Pressable>
+          <Pressable
+            onPress={() => {
+              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+              setBellSheetOpen(true);
+            }}
+            hitSlop={8}
+            style={({ pressed }) => [pressed && { opacity: 0.7 }]}
+          >
+            <View style={styles.bellBtn}>
+              <Ionicons name="notifications-outline" size={20} color={Colors.primaryLight} />
+              {bellDotColor && (
+                <View style={[styles.bellDot, { backgroundColor: bellDotColor }]} />
+              )}
+            </View>
+          </Pressable>
         </View>
       </View>
 
@@ -397,32 +426,6 @@ export default function HomeScreen() {
         <Ionicons name="chevron-forward" size={16} color={Colors.textTertiary} />
       </Pressable>
 
-      {profileCompletion.stage === 1 && (
-        <Pressable
-          onPress={() => router.push("/(tabs)/circles")}
-          style={({ pressed }) => [styles.profileBanner, pressed && { opacity: 0.8 }]}
-        >
-          <View style={styles.profileBannerLeft}>
-            <View style={styles.profileBannerIcon}>
-              <Ionicons name="people-outline" size={18} color="#9B7DFF" />
-            </View>
-            <View style={styles.profileBannerText}>
-              <Text style={styles.profileBannerTitle}>Complete your circles</Text>
-              <Text style={styles.profileBannerSub}>
-                {profileCompletion.circle1WithBirthday}/{STAGE1_GOALS.circle1WithBirthday} core friends with birthdays
-                {profileCompletion.circle2Count < STAGE1_GOALS.circle2
-                  ? `, ${profileCompletion.circle2Count}/${STAGE1_GOALS.circle2} close friends`
-                  : ""}
-                {profileCompletion.circle3Count < STAGE1_GOALS.circle3
-                  ? `, ${profileCompletion.circle3Count}/${STAGE1_GOALS.circle3} acquaintance`
-                  : ""}
-              </Text>
-            </View>
-          </View>
-          <Ionicons name="chevron-forward" size={16} color={Colors.textTertiary} />
-        </Pressable>
-      )}
-
       {contacts.length === 0 && (
         <View style={styles.section}>
           <EmptyState
@@ -437,6 +440,7 @@ export default function HomeScreen() {
 
       {contacts.length > 0 && (
         <>
+          <Text style={styles.umbrellaLabel}>Social Health Checklist</Text>
           <View style={styles.section}>
             <View style={styles.sectionHeader}>
               <Ionicons name="notifications-outline" size={18} color={Colors.accent} />
@@ -492,6 +496,14 @@ export default function HomeScreen() {
             <View style={styles.sectionHeader}>
               <Ionicons name="bulb-outline" size={18} color={Colors.warning} />
               <Text style={styles.sectionTitle}>Suggestions</Text>
+              <View style={{ flex: 1 }} />
+              <Pressable
+                onPress={handleShuffleSuggestions}
+                hitSlop={8}
+                style={({ pressed }) => [styles.shuffleBtn, pressed && { opacity: 0.5 }]}
+              >
+                <Ionicons name="shuffle-outline" size={18} color={Colors.textSecondary} />
+              </Pressable>
             </View>
 
             {suggestions.length === 0 && (
@@ -561,6 +573,13 @@ export default function HomeScreen() {
           </View>
         </>
       )}
+
+      <BellSheet
+        visible={bellSheetOpen}
+        onClose={() => setBellSheetOpen(false)}
+        contacts={contacts}
+        isComplete={profileCompletion.isComplete}
+      />
     </ScrollView>
   );
 }
@@ -620,6 +639,38 @@ const styles = StyleSheet.create({
     borderColor: Colors.primary + "30",
     alignItems: "center",
     justifyContent: "center",
+  },
+  bellBtn: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    backgroundColor: Colors.primary + "18",
+    borderWidth: 1,
+    borderColor: Colors.primary + "30",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  bellDot: {
+    position: "absolute",
+    top: 7,
+    right: 7,
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    borderWidth: 1.5,
+    borderColor: Colors.background,
+  },
+  umbrellaLabel: {
+    fontSize: 13,
+    fontFamily: "Nunito_600SemiBold",
+    color: Colors.textTertiary,
+    letterSpacing: 0.5,
+    textTransform: "uppercase",
+    marginTop: 20,
+    marginBottom: 4,
+  },
+  shuffleBtn: {
+    padding: 4,
   },
   hangoutBanner: {
     flexDirection: "row",
