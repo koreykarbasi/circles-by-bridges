@@ -249,15 +249,22 @@ export function SuggestionCard({
       hasBirthdaySoon,
       circleLevel,
     });
+    let copied = false;
     if (Platform.OS === "web") {
       try {
         await navigator.clipboard.writeText(message);
+        copied = true;
       } catch {}
     } else {
-      await Clipboard.setStringAsync(message);
+      try {
+        await Clipboard.setStringAsync(message);
+        copied = true;
+      } catch {}
     }
-    onCopyText?.();
-    onCopied?.();
+    if (copied) {
+      onCopyText?.();
+      onCopied?.();
+    }
   }, [contactName, prompt, interests, labels, daysSinceContact, hasBirthdaySoon, circleLevel, onCopyText, onCopied]);
 
   const handlePlanHangout = useCallback(() => {

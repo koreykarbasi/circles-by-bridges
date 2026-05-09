@@ -232,6 +232,12 @@ export default function SuggestionsScreen() {
     [markContacted],
   );
 
+  useEffect(() => {
+    return () => {
+      if (copiedToastTimer.current) clearTimeout(copiedToastTimer.current);
+    };
+  }, []);
+
   const showCopiedToast = useCallback(() => {
     if (copiedToastTimer.current) clearTimeout(copiedToastTimer.current);
     setCopiedToast(true);

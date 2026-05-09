@@ -305,6 +305,12 @@ export default function HomeScreen() {
     [contacts],
   );
 
+  useEffect(() => {
+    return () => {
+      if (copiedToastTimer.current) clearTimeout(copiedToastTimer.current);
+    };
+  }, []);
+
   const showCopiedToast = useCallback(() => {
     if (copiedToastTimer.current) clearTimeout(copiedToastTimer.current);
     setCopiedToast(true);
@@ -331,12 +337,13 @@ export default function HomeScreen() {
         hasBirthdaySoon,
         circleLevel: suggestion.circleLevel,
       });
+      let copied = false;
       if (Platform.OS === "web") {
-        try { await navigator.clipboard.writeText(message); } catch {}
+        try { await navigator.clipboard.writeText(message); copied = true; } catch {}
       } else {
-        await Clipboard.setStringAsync(message);
+        try { await Clipboard.setStringAsync(message); copied = true; } catch {}
       }
-      showCopiedToast();
+      if (copied) showCopiedToast();
       setDismissedSuggestions((prev) => new Set(prev).add(suggestion.contactId));
       await markContacted(suggestion.contactId);
     },
