@@ -249,22 +249,13 @@ export function SuggestionCard({
       hasBirthdaySoon,
       circleLevel,
     });
-    let copied = false;
     if (Platform.OS === "web") {
-      try {
-        await navigator.clipboard.writeText(message);
-        copied = true;
-      } catch {}
+      try { await navigator.clipboard.writeText(message); } catch {}
     } else {
-      try {
-        await Clipboard.setStringAsync(message);
-        copied = true;
-      } catch {}
+      try { await Clipboard.setStringAsync(message); } catch {}
     }
-    if (copied) {
-      onCopyText?.();
-      onCopied?.();
-    }
+    onCopyText?.();
+    onCopied?.();
   }, [contactName, prompt, interests, labels, daysSinceContact, hasBirthdaySoon, circleLevel, onCopyText, onCopied]);
 
   const handlePlanHangout = useCallback(() => {
@@ -314,6 +305,7 @@ export function SuggestionCard({
 
         {type === "text" && onCopyText && (
           <Pressable
+            testID="suggestion-copy-btn"
             onPress={handleCopyText}
             style={({ pressed }) => [styles.iconButton, pressed && { opacity: 0.5 }]}
           >

@@ -337,13 +337,12 @@ export default function HomeScreen() {
         hasBirthdaySoon,
         circleLevel: suggestion.circleLevel,
       });
-      let copied = false;
       if (Platform.OS === "web") {
-        try { await navigator.clipboard.writeText(message); copied = true; } catch {}
+        try { await navigator.clipboard.writeText(message); } catch {}
       } else {
-        try { await Clipboard.setStringAsync(message); copied = true; } catch {}
+        try { await Clipboard.setStringAsync(message); } catch {}
       }
-      if (copied) showCopiedToast();
+      showCopiedToast();
       setDismissedSuggestions((prev) => new Set(prev).add(suggestion.contactId));
       await markContacted(suggestion.contactId);
     },
@@ -619,14 +618,15 @@ export default function HomeScreen() {
 
     {copiedToast && (
       <Animated.View
+        testID="copied-toast"
         style={[
           styles.copiedToast,
           {
             opacity: copiedToastAnim,
             bottom: insets.bottom + 90 + (Platform.OS === "web" ? 34 : 0),
+            pointerEvents: "none",
           },
         ]}
-        pointerEvents="none"
       >
         <Ionicons name="checkmark-circle" size={16} color={Colors.success} />
         <Text style={styles.copiedToastText}>Text copied</Text>

@@ -485,14 +485,15 @@ export default function SuggestionsScreen() {
 
     {copiedToast && (
       <Animated.View
+        testID="copied-toast"
         style={[
           styles.copiedToast,
           {
             opacity: copiedToastAnim,
             bottom: insets.bottom + 90 + (Platform.OS === "web" ? 34 : 0),
+            pointerEvents: "none",
           },
         ]}
-        pointerEvents="none"
       >
         <Ionicons name="checkmark-circle" size={16} color={Colors.success} />
         <Text style={styles.copiedToastText}>Text copied</Text>
