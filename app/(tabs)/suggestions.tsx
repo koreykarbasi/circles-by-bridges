@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useCallback, useRef, useEffect } from "react";
-import { View, Text, StyleSheet, ScrollView, Pressable, Platform } from "react-native";
+import { View, Text, StyleSheet, ScrollView, Pressable, Platform, Animated } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import Colors from "@/constants/colors";
@@ -90,6 +90,9 @@ export default function SuggestionsScreen() {
   const [remindersCollapsed, setRemindersCollapsed] = useState(false);
   const [lastSuggestedDates, setLastSuggestedDates] = useState<Record<string, string>>({});
   const visitCount = useRef(0);
+  const [copiedToast, setCopiedToast] = useState(false);
+  const copiedToastAnim = useRef(new Animated.Value(0)).current;
+  const copiedToastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     loadSyncedPrompts();
@@ -229,6 +232,17 @@ export default function SuggestionsScreen() {
     [markContacted],
   );
 
+  const showCopiedToast = useCallback(() => {
+    if (copiedToastTimer.current) clearTimeout(copiedToastTimer.current);
+    setCopiedToast(true);
+    Animated.timing(copiedToastAnim, { toValue: 1, duration: 180, useNativeDriver: true }).start();
+    copiedToastTimer.current = setTimeout(() => {
+      Animated.timing(copiedToastAnim, { toValue: 0, duration: 280, useNativeDriver: true }).start(() => {
+        setCopiedToast(false);
+      });
+    }, 1800);
+  }, [copiedToastAnim]);
+
   const handleCopyText = useCallback(
     (contactId: string) => {
       markContacted(contactId);
@@ -290,6 +304,7 @@ export default function SuggestionsScreen() {
   const allSuggestions = useMemo(() => [...suggestions, ...circle3Nudges], [suggestions, circle3Nudges]);
 
   return (
+    <View style={styles.screenWrapper}>
     <ScrollView
       style={styles.container}
       contentContainerStyle={[
@@ -447,6 +462,7 @@ export default function SuggestionsScreen() {
               onDone={() => handleDone(s.contact.id)}
               onRefresh={() => handleRefreshSingle(s.contact.id, s.prompt)}
               onCopyText={s.type === "text" ? () => handleCopyText(s.contact.id) : undefined}
+              onCopied={s.type === "text" ? showCopiedToast : undefined}
             />
           );
         })
@@ -460,6 +476,23 @@ export default function SuggestionsScreen() {
         <Text style={styles.refreshAllText}>New suggestions</Text>
       </Pressable>
     </ScrollView>
+
+    {copiedToast && (
+      <Animated.View
+        style={[
+          styles.copiedToast,
+          {
+            opacity: copiedToastAnim,
+            bottom: insets.bottom + 90 + (Platform.OS === "web" ? 34 : 0),
+          },
+        ]}
+        pointerEvents="none"
+      >
+        <Ionicons name="checkmark-circle" size={16} color={Colors.success} />
+        <Text style={styles.copiedToastText}>Text copied</Text>
+      </Animated.View>
+    )}
+    </View>
   );
 }
 
@@ -586,5 +619,32 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontFamily: "Nunito_600SemiBold",
     color: Colors.primaryLight,
+  },
+  screenWrapper: {
+    flex: 1,
+    backgroundColor: Colors.background,
+  },
+  copiedToast: {
+    position: "absolute",
+    alignSelf: "center",
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    backgroundColor: Colors.surface,
+    borderWidth: 1,
+    borderColor: Colors.success + "40",
+    borderRadius: 20,
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.15,
+    shadowRadius: 6,
+    elevation: 4,
+  },
+  copiedToastText: {
+    fontSize: 13,
+    fontFamily: "Nunito_600SemiBold",
+    color: Colors.success,
   },
 });

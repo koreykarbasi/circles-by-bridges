@@ -1,4 +1,4 @@
-import React, { useCallback, useState, useEffect, useRef } from "react";
+import React, { useCallback } from "react";
 import { View, Text, StyleSheet, Pressable, Platform } from "react-native";
 import Animated, { useSharedValue, useAnimatedStyle, withTiming, withSequence, runOnJS, Easing } from "react-native-reanimated";
 import { Ionicons } from "@expo/vector-icons";
@@ -24,6 +24,7 @@ interface SuggestionCardProps {
   onDone: () => void;
   onRefresh: () => void;
   onCopyText?: () => void;
+  onCopied?: () => void;
   onPlanHangout?: () => void;
 }
 
@@ -43,33 +44,100 @@ const OPENERS = [
   "Hey {name}, I was just thinking about you",
   "Hey {name}, you crossed my mind today",
   "Hey {name}, randomly thought of you",
-  "Hey {name}, just wanted to reach out",
   "Hey {name}, you've been on my mind",
 ];
 
-const GENERIC_CLOSINGS = [
-  "— hope you're doing well!",
-  "— hope life's been treating you well. How are things?",
-  "— just wanted to say hi. How's everything going?",
-  "— just wanted to check in. What's new?",
-  "— it would be great to catch up soon!",
-];
-
-const OVERDUE_CLOSINGS = [
-  "— it's been a while and I've been meaning to reach out!",
-  "— it's been too long! Would love to catch up.",
-  "— feels like ages! How have you been?",
-  "— I know it's been a minute. Hope everything's good!",
-];
-
-const BIRTHDAY_CLOSINGS = [
-  "— just wanted to wish you an early happy birthday! Hope it's a great one.",
+const BIRTHDAY_REASONS = [
   "— your birthday is coming up and I didn't want to miss it. Hope you have an amazing day!",
+  "— just wanted to wish you an early happy birthday! Hope it's a great one.",
   "— had to reach out before your birthday. Hope you have the best one!",
+];
+
+const OVERDUE_REASONS = [
+  "— it's been a while and I've been meaning to reach out.",
+  "— it's been too long. Would love to catch up soon.",
+  "— feels like ages. How have you been?",
 ];
 
 function pick<T>(arr: T[]): T {
   return arr[Math.floor(Math.random() * arr.length)];
+}
+
+function reasonFromPrompt(prompt: string, interests: string[], labels: string[]): string {
+  const lower = prompt.toLowerCase();
+
+  // Interest match from prompt text
+  for (const interest of interests) {
+    if (lower.includes(interest.toLowerCase())) {
+      return `— was curious how the ${interest.toLowerCase()} has been going.`;
+    }
+  }
+
+  // Prompt-derived reasons — ordered from most specific to least
+  if (lower.includes("memory") || lower.includes("remember") || lower.includes("reminiscing") || lower.includes("shared memory")) {
+    return "— I was just reminiscing about one of our memories.";
+  }
+  if (lower.includes("appreciat") || lower.includes("admire") || lower.includes("grateful") || lower.includes("thankful")) {
+    return "— I was thinking about how much I appreciate having you in my life.";
+  }
+  if (lower.includes("laugh") || lower.includes("funny") || lower.includes("joke")) {
+    return "— something made me laugh and it reminded me of you.";
+  }
+  if (lower.includes("support") || lower.includes("there for") || lower.includes("helped you grow") || lower.includes("challenge")) {
+    return "— thinking about how much you've supported me lately.";
+  }
+  if (lower.includes("vulnerable") || lower.includes("honest") || lower.includes("open up")) {
+    return "— there's something I've been meaning to share with you.";
+  }
+  if (lower.includes("voice") || lower.includes("hear your voice") || lower.includes("voice note")) {
+    return "— I just wanted to hear how things are going.";
+  }
+  if (lower.includes("plan") || lower.includes("hang") || lower.includes("get together") || lower.includes("spontaneous")) {
+    return "— we should make time to get together soon.";
+  }
+  if (lower.includes("birthday")) {
+    return "— your birthday is on my mind and I wanted to reach out.";
+  }
+  if (lower.includes("trip") || lower.includes("travel") || lower.includes("adventure")) {
+    return "— been thinking about your travels lately.";
+  }
+  if (lower.includes("work") || lower.includes("career") || lower.includes("job")) {
+    return "— I wanted to check in and see how work's been treating you.";
+  }
+  if (lower.includes("recipe") || lower.includes("cook") || lower.includes("food")) {
+    return "— I tried a new recipe and thought of you.";
+  }
+  if (lower.includes("read") || lower.includes("book")) {
+    return "— I read something recently that made me think of you.";
+  }
+  if (lower.includes("training") || lower.includes("workout") || lower.includes("hike") || lower.includes("run")) {
+    return "— curious how your training has been going lately.";
+  }
+
+  // Label-based fallback
+  if (labels.length > 0) {
+    const label = labels[0].toLowerCase();
+    if (label.includes("childhood") || label.includes("college")) {
+      return "— I was just thinking about our history together.";
+    }
+    if (label.includes("work")) {
+      return "— I wanted to check in and see how things are going at work.";
+    }
+    if (label.includes("travel")) {
+      return "— been thinking about our last trip.";
+    }
+    if (label.includes("family")) {
+      return "— wanted to check in and see how the family is doing.";
+    }
+  }
+
+  // Interests fallback
+  if (interests.length > 0) {
+    return `— was curious how the ${interests[0].toLowerCase()} has been going.`;
+  }
+
+  // Last resort: always has a specific reason, never generic
+  return "— I just wanted to reach out and check in with you.";
 }
 
 export function getTextCopyMessage(
@@ -93,56 +161,14 @@ export function getTextCopyMessage(
   } = options ?? {};
 
   if (hasBirthdaySoon) {
-    return `${opener} ${pick(BIRTHDAY_CLOSINGS)}`;
-  }
-
-  const promptLower = prompt.toLowerCase();
-
-  if (interests.length > 0) {
-    for (const interest of interests) {
-      if (promptLower.includes(interest.toLowerCase())) {
-        return `${opener} — how's the ${interest.toLowerCase()} been going lately?`;
-      }
-    }
-    const hasInterestContext =
-      promptLower.includes("training") ||
-      promptLower.includes("recipe") ||
-      promptLower.includes("listen") ||
-      promptLower.includes("trip") ||
-      promptLower.includes("playing") ||
-      promptLower.includes("reading") ||
-      promptLower.includes("creat") ||
-      promptLower.includes("game") ||
-      promptLower.includes("workout") ||
-      promptLower.includes("hike");
-
-    if (hasInterestContext) {
-      const interest = pick(interests).toLowerCase();
-      return `${opener} — how's the ${interest} been going lately?`;
-    }
+    return `${opener} ${pick(BIRTHDAY_REASONS)}`;
   }
 
   if (daysSinceContact !== null && daysSinceContact !== undefined && daysSinceContact > 45) {
-    return `${opener} ${pick(OVERDUE_CLOSINGS)}`;
+    return `${opener} ${pick(OVERDUE_REASONS)}`;
   }
 
-  if (labels.length > 0) {
-    const label = labels[0].toLowerCase();
-    if (label.includes("childhood") || label.includes("college")) {
-      return `${opener} — was just reminiscing about the old days!`;
-    }
-    if (label.includes("work")) {
-      return `${opener} — hope work has been going well for you!`;
-    }
-    if (label.includes("neighbor")) {
-      return `${opener} — hope things are good on your end!`;
-    }
-    if (label.includes("travel")) {
-      return `${opener} — been thinking about our last trip. Hope you're doing great!`;
-    }
-  }
-
-  return `${opener} ${pick(GENERIC_CLOSINGS)}`;
+  return `${opener} ${reasonFromPrompt(prompt, interests, labels)}`;
 }
 
 export function SuggestionCard({
@@ -162,15 +188,12 @@ export function SuggestionCard({
   onDone,
   onRefresh,
   onCopyText,
+  onCopied,
   onPlanHangout,
 }: SuggestionCardProps) {
   const circleColor = circleLevel === 1 ? Colors.circle1 : circleLevel === 2 ? Colors.circle2 : Colors.circle3;
   const typeConfig = TYPE_CONFIG[type];
   const urgencyConfig = URGENCY_CONFIG[urgency];
-
-  const [copiedVisible, setCopiedVisible] = useState(false);
-  const copiedTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const copiedOpacity = useSharedValue(0);
 
   const opacity = useSharedValue(1);
   const translateX = useSharedValue(0);
@@ -190,26 +213,6 @@ export function SuggestionCard({
     transform: [{ scale: refreshScale.value }],
   }));
 
-  const copiedStyle = useAnimatedStyle(() => ({
-    opacity: copiedOpacity.value,
-  }));
-
-  useEffect(() => {
-    return () => {
-      if (copiedTimer.current) clearTimeout(copiedTimer.current);
-    };
-  }, []);
-
-  const showCopiedToast = useCallback(() => {
-    setCopiedVisible(true);
-    copiedOpacity.value = withTiming(1, { duration: 180 });
-    if (copiedTimer.current) clearTimeout(copiedTimer.current);
-    copiedTimer.current = setTimeout(() => {
-      copiedOpacity.value = withTiming(0, { duration: 300 }, () => {
-        runOnJS(setCopiedVisible)(false);
-      });
-    }, 1600);
-  }, []);
 
   const handleDone = useCallback(() => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
@@ -253,9 +256,9 @@ export function SuggestionCard({
     } else {
       await Clipboard.setStringAsync(message);
     }
-    showCopiedToast();
     onCopyText?.();
-  }, [contactName, prompt, interests, labels, daysSinceContact, hasBirthdaySoon, circleLevel, onCopyText, showCopiedToast]);
+    onCopied?.();
+  }, [contactName, prompt, interests, labels, daysSinceContact, hasBirthdaySoon, circleLevel, onCopyText, onCopied]);
 
   const handlePlanHangout = useCallback(() => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -321,13 +324,6 @@ export function SuggestionCard({
         )}
 
         <View style={{ flex: 1 }} />
-
-        {copiedVisible && (
-          <Animated.View style={[styles.copiedBadge, copiedStyle]}>
-            <Ionicons name="checkmark" size={12} color={Colors.success} />
-            <Text style={styles.copiedText}>Text copied</Text>
-          </Animated.View>
-        )}
 
         <Pressable
           onPress={handleDone}
@@ -422,22 +418,6 @@ const styles = StyleSheet.create({
   },
   iconButton: {
     padding: 8,
-  },
-  copiedBadge: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 4,
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderRadius: 8,
-    backgroundColor: Colors.success + "15",
-    borderWidth: 1,
-    borderColor: Colors.success + "30",
-  },
-  copiedText: {
-    fontSize: 12,
-    fontFamily: "Nunito_600SemiBold",
-    color: Colors.success,
   },
   primaryButton: {
     flexDirection: "row",

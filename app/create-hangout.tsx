@@ -116,7 +116,8 @@ export default function CreateHangoutScreen() {
         .filter((c) => selectedContacts.has(c.id))
         .map((c) => c.name);
 
-      const options: any[] = [];
+      interface OptionPayload { label: string; questionType: string; }
+      const options: OptionPayload[] = [];
 
       if (surveyMode === "standard") {
         activityOptions

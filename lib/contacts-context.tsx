@@ -61,7 +61,8 @@ export function ContactsProvider({ children }: { children: ReactNode }) {
       ...data,
       avatarColor: AVATAR_COLORS[Math.floor(Math.random() * AVATAR_COLORS.length)],
     };
-    const created = await apiRequest("POST", "/api/contacts", body) as unknown as Contact;
+    const resp = await apiRequest("POST", "/api/contacts", body);
+    const created = (await resp.json()) as Contact;
     await fetchContacts();
     return created;
   }, [fetchContacts]);

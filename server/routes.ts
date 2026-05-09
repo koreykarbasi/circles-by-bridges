@@ -502,8 +502,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (!title || typeof title !== "string" || !title.trim()) {
         return bad(res, "Title is required");
       }
-      if (!Array.isArray(inviteeNames)) {
-        return bad(res, "inviteeNames is required and must be an array");
+      if (!Array.isArray(inviteeNames) || inviteeNames.length === 0) {
+        return bad(res, "At least one invitee is required");
+      }
+      if (!Array.isArray(options) || !options.some((o) => o.questionType === "time")) {
+        return bad(res, "At least one time option is required");
+      }
+      if (surveyMode === "standard" && !options.some((o) => o.questionType === "activity")) {
+        return bad(res, "At least one activity option is required for multiple-options mode");
+      }
+      if (surveyMode === "fixed-activity" && (!fixedActivity || !fixedActivity.trim())) {
+        return bad(res, "A fixed activity name is required");
       }
 
       let shareCode = generateShareCode();
