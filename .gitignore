@@ -40,3 +40,7 @@ yarn-error.*
 
 .env
 data/prompts-cache.json
+
+# Playwright artifacts
+test-results/
+playwright-report/
