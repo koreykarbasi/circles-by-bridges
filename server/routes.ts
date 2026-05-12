@@ -4,6 +4,7 @@ import { storage } from "./storage";
 import bcrypt from "bcryptjs";
 import session from "express-session";
 import connectPgSimple from "connect-pg-simple";
+import rateLimit from "express-rate-limit";
 import { pool } from "./db";
 import { getPrompts, syncFromSheet } from "./prompts-sync";
 import { sendHangoutFinalizedNotifications } from "./push-notifications";
@@ -145,6 +146,23 @@ function generateIcs(title: string, timeLabel: string, locationLabel: string | n
     .join("\r\n");
 }
 
+const authRateLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 10,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { message: "Too many attempts, please try again later" },
+  skipSuccessfulRequests: false,
+});
+
+const registerRateLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000,
+  max: 5,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { message: "Too many registration attempts, please try again later" },
+});
+
 export async function registerRoutes(app: Express): Promise<Server> {
   app.set("trust proxy", 1);
   const PgSession = connectPgSimple(session);
@@ -167,7 +185,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }),
   );
 
-  app.post("/api/auth/register", async (req, res) => {
+  app.post("/api/auth/register", registerRateLimiter, async (req, res) => {
     try {
       const { email, password, name } = req.body;
       if (!email || !password) {
@@ -176,34 +194,31 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (password.length < 6) {
         return res.status(400).json({ message: "Password must be at least 6 characters" });
       }
+      // Silent-success pattern: always return the same 201 response regardless
+      // of whether this email was already registered, so the endpoint cannot be
+      // used as an oracle to enumerate existing accounts.
       const existing = await storage.getUserByEmail(email.toLowerCase().trim());
-      if (existing) {
-        return res.status(409).json({ message: "An account with this email already exists" });
-      }
-      const hashedPassword = await bcrypt.hash(password, 10);
-      const user = await storage.createUser({
-        email: email.toLowerCase().trim(),
-        password: hashedPassword,
-      });
-      if (name) {
-        await storage.updateUser(user.id, { username: name.trim() });
-      }
-      const updated = name ? await storage.getUser(user.id) : user;
-      req.session.userId = user.id;
-      req.session.save((err) => {
-        if (err) {
-          console.error("Session save error:", err);
-          return res.status(500).json({ message: "Registration failed" });
+      if (!existing) {
+        const hashedPassword = await bcrypt.hash(password, 10);
+        const user = await storage.createUser({
+          email: email.toLowerCase().trim(),
+          password: hashedPassword,
+        });
+        if (name) {
+          await storage.updateUser(user.id, { username: name.trim() });
         }
-        res.status(201).json({ id: updated!.id, email: updated!.email, name: updated!.username, profilePhotoUri: updated!.profilePhotoUri });
-      });
+      } else {
+        // Run a bcrypt hash to consume equivalent time and prevent timing oracle.
+        await bcrypt.hash(password, 10);
+      }
+      res.status(201).json({ message: "Account created. Please sign in to continue." });
     } catch (err) {
       console.error("Registration error:", err);
       res.status(500).json({ message: "Registration failed" });
     }
   });
 
-  app.post("/api/auth/login", async (req, res) => {
+  app.post("/api/auth/login", authRateLimiter, async (req, res) => {
     try {
       const { email, password } = req.body;
       if (!email || !password) {
@@ -231,7 +246,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post("/api/auth/guest", async (req, res) => {
+  app.post("/api/auth/guest", authRateLimiter, async (req, res) => {
     try {
       const { name } = req.body;
       if (!name || !name.trim()) {

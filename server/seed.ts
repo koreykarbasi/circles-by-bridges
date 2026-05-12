@@ -237,7 +237,7 @@ export async function seedDatabase() {
           userId: demoUser.id,
         });
       }
-      console.log(`Seeded demo user (demo@bridges.app / demo123) with ${SAMPLE_CONTACTS.length} contacts`);
+      console.log(`Seeded demo user (demo@bridges.app) with ${SAMPLE_CONTACTS.length} contacts`);
     }
 
     const test1Exists = existingUsers.some((u) => u.email === "test1@bridges.app");
@@ -270,7 +270,7 @@ export async function seedDatabase() {
           avatarColor: AVATAR_COLORS[i % AVATAR_COLORS.length],
         });
       }
-      console.log(`Seeded test1 user (test1@bridges.app / test123) with ${TEST1_CONTACTS.length} contacts`);
+      console.log(`Seeded test1 user (test1@bridges.app) with ${TEST1_CONTACTS.length} contacts`);
     }
 
     // complete@bridges.app — Stage 2, full profile, past finalized hangout
@@ -327,7 +327,7 @@ export async function seedDatabase() {
         await db.insert(hangoutVotes).values({ optionId: opt1.id, planId: plan.id, voterName: voter, rank: 1 });
       }
 
-      console.log(`Seeded complete@bridges.app / test123 with ${COMPLETE_CONTACTS.length} contacts + 1 finalized hangout`);
+      console.log(`Seeded complete@bridges.app with ${COMPLETE_CONTACTS.length} contacts + 1 finalized hangout`);
     }
 
     // half@bridges.app — Stage 1, mid-funnel
@@ -350,7 +350,7 @@ export async function seedDatabase() {
           userId: halfUser.id,
         });
       }
-      console.log(`Seeded half@bridges.app / test123 with ${HALF_CONTACTS.length} contacts`);
+      console.log(`Seeded half@bridges.app with ${HALF_CONTACTS.length} contacts`);
     }
 
     // fresh@bridges.app — Brand new, 0 contacts
@@ -365,7 +365,7 @@ export async function seedDatabase() {
           password: hashedPassword,
           username: "Fresh User",
         });
-      console.log("Seeded fresh@bridges.app / test123 with 0 contacts");
+      console.log("Seeded fresh@bridges.app with 0 contacts");
     }
   } catch (err) {
     console.error("Error seeding database:", err);

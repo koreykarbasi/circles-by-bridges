@@ -108,10 +108,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const register = useCallback(async (email: string, password: string, name?: string) => {
-    const res = await apiRequest("POST", "/api/auth/register", { email, password, name });
-    const data = await res.json();
-    setUser(data);
-    writeAuthCache(data);
+    await apiRequest("POST", "/api/auth/register", { email, password, name });
+    // Server uses silent-success pattern: no session is created during registration.
+    // Caller should redirect the user to the sign-in screen.
   }, []);
 
   const loginAsGuest = useCallback(async (name: string) => {

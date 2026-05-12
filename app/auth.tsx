@@ -27,6 +27,7 @@ export default function AuthScreen() {
   const [confirmPassword, setConfirmPassword] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState("");
+  const [successMessage, setSuccessMessage] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [guestMode, setGuestMode] = useState(false);
   const [guestName, setGuestName] = useState("");
@@ -56,6 +57,10 @@ export default function AuthScreen() {
         await login(email.trim(), password);
       } else {
         await register(email.trim(), password, name.trim());
+        setSuccessMessage("Account created. Please sign in to continue.");
+        setIsLogin(true);
+        setPassword("");
+        setConfirmPassword("");
       }
     } catch (err: any) {
       const msg = err?.message || "Something went wrong";
@@ -187,6 +192,13 @@ export default function AuthScreen() {
             </View>
           ) : null}
 
+          {successMessage ? (
+            <View style={styles.successBox}>
+              <Ionicons name="checkmark-circle" size={16} color={Colors.success} />
+              <Text style={styles.successText}>{successMessage}</Text>
+            </View>
+          ) : null}
+
           {!isLogin && (
             <View style={styles.inputGroup}>
               <Text style={styles.label}>Name</Text>
@@ -280,7 +292,7 @@ export default function AuthScreen() {
             <Text style={styles.switchText}>
               {isLogin ? "Don't have an account?" : "Already have an account?"}
             </Text>
-            <TouchableOpacity onPress={() => { setIsLogin(!isLogin); setError(""); }} testID="auth-switch">
+            <TouchableOpacity onPress={() => { setIsLogin(!isLogin); setError(""); setSuccessMessage(""); }} testID="auth-switch">
               <Text style={styles.switchLink}>
                 {isLogin ? "Sign Up" : "Sign In"}
               </Text>
@@ -467,6 +479,23 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontFamily: "Nunito_600SemiBold",
     color: Colors.primary,
+  },
+  successBox: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    backgroundColor: "rgba(74, 222, 128, 0.1)",
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: "rgba(74, 222, 128, 0.2)",
+  },
+  successText: {
+    color: Colors.success,
+    fontFamily: "Nunito_400Regular",
+    fontSize: 14,
+    flex: 1,
   },
   demoHint: {
     alignItems: "center",

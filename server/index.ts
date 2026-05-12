@@ -255,8 +255,10 @@ import { scheduleDailyNotifications } from "./push-notifications";
 
   setupErrorHandler(app);
 
-  await seedDatabase();
-  await updateExistingContactsWithLabels();
+  if (process.env.NODE_ENV !== "production") {
+    await seedDatabase();
+    await updateExistingContactsWithLabels();
+  }
 
   initPromptSync().catch((err) => {
     console.log("[prompts-sync] Init failed (non-fatal):", err.message);
