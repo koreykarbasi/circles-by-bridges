@@ -163,6 +163,14 @@ const registerRateLimiter = rateLimit({
   message: { message: "Too many registration attempts, please try again later" },
 });
 
+const voteRateLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 20,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { message: "Too many voting attempts, please try again later" },
+});
+
 export async function registerRoutes(app: Express): Promise<Server> {
   app.set("trust proxy", 1);
   const PgSession = connectPgSimple(session);
@@ -726,20 +734,27 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const scored = computeBordaScores(options, votes);
       const creator = await storage.getUser(plan.userId!);
 
+      // Explicit allowlist of fields safe to expose on the public voting page
+      const publicOptions = scored.map((opt) => ({
+        id: opt.id,
+        label: opt.label,
+        questionType: opt.questionType,
+        dateTime: opt.dateTime,
+        bordaScore: opt.bordaScore,
+        voteCount: opt.voteCount,
+      }));
+
       res.json({
-        id: plan.id,
         title: plan.title,
         description: plan.description,
         status: plan.status,
-        shareCode: plan.shareCode,
         creatorName: creator?.username || "Someone",
-        inviteeNames: plan.inviteeNames,
         finalizedOptionId: plan.finalizedOptionId,
         surveyMode: plan.surveyMode,
         fixedActivity: plan.fixedActivity,
         deadline: plan.deadline,
         includePlusOne: plan.includePlusOne,
-        options: scored,
+        options: publicOptions,
         bestRecommendation: computeBestRecommendation(scored, votes, plan.includePlusOne),
       });
     } catch (err) {
@@ -748,7 +763,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post("/api/vote/:shareCode", async (req, res) => {
+  app.post("/api/vote/:shareCode", voteRateLimiter, async (req, res) => {
     try {
       const plan = await storage.getHangoutPlanByShareCode(req.params.shareCode);
       if (!plan) {
@@ -779,6 +794,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
       }
 
+      // Validate voterName against the invitee list when one is present
+      if (plan.inviteeNames && plan.inviteeNames.length > 0) {
+        const normalizedVoter = voterName.toLowerCase().trim();
+        const match = plan.inviteeNames.some(
+          (name) => name.toLowerCase().trim() === normalizedVoter
+        );
+        if (!match) {
+          return res.status(403).json({ message: "Your name does not match the invitee list for this survey" });
+        }
+      }
+
       // Check deadline
       if (plan.deadline) {
         const deadlineDate = new Date(plan.deadline);
@@ -787,18 +813,25 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
       }
 
-      const createdVotes = [];
+      // Validate all submitted optionIds belong to this plan
+      const planOptions = await storage.getOptionsByPlanId(plan.id);
+      const validOptionIds = new Set(planOptions.map((o) => o.id));
       for (const v of votes) {
-        const vote = await storage.createHangoutVote({
-          optionId: v.optionId,
-          planId: plan.id,
-          voterName,
-          rank: v.rank ?? null,
-          bringsGuests: bringsGuests ?? null,
-          plusOneCount: plusOneCount ?? null,
-        });
-        createdVotes.push(vote);
+        if (!validOptionIds.has(v.optionId)) {
+          return bad(res, "One or more submitted options do not belong to this survey");
+        }
       }
+
+      // Atomically replace any existing submission from this voter to prevent ballot stuffing
+      const newVotes = votes.map((v: any) => ({
+        optionId: v.optionId,
+        planId: plan.id,
+        voterName,
+        rank: v.rank ?? null,
+        bringsGuests: bringsGuests ?? null,
+        plusOneCount: plusOneCount ?? null,
+      }));
+      const createdVotes = await storage.replaceVotesForVoter(plan.id, voterName, newVotes);
       res.status(201).json(createdVotes);
     } catch (err) {
       console.error("Error casting votes:", err);

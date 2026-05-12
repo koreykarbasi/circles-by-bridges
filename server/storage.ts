@@ -31,6 +31,8 @@ export interface IStorage {
   getVotesByOptionId(optionId: string): Promise<HangoutVote[]>;
   createHangoutVote(data: InsertHangoutVote): Promise<HangoutVote>;
   deleteVotesByPlanId(planId: string): Promise<boolean>;
+  deleteVotesByPlanIdAndVoterName(planId: string, voterName: string): Promise<void>;
+  replaceVotesForVoter(planId: string, voterName: string, newVotes: InsertHangoutVote[]): Promise<HangoutVote[]>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -156,6 +158,22 @@ export class DatabaseStorage implements IStorage {
   async deleteVotesByPlanId(planId: string): Promise<boolean> {
     const result = await db.delete(hangoutVotes).where(eq(hangoutVotes.planId, planId)).returning();
     return result.length >= 0;
+  }
+
+  async deleteVotesByPlanIdAndVoterName(planId: string, voterName: string): Promise<void> {
+    await db.delete(hangoutVotes).where(
+      and(eq(hangoutVotes.planId, planId), eq(hangoutVotes.voterName, voterName))
+    );
+  }
+
+  async replaceVotesForVoter(planId: string, voterName: string, newVotes: InsertHangoutVote[]): Promise<HangoutVote[]> {
+    return db.transaction(async (tx) => {
+      await tx.delete(hangoutVotes).where(
+        and(eq(hangoutVotes.planId, planId), eq(hangoutVotes.voterName, voterName))
+      );
+      if (newVotes.length === 0) return [];
+      return tx.insert(hangoutVotes).values(newVotes).returning();
+    });
   }
 }
 

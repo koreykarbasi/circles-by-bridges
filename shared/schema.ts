@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { pgTable, text, varchar, integer, timestamp, boolean } from "drizzle-orm/pg-core";
+import { pgTable, text, varchar, integer, timestamp, boolean, uniqueIndex } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
@@ -78,7 +78,10 @@ export const hangoutVotes = pgTable("hangout_votes", {
   bringsGuests: boolean("brings_guests"),
   plusOneCount: integer("plus_one_count"),
   createdAt: timestamp("created_at").defaultNow(),
-});
+}, (table) => ({
+  planVoterOptionUnique: uniqueIndex("hangout_votes_plan_voter_option_unique")
+    .on(table.planId, table.voterName, table.optionId),
+}));
 
 export const insertUserSchema = createInsertSchema(users).pick({
   email: true,
