@@ -1,5 +1,5 @@
 import { db } from "./db";
-import { users, contacts } from "@shared/schema";
+import { users, contacts, hangoutVotes, hangoutOptions, hangoutPlans } from "@shared/schema";
 import { isNotNull, eq } from "drizzle-orm";
 
 // ─── Reminder helpers (mirrors lib/helpers.ts + lib/reminders.ts) ─────────────
@@ -168,6 +168,100 @@ export async function sendDailyReminders() {
     }
   } catch (err) {
     console.error("[push] Error sending reminders:", err);
+  }
+}
+
+// ─── Hangout finalized notifications ─────────────────────────────────────────
+
+export async function sendHangoutFinalizedNotifications(
+  planId: string,
+  organizerUserId: string,
+): Promise<void> {
+  try {
+    // Load the plan
+    const [plan] = await db
+      .select()
+      .from(hangoutPlans)
+      .where(eq(hangoutPlans.id, planId));
+    if (!plan) return;
+
+    // Load all options to resolve the finalized time slot and activity/location
+    const options = await db
+      .select()
+      .from(hangoutOptions)
+      .where(eq(hangoutOptions.planId, planId));
+
+    const timeOption = options.find(
+      (o) => o.id === plan.finalizedTimeOptionId,
+    );
+    const activityOption = options.find(
+      (o) => o.id === plan.finalizedOptionId,
+    );
+
+    // Build a readable summary for the notification body
+    const timePart = timeOption?.label ?? timeOption?.dateTime ?? null;
+    const locationPart =
+      activityOption?.location ??
+      timeOption?.location ??
+      activityOption?.activity ??
+      activityOption?.label ??
+      null;
+
+    // Format: "[Title] — [time] at [location]"
+    let bodyParts: string[] = [plan.title];
+    if (timePart) bodyParts.push(timePart);
+    const notificationBody =
+      bodyParts.join(" — ") + (locationPart ? ` at ${locationPart}` : "");
+
+    // Collect unique voter names
+    const allVotes = await db
+      .select({ voterName: hangoutVotes.voterName })
+      .from(hangoutVotes)
+      .where(eq(hangoutVotes.planId, planId));
+
+    const uniqueVoterNames = [
+      ...new Set(
+        allVotes
+          .map((v) => v.voterName.trim().toLowerCase())
+          .filter((name) => name.length > 0),
+      ),
+    ];
+    if (uniqueVoterNames.length === 0) return;
+
+    // Find registered users whose username matches a voter name (case-insensitive)
+    // and who have a push token and are not the organizer
+    const registeredUsers = await db
+      .select({
+        id: users.id,
+        username: users.username,
+        pushToken: users.pushToken,
+      })
+      .from(users)
+      .where(isNotNull(users.pushToken));
+
+    let sent = 0;
+    for (const user of registeredUsers) {
+      if (user.id === organizerUserId) continue;
+      if (!user.pushToken || !user.username) continue;
+      const normalizedUsername = user.username.trim().toLowerCase();
+      if (!uniqueVoterNames.includes(normalizedUsername)) continue;
+
+      await sendExpoPush(
+        user.pushToken,
+        "Your hangout is confirmed!",
+        notificationBody,
+        { hangoutId: planId },
+      );
+      sent++;
+    }
+
+    if (sent > 0) {
+      console.log(
+        `[push] Sent ${sent} hangout-finalized notifications for plan ${planId}`,
+      );
+    }
+  } catch (err) {
+    console.error("[push] Error sending hangout finalized notifications:", err);
   }
 }
 

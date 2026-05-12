@@ -6,6 +6,7 @@ import session from "express-session";
 import connectPgSimple from "connect-pg-simple";
 import { pool } from "./db";
 import { getPrompts, syncFromSheet } from "./prompts-sync";
+import { sendHangoutFinalizedNotifications } from "./push-notifications";
 import type { InsertContact } from "@shared/schema";
 import * as chrono from "chrono-node";
 
@@ -605,6 +606,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
         options: scored,
         bestRecommendation: computeBestRecommendation(scored, votes, plan!.includePlusOne),
       });
+
+      // Fire-and-forget: notify voters when the organizer finalizes the plan
+      if (updateData.status === "finalized" && existing.status !== "finalized") {
+        sendHangoutFinalizedNotifications(id, req.session.userId!).catch((err) =>
+          console.error("[push] Hangout finalized notification error:", err),
+        );
+      }
     } catch (err) {
       console.error("Error updating hangout:", err);
       res.status(500).json({ message: "Failed to update hangout" });

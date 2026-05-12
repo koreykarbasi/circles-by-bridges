@@ -77,10 +77,12 @@ function RootLayoutNav() {
       if (token) savePushToken(token);
     });
 
-    // Handle notification taps — deep-link to the relevant contact's edit screen
+    // Handle notification taps — deep-link to the relevant screen
     responseListener.current = Notifications.addNotificationResponseReceivedListener((response) => {
       const data = response.notification.request.content.data as Record<string, string> | undefined;
-      if (data?.contactId) {
+      if (data?.hangoutId) {
+        router.push({ pathname: "/hangout-detail", params: { id: data.hangoutId } });
+      } else if (data?.contactId) {
         router.push({ pathname: "/edit-contact", params: { id: data.contactId } });
       } else {
         router.push("/(tabs)");
