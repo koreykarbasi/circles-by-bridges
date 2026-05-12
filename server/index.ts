@@ -60,8 +60,22 @@ function setupBodyParsing(app: express.Application) {
       },
     }),
   );
+}
 
-  app.use(express.urlencoded({ extended: false }));
+function enforceJsonContentType(app: express.Application) {
+  app.use((req: Request, res: Response, next: NextFunction) => {
+    if (req.method === "GET" || req.method === "HEAD" || req.method === "OPTIONS") {
+      return next();
+    }
+    if (!req.path.startsWith("/api")) {
+      return next();
+    }
+    const ct = req.headers["content-type"] ?? "";
+    if (!ct.includes("application/json")) {
+      return res.status(415).json({ message: "Unsupported Media Type: requests must use application/json" });
+    }
+    next();
+  });
 }
 
 function setupRequestLogging(app: express.Application) {
@@ -247,6 +261,7 @@ import { scheduleDailyNotifications } from "./push-notifications";
 (async () => {
   setupCors(app);
   setupBodyParsing(app);
+  enforceJsonContentType(app);
   setupRequestLogging(app);
 
   configureExpoAndLanding(app);

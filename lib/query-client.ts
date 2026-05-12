@@ -37,7 +37,7 @@ export async function apiRequest(
 
   const res = await fetchFn(url.toString(), {
     method,
-    headers: data ? { "Content-Type": "application/json" } : {},
+    headers: { "Content-Type": "application/json" },
     body: data ? JSON.stringify(data) : undefined,
     credentials: "include",
   });
