@@ -13,7 +13,8 @@
     "db:push": "drizzle-kit push",
     "start": "npx expo start",
     "lint": "npx expo lint",
-    "lint:fix": "npx expo lint --fix"
+    "lint:fix": "npx expo lint --fix",
+    "test:e2e": "npx playwright test"
   },
   "dependencies": {
     "@expo-google-fonts/nunito": "^0.4.2",
@@ -80,8 +81,10 @@
     "@types/express": "^5.0.0",
     "@types/react": "~19.1.10",
     "babel-plugin-react-compiler": "^19.0.0-beta-e993439-20250117",
+    "@playwright/test": "^1.60.0",
     "drizzle-kit": "^0.31.4",
     "eslint": "^9.31.0",
+    "playwright": "^1.60.0",
     "eslint-config-expo": "~10.0.0",
     "patch-package": "^8.0.0",
     "typescript": "~5.9.2"
