@@ -1,6 +1,8 @@
 /**
  * Deterministic unit tests for International Friend action-type distribution.
  * Run with: npx ts-node tests/prompts-international.test.ts
+ *
+ * Uses fixed ordering (no randomness) so results are stable across runs.
  */
 
 type ActionType = "call" | "text" | "hangout";
@@ -10,17 +12,8 @@ interface TaggedPrompt {
   actionType: ActionType;
 }
 
-function shuffleArray<T>(arr: T[]): T[] {
-  const copy = [...arr];
-  for (let i = copy.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
-    [copy[i], copy[j]] = [copy[j], copy[i]];
-  }
-  return copy;
-}
-
 function buildInternationalPool(tagged: TaggedPrompt[]): TaggedPrompt[] {
-  const hangoutPool = shuffleArray(tagged.filter((t) => t.actionType === "hangout"));
+  const hangoutPool = tagged.filter((t) => t.actionType === "hangout");
   const reducedCount = Math.max(1, Math.floor(hangoutPool.length * 0.6));
   return [
     ...tagged.filter((t) => t.actionType !== "hangout"),
@@ -53,10 +46,16 @@ for (const { name, call, text, hangout } of circles) {
   const normalRate = hangoutRate(tagged);
   const intlPool = buildInternationalPool(tagged);
   const intlRate = hangoutRate(intlPool);
+  const reducedCount = Math.max(1, Math.floor(hangout * 0.6));
 
   assert(
     intlRate < normalRate,
     `${name}: international hangout rate (${(intlRate * 100).toFixed(1)}%) is strictly fewer than normal (${(normalRate * 100).toFixed(1)}%)`
+  );
+
+  assert(
+    intlPool.filter((t) => t.actionType === "hangout").length === reducedCount,
+    `${name}: hangout count reduced to floor(n * 0.6) = ${reducedCount} (from ${hangout})`
   );
 
   assert(
@@ -66,12 +65,12 @@ for (const { name, call, text, hangout } of circles) {
 
   assert(
     intlPool.filter((t) => t.actionType === "call").length === call,
-    `${name}: all circle call prompts are present for international contacts`
+    `${name}: all ${call} circle call prompts retained for international contacts`
   );
 
   assert(
     intlPool.filter((t) => t.actionType === "text").length === text,
-    `${name}: all circle text prompts are present for international contacts`
+    `${name}: all ${text} circle text prompts retained for international contacts`
   );
 }
 
