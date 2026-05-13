@@ -65,6 +65,10 @@ const CIRCLE_1_CALL_PROMPTS = [
   "Call [Name] and ask how they're really doing - not the surface answer.",
   "Leave [Name] a voice note about a moment this week where you wished they were there.",
   "Call [Name] and share something you've been sitting with lately.",
+  "Call [Name] with no reason at all - just the desire to hear their voice.",
+  "Tell [Name] on a call that you see how hard they've been working lately.",
+  "Ask [Name] what's been bringing them peace lately - then really listen.",
+  "Call [Name] to remind them they're not doing life alone.",
 ];
 
 const CIRCLE_1_TEXT_PROMPTS = [
@@ -81,6 +85,10 @@ const CIRCLE_1_TEXT_PROMPTS = [
   "Tell [Name]: I don't say this enough, but I'm really glad you're in my life.",
   "Ask [Name] what they need most right now - and really mean it.",
   "Tell [Name] one thing you hope never changes about them.",
+  "Tell [Name] that you admire how they show up for others.",
+  "Ask [Name] what they've been learning about themselves lately.",
+  "Send [Name] a note: you don't have to have it all figured out - I'm here.",
+  "Ask [Name] what part of life feels most uncertain for them right now.",
 ];
 
 const CIRCLE_1_HANGOUT_PROMPTS = [
@@ -98,6 +106,10 @@ const CIRCLE_2_CALL_PROMPTS = [
   "Leave [Name] a voice note just to check in - warmth goes a long way.",
   "Phone [Name] out of the blue - the unexpected call often means the most.",
   "Ask [Name] how they're doing beyond the surface - show you actually want to know.",
+  "Call [Name] and ask what's been weighing on them lately.",
+  "Leave [Name] a voice message saying you've been thinking about them.",
+  "Give [Name] a call and share something specific you admire about them.",
+  "Ask [Name] what they're looking forward to - a call goes deeper than a text.",
 ];
 
 const CIRCLE_2_TEXT_PROMPTS = [
@@ -114,6 +126,10 @@ const CIRCLE_2_TEXT_PROMPTS = [
   "Ask [Name] something genuine: what are they figuring out right now?",
   "Send [Name] a word of encouragement about something they're working through.",
   "Tell [Name] specifically what you value about their friendship.",
+  "Tell [Name] that you've been rooting for them quietly.",
+  "Ask [Name] how they're really doing - not the polished version.",
+  "Send [Name] a genuine compliment about something you've noticed.",
+  "Ask [Name] what's something they wish they had more time for.",
 ];
 
 const CIRCLE_2_HANGOUT_PROMPTS = [
@@ -130,6 +146,11 @@ const CIRCLE_3_CALL_PROMPTS = [
   "Leave [Name] a voice note - it's low pressure and surprisingly meaningful.",
   "Call [Name] just to say you were thinking about them - keep it short and genuine.",
   "Give [Name] a quick call to check in - no agenda, just connection.",
+  "Send [Name] a voice note with no agenda - just warmth.",
+  "Call [Name] to say you saw something that made you think of them.",
+  "Give [Name] a brief call to check in - keep it light and easy.",
+  "Leave [Name] a voice note with a genuine compliment.",
+  "Call [Name] to share something small you thought they'd enjoy.",
 ];
 
 const CIRCLE_3_TEXT_PROMPTS = [
@@ -144,6 +165,11 @@ const CIRCLE_3_TEXT_PROMPTS = [
   "Tell [Name] something genuine you noticed or admire about who they are.",
   "Check in with [Name] - no agenda, just a moment of presence.",
   "Send [Name] something small that made you think of them this week.",
+  "Drop [Name] a short message - they don't need a reason to hear from you.",
+  "Tell [Name] something you noticed about them that you haven't said yet.",
+  "Ask [Name] what's been new in their world lately.",
+  "Send [Name] a kind word - small gestures build real connection.",
+  "Reach out to [Name] just to say hi - it's always the right time.",
 ];
 
 const CIRCLE_3_HANGOUT_PROMPTS = [
@@ -400,10 +426,13 @@ export function getPromptsForContact(
   const tagged = buildTaggedPrompts(circleLevel);
   let allPrompts: string[];
   if (isInternationalFriend) {
-    // Reduce hangout weight for international friends: keep all call/text, limit to 1 hangout
-    const nonHangout = tagged.filter((t) => t.actionType !== "hangout").map((t) => t.text);
-    const oneHangout = tagged.filter((t) => t.actionType === "hangout").slice(0, 1).map((t) => t.text);
-    allPrompts = [...nonHangout, ...oneHangout];
+    // Reduce hangout weight to ~20%: keep all call/text, randomly sample hangout prompts
+    const nonHangout = tagged.filter((t) => t.actionType !== "hangout");
+    const hangoutPool = shuffleArray(tagged.filter((t) => t.actionType === "hangout"));
+    // Target ~20% hangout: nonHangout * 0.25 gives hangout/(hangout+nonHangout) ≈ 20%
+    const targetHangoutCount = Math.max(1, Math.round(nonHangout.length * 0.25));
+    const sampledHangout = hangoutPool.slice(0, targetHangoutCount);
+    allPrompts = [...nonHangout.map((t) => t.text), ...sampledHangout.map((t) => t.text)];
   } else {
     allPrompts = tagged.map((t) => t.text);
   }
