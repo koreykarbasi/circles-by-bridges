@@ -246,6 +246,14 @@ export default function CreateHangoutScreen() {
     </>
   );
 
+  const sortedContacts = useMemo(() =>
+    [...contacts].sort((a, b) => {
+      if (a.circleLevel !== b.circleLevel) return a.circleLevel - b.circleLevel;
+      return a.name.localeCompare(b.name);
+    }),
+    [contacts]
+  );
+
   const renderStep2 = () => (
     <>
       <Text style={styles.stepLabel}>Step 2 of 3</Text>
@@ -253,11 +261,12 @@ export default function CreateHangoutScreen() {
       <Text style={styles.stepDescription}>Select friends from your circles.</Text>
 
       <View style={styles.contactsList}>
-        {contacts.length === 0 ? (
+        {sortedContacts.length === 0 ? (
           <Text style={styles.emptyText}>No contacts yet. Add people to your circles first.</Text>
         ) : (
-          contacts.map((c) => {
+          sortedContacts.map((c) => {
             const selected = selectedContacts.has(c.id);
+            const badge = CIRCLE_BADGE[c.circleLevel];
             return (
               <Pressable
                 key={c.id}
@@ -266,6 +275,11 @@ export default function CreateHangoutScreen() {
               >
                 <Avatar name={c.name} color={c.avatarColor} size={36} photoUri={c.photoUri} />
                 <Text style={styles.contactName} numberOfLines={1}>{c.name}</Text>
+                {badge && (
+                  <View style={[styles.circleBadge, { backgroundColor: badge.color + "22", borderColor: badge.color + "55" }]}>
+                    <Text style={[styles.circleBadgeText, { color: badge.color }]}>{badge.label}</Text>
+                  </View>
+                )}
                 <View style={[styles.checkbox, selected && styles.checkboxSelected]}>
                   {selected && <Ionicons name="checkmark" size={14} color="#fff" />}
                 </View>
@@ -472,6 +486,12 @@ export default function CreateHangoutScreen() {
   );
 }
 
+const CIRCLE_BADGE: Record<number, { label: string; color: string }> = {
+  1: { label: "Core", color: "#FF6B8A" },
+  2: { label: "Close", color: "#9B7DFF" },
+  3: { label: "Acquaintance", color: "#4ECDC4" },
+};
+
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: Colors.background },
   headerBar: {
@@ -554,6 +574,11 @@ const styles = StyleSheet.create({
   },
   contactRowSelected: { borderColor: Colors.primary + "60", backgroundColor: Colors.primary + "10" },
   contactName: { flex: 1, fontSize: 15, fontFamily: "Nunito_600SemiBold", color: Colors.text },
+  circleBadge: {
+    paddingHorizontal: 7, paddingVertical: 3, borderRadius: 6,
+    borderWidth: 1, marginRight: 4,
+  },
+  circleBadgeText: { fontSize: 11, fontFamily: "Nunito_700Bold" },
   checkbox: {
     width: 24, height: 24, borderRadius: 12, borderWidth: 2,
     borderColor: Colors.border, alignItems: "center", justifyContent: "center",

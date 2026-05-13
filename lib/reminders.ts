@@ -118,17 +118,23 @@ function generateCircle2Reminders(contact: Contact): Reminder[] {
       });
     }
   } else {
-    reminders.push({
-      id: `hangout-${contact.id}`,
-      contactId: contact.id,
-      contactName: contact.name,
-      circleLevel: contact.circleLevel,
-      type: "hangout-overdue",
-      priority: baseScore + 50,
-      title: `Plan a hangout with ${contact.name}`,
-      subtitle: "You haven't hung out yet",
-      actionType: "hangout",
-    });
+    // lastHangout is null — only remind if the contact wasn't just added.
+    // lastContacted defaults to today on creation, so <= 7 days means brand-new.
+    const daysSinceContact = getDaysSince(contact.lastContacted ?? undefined);
+    const isNewContact = daysSinceContact === null || daysSinceContact <= 7;
+    if (!isNewContact) {
+      reminders.push({
+        id: `hangout-${contact.id}`,
+        contactId: contact.id,
+        contactName: contact.name,
+        circleLevel: contact.circleLevel,
+        type: "hangout-overdue",
+        priority: baseScore + 50,
+        title: `Plan a hangout with ${contact.name}`,
+        subtitle: "You haven't hung out yet",
+        actionType: "hangout",
+      });
+    }
   }
 
   const daysSinceContact = getDaysSince(contact.lastContacted ?? undefined);
