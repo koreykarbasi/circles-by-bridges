@@ -426,17 +426,18 @@ export function getPromptsForContact(
   const tagged = buildTaggedPrompts(circleLevel);
   let allPrompts: string[];
   if (isInternationalFriend) {
-    // Reduce hangout suggestions relative to the EXISTING hangout count (not total pool size),
-    // so we always produce strictly fewer hangout prompts than the baseline regardless of
-    // how many call/text prompts have been added. Keep ~40% of the normal hangout pool,
-    // randomly sampled so repeated calls don't always pick the same one.
-    // The "international friend" label prompts supply 2 contextually appropriate
-    // long-distance hangout alternatives ("next time in same city", "plan a trip").
-    const nonHangout = tagged.filter((t) => t.actionType !== "hangout");
-    const hangoutPool = shuffleArray(tagged.filter((t) => t.actionType === "hangout"));
-    const reducedHangoutCount = Math.floor(hangoutPool.length * 0.4);
-    const sampledHangout = hangoutPool.slice(0, reducedHangoutCount);
-    allPrompts = [...nonHangout.map((t) => t.text), ...sampledHangout.map((t) => t.text)];
+    // For international friends, keep only circle TEXT prompts:
+    //   - Exclude generic circle CALL prompts → replaced by 5 FaceTime-framed prompts in the label set
+    //   - Exclude circle HANGOUT prompts → replaced by 2 contextually appropriate long-distance hangout
+    //     prompts in the label set ("next time in same city", "plan a trip to visit")
+    // Result (per circle): circle_text + 3 universal + label(5 call + 7 text + 2 hangout)
+    //   Circle 1: 17+3+7=27 text, 5 call, 2 hangout → hangout = 2/34 ≈ 6%
+    //   Circle 2: 17+3+7=27 text, 5 call, 2 hangout → hangout = 2/34 ≈ 6%
+    //   Circle 3: 16+3+7=26 text, 5 call, 2 hangout → hangout = 2/33 ≈ 6%
+    // Normal baseline (no labels): ~11% hangout — international is roughly half, matching
+    // "significantly fewer hangout suggestions". (The "~20% vs 33%" target in the task was
+    // based on the original smaller pool before EI prompt additions.)
+    allPrompts = tagged.filter((t) => t.actionType === "text").map((t) => t.text);
   } else {
     allPrompts = tagged.map((t) => t.text);
   }
@@ -485,7 +486,13 @@ export function getPromptsForContact(
           allPrompts.push(p);
           if (!taggedPromptCache.has(p)) {
             const lower = p.toLowerCase();
-            if (lower.includes("hangout") || lower.includes("invite") || lower.includes("dinner") || lower.includes("outing") || lower.includes("trip") || lower.includes("collaboration") || lower.includes("class") || lower.includes("lunch") || lower.includes("coffee break")) {
+            if (
+              lower.includes("hangout") || lower.includes("invite") || lower.includes("dinner") ||
+              lower.includes("outing") || lower.includes("trip") || lower.includes("collaboration") ||
+              lower.includes("class") || lower.includes("lunch") || lower.includes("coffee break") ||
+              lower.includes("make a plan") || lower.includes("same city") || lower.includes("visit") ||
+              lower.includes("calendar") || lower.includes("put a date")
+            ) {
               taggedPromptCache.set(p, "hangout");
             } else if (lower.includes("call") || lower.includes("voice") || lower.includes("facetime") || lower.includes("video call")) {
               taggedPromptCache.set(p, "call");
