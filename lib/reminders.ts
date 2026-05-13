@@ -118,10 +118,10 @@ function generateCircle2Reminders(contact: Contact): Reminder[] {
       });
     }
   } else {
-    // lastHangout is null — only remind if the contact wasn't just added.
-    // lastContacted defaults to today on creation, so <= 7 days means brand-new.
+    // lastHangout is null — only remind if the contact has been around for at least 7 days.
+    // lastContacted defaults to today on creation, so < 7 days means brand-new.
     const daysSinceContact = getDaysSince(contact.lastContacted ?? undefined);
-    const isNewContact = daysSinceContact === null || daysSinceContact <= 7;
+    const isNewContact = daysSinceContact === null || daysSinceContact < 7;
     if (!isNewContact) {
       reminders.push({
         id: `hangout-${contact.id}`,
