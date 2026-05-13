@@ -19,6 +19,17 @@ interface OptionDraft {
   label: string;
 }
 
+const MONTHS_FULL = [
+  "January", "February", "March", "April", "May", "June",
+  "July", "August", "September", "October", "November", "December",
+];
+
+function defaultDatetimeLabel(daysFromNow: number): string {
+  const d = new Date();
+  d.setDate(d.getDate() + daysFromNow);
+  return `${MONTHS_FULL[d.getMonth()]} ${d.getDate()}, ${d.getFullYear()} at 7:00 PM`;
+}
+
 export default function CreateHangoutScreen() {
   const insets = useSafeAreaInsets();
   const { contacts } = useContacts();
@@ -54,10 +65,11 @@ export default function CreateHangoutScreen() {
     { key: "a1", label: "" },
     { key: "a2", label: "" },
   ]);
-  const [timeOptions, setTimeOptions] = useState<OptionDraft[]>([
-    { key: "t1", label: "" },
-    { key: "t2", label: "" },
+  const [timeOptions, setTimeOptions] = useState<OptionDraft[]>(() => [
+    { key: "t1", label: defaultDatetimeLabel(7) },
+    { key: "t2", label: defaultDatetimeLabel(14) },
   ]);
+  const [expandedTimeKey, setExpandedTimeKey] = useState<string | null>("t1");
   const [locationOptions, setLocationOptions] = useState<OptionDraft[]>([
     { key: "l1", label: "" },
   ]);
@@ -101,12 +113,18 @@ export default function CreateHangoutScreen() {
   const canProceedStep1 = title.trim().length > 0;
   const canProceedStep2 = selectedContacts.size > 0;
   const canSubmit = (() => {
-    const hasTime = timeOptions.some((o) => o.label.trim().length > 0);
+    const hasTime = timeOptions.length > 0;
     if (surveyMode === "standard") {
       return hasTime && activityOptions.some((o) => o.label.trim().length > 0);
     }
     return hasTime && fixedActivity.trim().length > 0;
   })();
+
+  const removeTimeOption = (key: string) => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    setTimeOptions((prev) => prev.filter((o) => o.key !== key));
+    if (expandedTimeKey === key) setExpandedTimeKey(null);
+  };
 
   const handleSubmit = async () => {
     if (submitting) return;
@@ -338,11 +356,73 @@ export default function CreateHangoutScreen() {
         )}
       </View>
 
-      {/* Time options */}
+      {/* Time options — datetime picker accordion */}
       <View style={styles.sectionCard}>
         <Text style={styles.sectionCardTitle}>When</Text>
-        <Text style={styles.fieldHint}>Add time options to vote on (date + time in one field)</Text>
-        {renderOptionList(timeOptions, setTimeOptions, "t", "e.g. Saturday June 7, 3pm", 5)}
+        <Text style={styles.fieldHint}>Add time options for friends to vote on</Text>
+        {timeOptions.map((opt, idx) => {
+          const isExpanded = expandedTimeKey === opt.key;
+          return (
+            <View key={opt.key} style={styles.timeOptionItem}>
+              <Pressable
+                onPress={() => {
+                  Haptics.selectionAsync();
+                  setExpandedTimeKey(isExpanded ? null : opt.key);
+                }}
+                style={({ pressed }) => [
+                  styles.timeOptionRow,
+                  isExpanded && styles.timeOptionRowExpanded,
+                  pressed && { opacity: 0.85 },
+                ]}
+              >
+                <View style={styles.rankBadge}>
+                  <Text style={styles.rankBadgeText}>{idx + 1}</Text>
+                </View>
+                <Text style={styles.timeOptionLabel} numberOfLines={1}>
+                  {opt.label || "Pick a date and time"}
+                </Text>
+                <Ionicons
+                  name={isExpanded ? "chevron-up" : "chevron-down"}
+                  size={15}
+                  color={Colors.textTertiary}
+                />
+                {timeOptions.length > 1 && (
+                  <Pressable
+                    onPress={() => removeTimeOption(opt.key)}
+                    hitSlop={8}
+                    style={{ marginLeft: 4 }}
+                  >
+                    <Ionicons name="close-circle" size={20} color={Colors.danger} />
+                  </Pressable>
+                )}
+              </Pressable>
+              {isExpanded && (
+                <View style={{ marginTop: 10, marginBottom: 4 }}>
+                  <DateWheelPicker
+                    mode="datetime"
+                    value={opt.label}
+                    onChange={(val) => updateOption(setTimeOptions, opt.key, val)}
+                  />
+                </View>
+              )}
+            </View>
+          );
+        })}
+        {timeOptions.length < 5 && (
+          <Pressable
+            onPress={() => {
+              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+              const key = "t" + Date.now();
+              const label = defaultDatetimeLabel(7 + timeOptions.length * 7);
+              setTimeOptions((prev) => [...prev, { key, label }]);
+              setExpandedTimeKey(key);
+            }}
+            style={({ pressed }) => [styles.addOptionBtn, pressed && { opacity: 0.7 }]}
+          >
+            <Ionicons name="add-circle-outline" size={18} color={Colors.primaryLight} />
+            <Text style={styles.addOptionText}>Add time option</Text>
+          </Pressable>
+        )}
       </View>
 
       {/* Location options - only for fixed activity */}
@@ -561,6 +641,20 @@ const styles = StyleSheet.create({
     paddingVertical: 8, marginTop: 2,
   },
   addOptionText: { fontSize: 13, fontFamily: "Nunito_600SemiBold", color: Colors.primaryLight },
+  timeOptionItem: { marginBottom: 8 },
+  timeOptionRow: {
+    flexDirection: "row", alignItems: "center", gap: 10,
+    backgroundColor: Colors.surfaceElevated, borderRadius: 12,
+    paddingHorizontal: 12, paddingVertical: 10,
+    borderWidth: 1, borderColor: Colors.border,
+  },
+  timeOptionRowExpanded: {
+    borderColor: Colors.primary + "60",
+    backgroundColor: Colors.primary + "0C",
+  },
+  timeOptionLabel: {
+    flex: 1, fontSize: 14, fontFamily: "Nunito_600SemiBold", color: Colors.text,
+  },
   toggleRow: { flexDirection: "row", alignItems: "center", gap: 12 },
   contactsList: { gap: 6, marginBottom: 20 },
   emptyText: {
