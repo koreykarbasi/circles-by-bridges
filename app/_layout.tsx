@@ -66,12 +66,17 @@ async function savePushToken(token: string) {
 
 function RootLayoutNav() {
   const { user, isCacheHydrated } = useAuth();
-  const { hasCompletedOnboarding } = useOnboarding();
+  const { hasCompletedOnboarding, isReplayRequested } = useOnboarding();
   const responseListener = useRef<{ remove(): void } | null>(null);
 
-  // Register for push notifications once onboarding is done and user is authenticated
+  // A valid server session is a stronger signal than AsyncStorage — treat authenticated
+  // users as having completed onboarding, unless they explicitly requested a replay.
+  const effectivelyCompleted =
+    hasCompletedOnboarding || (user !== null && !isReplayRequested);
+
+  // Register for push notifications once in the main app and user is authenticated
   useEffect(() => {
-    if (!user || !hasCompletedOnboarding) return;
+    if (!user || !effectivelyCompleted) return;
 
     registerForPushNotifications().then((token) => {
       if (token) savePushToken(token);
@@ -93,19 +98,19 @@ function RootLayoutNav() {
       responseListener.current?.remove();
       responseListener.current = null;
     };
-  }, [user?.id, hasCompletedOnboarding]);
+  }, [user?.id, effectivelyCompleted]);
 
   useEffect(() => {
     if (hasCompletedOnboarding === null || !isCacheHydrated) return;
 
-    if (!hasCompletedOnboarding) {
+    if (!effectivelyCompleted) {
       router.replace("/onboarding");
     } else if (!user) {
       router.replace("/auth");
     } else {
       router.replace("/(tabs)");
     }
-  }, [user, hasCompletedOnboarding, isCacheHydrated]);
+  }, [user, hasCompletedOnboarding, isReplayRequested, isCacheHydrated]);
 
   if (hasCompletedOnboarding === null || !isCacheHydrated) {
     return (

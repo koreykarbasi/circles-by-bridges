@@ -158,6 +158,13 @@ async function load() {
     if (!res.ok) throw new Error('Not found');
     planData = await res.json();
 
+    // If this browser already submitted a vote for this survey, show results directly
+    try {
+      if (localStorage.getItem('voted_' + shareCode) === 'true') {
+        submitted = true;
+      }
+    } catch(_) {}
+
     // Initialize rankings: each type gets its options in order
     const types = [...new Set(planData.options.map(o => o.questionType))];
     types.forEach(t => {
@@ -644,6 +651,7 @@ async function submitVotes() {
     }
     submitted = true;
     voterName = name;
+    try { localStorage.setItem('voted_' + shareCode, 'true'); } catch(_) {}
 
     // Refresh plan data to show updated results
     const updated = await fetch('/api/vote/' + shareCode);

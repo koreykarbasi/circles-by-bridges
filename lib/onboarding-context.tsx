@@ -5,6 +5,7 @@ const ONBOARDING_KEY = "bridges_onboarding_complete";
 
 interface OnboardingContextValue {
   hasCompletedOnboarding: boolean | null;
+  isReplayRequested: boolean;
   completeOnboarding: () => Promise<void>;
   resetOnboarding: () => Promise<void>;
 }
@@ -13,6 +14,7 @@ const OnboardingContext = createContext<OnboardingContextValue | null>(null);
 
 export function OnboardingProvider({ children }: { children: ReactNode }) {
   const [hasCompletedOnboarding, setHasCompletedOnboarding] = useState<boolean | null>(null);
+  const [isReplayRequested, setIsReplayRequested] = useState(false);
 
   useEffect(() => {
     AsyncStorage.getItem(ONBOARDING_KEY).then((val) => {
@@ -23,16 +25,18 @@ export function OnboardingProvider({ children }: { children: ReactNode }) {
   const completeOnboarding = async () => {
     await AsyncStorage.setItem(ONBOARDING_KEY, "true");
     setHasCompletedOnboarding(true);
+    setIsReplayRequested(false);
   };
 
   const resetOnboarding = async () => {
     await AsyncStorage.removeItem(ONBOARDING_KEY);
     setHasCompletedOnboarding(false);
+    setIsReplayRequested(true);
   };
 
   const value = useMemo(
-    () => ({ hasCompletedOnboarding, completeOnboarding, resetOnboarding }),
-    [hasCompletedOnboarding],
+    () => ({ hasCompletedOnboarding, isReplayRequested, completeOnboarding, resetOnboarding }),
+    [hasCompletedOnboarding, isReplayRequested],
   );
 
   return <OnboardingContext.Provider value={value}>{children}</OnboardingContext.Provider>;
