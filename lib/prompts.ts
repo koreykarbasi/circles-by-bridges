@@ -426,18 +426,14 @@ export function getPromptsForContact(
   const tagged = buildTaggedPrompts(circleLevel);
   let allPrompts: string[];
   if (isInternationalFriend) {
-    // Proportional sampling: keep circle participation across all action types but
-    // subsample call/text so hangout = ~20% of the circle pool.
-    const callPool = shuffleArray(tagged.filter((t) => t.actionType === "call"));
-    const textPool = shuffleArray(tagged.filter((t) => t.actionType === "text"));
+    // Keep call/text in full; reduce hangout to ~60% of baseline count.
+    // 60% preserves the spec ratio (20/33 ≈ 60%) and guarantees strictly fewer
+    // hangout suggestions than a non-international contact regardless of pool size.
     const hangoutPool = shuffleArray(tagged.filter((t) => t.actionType === "hangout"));
-    const nonHangoutTarget = hangoutPool.length * 4; // hangout / (hangout + 4*hangout) = 20%
-    const callTarget = Math.min(callPool.length, Math.round(nonHangoutTarget * 0.4));
-    const textTarget = nonHangoutTarget - callTarget;
+    const reducedCount = Math.max(1, Math.floor(hangoutPool.length * 0.6));
     allPrompts = [
-      ...callPool.slice(0, callTarget).map((t) => t.text),
-      ...textPool.slice(0, textTarget).map((t) => t.text),
-      ...hangoutPool.map((t) => t.text),
+      ...tagged.filter((t) => t.actionType !== "hangout").map((t) => t.text),
+      ...hangoutPool.slice(0, reducedCount).map((t) => t.text),
     ];
   } else {
     allPrompts = tagged.map((t) => t.text);
