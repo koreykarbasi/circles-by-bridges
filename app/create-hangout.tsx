@@ -364,38 +364,40 @@ export default function CreateHangoutScreen() {
           const isExpanded = expandedTimeKey === opt.key;
           return (
             <View key={opt.key} style={styles.timeOptionItem}>
-              <Pressable
-                onPress={() => {
-                  Haptics.selectionAsync();
-                  setExpandedTimeKey(isExpanded ? null : opt.key);
-                }}
-                style={({ pressed }) => [
-                  styles.timeOptionRow,
-                  isExpanded && styles.timeOptionRowExpanded,
-                  pressed && { opacity: 0.85 },
-                ]}
-              >
-                <View style={styles.rankBadge}>
-                  <Text style={styles.rankBadgeText}>{idx + 1}</Text>
-                </View>
-                <Text style={styles.timeOptionLabel} numberOfLines={1}>
-                  {opt.label || "Pick a date and time"}
-                </Text>
-                <Ionicons
-                  name={isExpanded ? "chevron-up" : "chevron-down"}
-                  size={15}
-                  color={Colors.textTertiary}
-                />
+              {/* Row: toggle area + delete button as siblings to avoid nested Pressable issues */}
+              <View style={[styles.timeOptionRow, isExpanded && styles.timeOptionRowExpanded]}>
+                <Pressable
+                  onPress={() => {
+                    Haptics.selectionAsync();
+                    setExpandedTimeKey(isExpanded ? null : opt.key);
+                  }}
+                  style={({ pressed }) => [
+                    styles.timeOptionToggle,
+                    pressed && { opacity: 0.8 },
+                  ]}
+                >
+                  <View style={styles.rankBadge}>
+                    <Text style={styles.rankBadgeText}>{idx + 1}</Text>
+                  </View>
+                  <Text style={styles.timeOptionLabel} numberOfLines={1}>
+                    {opt.label || "Pick a date and time"}
+                  </Text>
+                  <Ionicons
+                    name={isExpanded ? "chevron-up" : "chevron-down"}
+                    size={15}
+                    color={Colors.textTertiary}
+                  />
+                </Pressable>
                 {timeOptions.length > 1 && (
                   <Pressable
                     onPress={() => removeTimeOption(opt.key)}
-                    hitSlop={8}
-                    style={{ marginLeft: 4 }}
+                    hitSlop={10}
+                    style={{ paddingLeft: 8 }}
                   >
                     <Ionicons name="close-circle" size={20} color={Colors.danger} />
                   </Pressable>
                 )}
-              </Pressable>
+              </View>
               {isExpanded && (
                 <View style={{ marginTop: 10, marginBottom: 4 }}>
                   <DateWheelPicker
@@ -643,7 +645,7 @@ const styles = StyleSheet.create({
   addOptionText: { fontSize: 13, fontFamily: "Nunito_600SemiBold", color: Colors.primaryLight },
   timeOptionItem: { marginBottom: 8 },
   timeOptionRow: {
-    flexDirection: "row", alignItems: "center", gap: 10,
+    flexDirection: "row", alignItems: "center",
     backgroundColor: Colors.surfaceElevated, borderRadius: 12,
     paddingHorizontal: 12, paddingVertical: 10,
     borderWidth: 1, borderColor: Colors.border,
@@ -651,6 +653,9 @@ const styles = StyleSheet.create({
   timeOptionRowExpanded: {
     borderColor: Colors.primary + "60",
     backgroundColor: Colors.primary + "0C",
+  },
+  timeOptionToggle: {
+    flex: 1, flexDirection: "row", alignItems: "center", gap: 10,
   },
   timeOptionLabel: {
     flex: 1, fontSize: 14, fontFamily: "Nunito_600SemiBold", color: Colors.text,
