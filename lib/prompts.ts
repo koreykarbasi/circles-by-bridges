@@ -61,6 +61,10 @@ const CIRCLE_1_CALL_PROMPTS = [
   "Ask [Name] what's been weighing on them lately via a phone call.",
   "Call [Name] and ask what they need most right now and really listen.",
   "Leave [Name] a voice message sharing a vulnerable thought.",
+  "Tell [Name] out loud what they mean to you - not a text, a real call.",
+  "Call [Name] and ask how they're really doing - not the surface answer.",
+  "Leave [Name] a voice note about a moment this week where you wished they were there.",
+  "Call [Name] and share something you've been sitting with lately.",
 ];
 
 const CIRCLE_1_TEXT_PROMPTS = [
@@ -72,6 +76,11 @@ const CIRCLE_1_TEXT_PROMPTS = [
   "Send them a 'just because' message: no reason, just love.",
   "What's something [Name] does that makes you feel safe? Tell them.",
   "Share a vulnerable thought with [Name] - they can handle it.",
+  "Tell [Name] about a moment recently where you thought of them.",
+  "Ask [Name] what's been on their heart lately.",
+  "Tell [Name]: I don't say this enough, but I'm really glad you're in my life.",
+  "Ask [Name] what they need most right now - and really mean it.",
+  "Tell [Name] one thing you hope never changes about them.",
 ];
 
 const CIRCLE_1_HANGOUT_PROMPTS = [
@@ -85,6 +94,10 @@ const CIRCLE_2_CALL_PROMPTS = [
   "Call [Name] to catch up - even 10 minutes makes a difference.",
   "Leave [Name] a voice note checking in on how life's been.",
   "Phone [Name] and ask for advice on something you're working through.",
+  "Call [Name] and tell them you've been thinking about them - no agenda.",
+  "Leave [Name] a voice note just to check in - warmth goes a long way.",
+  "Phone [Name] out of the blue - the unexpected call often means the most.",
+  "Ask [Name] how they're doing beyond the surface - show you actually want to know.",
 ];
 
 const CIRCLE_2_TEXT_PROMPTS = [
@@ -96,6 +109,11 @@ const CIRCLE_2_TEXT_PROMPTS = [
   "Send [Name] a photo that reminds you of a good time together.",
   "Ask [Name] for advice on something - it shows you value their opinion.",
   "Share something new you've learned with [Name].",
+  "Ask [Name] what's been making them happy lately.",
+  "Tell [Name] you're thinking of them and hope things are going well.",
+  "Ask [Name] something genuine: what are they figuring out right now?",
+  "Send [Name] a word of encouragement about something they're working through.",
+  "Tell [Name] specifically what you value about their friendship.",
 ];
 
 const CIRCLE_2_HANGOUT_PROMPTS = [
@@ -109,6 +127,9 @@ const CIRCLE_2_HANGOUT_PROMPTS = [
 const CIRCLE_3_CALL_PROMPTS = [
   "Give [Name] a quick call to reconnect - keep it light and easy.",
   "Call [Name] to congratulate them on a recent milestone.",
+  "Leave [Name] a voice note - it's low pressure and surprisingly meaningful.",
+  "Call [Name] just to say you were thinking about them - keep it short and genuine.",
+  "Give [Name] a quick call to check in - no agenda, just connection.",
 ];
 
 const CIRCLE_3_TEXT_PROMPTS = [
@@ -119,6 +140,10 @@ const CIRCLE_3_TEXT_PROMPTS = [
   "Ask what's new in their world and actually listen.",
   "Congratulate [Name] on a recent milestone or life event.",
   "Forward [Name] an opportunity you think they'd be interested in.",
+  "Send [Name] a message just to let them know you're thinking of them.",
+  "Tell [Name] something genuine you noticed or admire about who they are.",
+  "Check in with [Name] - no agenda, just a moment of presence.",
+  "Send [Name] something small that made you think of them this week.",
 ];
 
 const CIRCLE_3_HANGOUT_PROMPTS = [
@@ -261,6 +286,22 @@ const LABEL_PROMPTS: Record<string, string[]> = {
     "Ask [Name] what they're struggling with and offer support.",
     "Celebrate a recent achievement of [Name].",
   ],
+  "international friend": [
+    "Ask [Name] when they started feeling at home in their new city.",
+    "Ask [Name] if there's something they miss about home that surprised them.",
+    "Tell [Name] that whenever they feel lonely, you're always here to talk.",
+    "Ask [Name] what's a random thing from home they didn't expect to miss.",
+    "Ask [Name] what's surprised them most about living where they do.",
+    "Tell [Name] about something small that made you think of them this week.",
+    "Send [Name] a message - I was just thinking about you and wanted to say hi.",
+    "Jump on a FaceTime with [Name] - a real conversation is long overdue.",
+    "Schedule a video call with [Name] to properly catch up.",
+    "Send [Name] a voice note - your voice means more than a text.",
+    "FaceTime [Name] out of the blue - they'll love to see your face.",
+    "Ask [Name] if they're free for a video call this week.",
+    "Next time you're in the same city as [Name], make a plan - put a date on the calendar.",
+    "Start thinking about a trip to visit [Name] - even floating the idea will mean a lot.",
+  ],
 };
 
 type ActionType = "call" | "text" | "hangout";
@@ -352,8 +393,20 @@ export function getPromptsForContact(
     labels?: string[];
   },
 ): string[] {
+  const isInternationalFriend = options?.labels?.some(
+    (l) => l.toLowerCase().trim() === "international friend"
+  ) ?? false;
+
   const tagged = buildTaggedPrompts(circleLevel);
-  const allPrompts = tagged.map((t) => t.text);
+  let allPrompts: string[];
+  if (isInternationalFriend) {
+    // Reduce hangout weight for international friends: keep all call/text, limit to 1 hangout
+    const nonHangout = tagged.filter((t) => t.actionType !== "hangout").map((t) => t.text);
+    const oneHangout = tagged.filter((t) => t.actionType === "hangout").slice(0, 1).map((t) => t.text);
+    allPrompts = [...nonHangout, ...oneHangout];
+  } else {
+    allPrompts = tagged.map((t) => t.text);
+  }
 
   const universalList = getSyncedList("universal", UNIVERSAL_PROMPTS);
   allPrompts.push(...universalList);
@@ -401,7 +454,7 @@ export function getPromptsForContact(
             const lower = p.toLowerCase();
             if (lower.includes("hangout") || lower.includes("invite") || lower.includes("dinner") || lower.includes("outing") || lower.includes("trip") || lower.includes("collaboration") || lower.includes("class") || lower.includes("lunch") || lower.includes("coffee break")) {
               taggedPromptCache.set(p, "hangout");
-            } else if (lower.includes("call") || lower.includes("voice")) {
+            } else if (lower.includes("call") || lower.includes("voice") || lower.includes("facetime") || lower.includes("video call")) {
               taggedPromptCache.set(p, "call");
             } else {
               taggedPromptCache.set(p, "text");
@@ -491,7 +544,7 @@ export function getActionType(circleLevel: 1 | 2 | 3, prompt: string): "call" | 
 
   const lower = prompt.toLowerCase();
 
-  if (lower.includes("voice note") || lower.includes("phone call") || lower.includes("call")) {
+  if (lower.includes("voice note") || lower.includes("phone call") || lower.includes("call") || lower.includes("facetime") || lower.includes("video call")) {
     return "call";
   }
   if (
@@ -519,5 +572,5 @@ export const AVAILABLE_INTERESTS = [
 export const AVAILABLE_LABELS = [
   "Childhood Friend", "College Friend", "Work Friend", "Neighbor",
   "Family Friend", "Gym Buddy", "Travel Buddy", "Creative Partner",
-  "Mentor", "Mentee",
+  "Mentor", "Mentee", "International Friend",
 ];
