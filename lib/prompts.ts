@@ -426,12 +426,16 @@ export function getPromptsForContact(
   const tagged = buildTaggedPrompts(circleLevel);
   let allPrompts: string[];
   if (isInternationalFriend) {
-    // Reduce hangout weight to ~20%: keep all call/text, randomly sample hangout prompts
+    // Reduce hangout suggestions relative to the EXISTING hangout count (not total pool size),
+    // so we always produce strictly fewer hangout prompts than the baseline regardless of
+    // how many call/text prompts have been added. Keep ~40% of the normal hangout pool,
+    // randomly sampled so repeated calls don't always pick the same one.
+    // The "international friend" label prompts supply 2 contextually appropriate
+    // long-distance hangout alternatives ("next time in same city", "plan a trip").
     const nonHangout = tagged.filter((t) => t.actionType !== "hangout");
     const hangoutPool = shuffleArray(tagged.filter((t) => t.actionType === "hangout"));
-    // Target ~20% hangout: nonHangout * 0.25 gives hangout/(hangout+nonHangout) ≈ 20%
-    const targetHangoutCount = Math.max(1, Math.round(nonHangout.length * 0.25));
-    const sampledHangout = hangoutPool.slice(0, targetHangoutCount);
+    const reducedHangoutCount = Math.floor(hangoutPool.length * 0.4);
+    const sampledHangout = hangoutPool.slice(0, reducedHangoutCount);
     allPrompts = [...nonHangout.map((t) => t.text), ...sampledHangout.map((t) => t.text)];
   } else {
     allPrompts = tagged.map((t) => t.text);
