@@ -66,7 +66,7 @@ async function savePushToken(token: string) {
 
 function RootLayoutNav() {
   const { user, isCacheHydrated } = useAuth();
-  const { hasCompletedOnboarding, isReplayRequested } = useOnboarding();
+  const { hasCompletedOnboarding, isReplayRequested, completeOnboarding } = useOnboarding();
   const responseListener = useRef<{ remove(): void } | null>(null);
 
   // A valid server session is a stronger signal than AsyncStorage — treat authenticated
@@ -108,9 +108,14 @@ function RootLayoutNav() {
     } else if (!user) {
       router.replace("/auth");
     } else {
+      // Silently sync AsyncStorage when the session is the reason we skipped onboarding,
+      // so future cold-starts don't flicker through the onboarding route first.
+      if (!hasCompletedOnboarding && !isReplayRequested) {
+        completeOnboarding();
+      }
       router.replace("/(tabs)");
     }
-  }, [user, hasCompletedOnboarding, isReplayRequested, isCacheHydrated]);
+  }, [user, hasCompletedOnboarding, isReplayRequested, isCacheHydrated, completeOnboarding]);
 
   if (hasCompletedOnboarding === null || !isCacheHydrated) {
     return (

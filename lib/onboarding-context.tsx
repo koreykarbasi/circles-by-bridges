@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect, useMemo, ReactNode } from "react";
+import React, { createContext, useContext, useState, useEffect, useMemo, useCallback, ReactNode } from "react";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 
 const ONBOARDING_KEY = "bridges_onboarding_complete";
@@ -22,21 +22,21 @@ export function OnboardingProvider({ children }: { children: ReactNode }) {
     });
   }, []);
 
-  const completeOnboarding = async () => {
+  const completeOnboarding = useCallback(async () => {
     await AsyncStorage.setItem(ONBOARDING_KEY, "true");
     setHasCompletedOnboarding(true);
     setIsReplayRequested(false);
-  };
+  }, []);
 
-  const resetOnboarding = async () => {
+  const resetOnboarding = useCallback(async () => {
     await AsyncStorage.removeItem(ONBOARDING_KEY);
     setHasCompletedOnboarding(false);
     setIsReplayRequested(true);
-  };
+  }, []);
 
   const value = useMemo(
     () => ({ hasCompletedOnboarding, isReplayRequested, completeOnboarding, resetOnboarding }),
-    [hasCompletedOnboarding, isReplayRequested],
+    [hasCompletedOnboarding, isReplayRequested, completeOnboarding, resetOnboarding],
   );
 
   return <OnboardingContext.Provider value={value}>{children}</OnboardingContext.Provider>;
