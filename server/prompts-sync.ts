@@ -282,7 +282,7 @@ const HARDCODED_PROMPTS: SyncedPrompts = {
       "Send [Name] a message - I was just thinking about you and wanted to say hi.",
       "Jump on a FaceTime with [Name] - a real conversation is long overdue.",
       "Schedule a video call with [Name] to properly catch up.",
-      "Send [Name] a voice note - your voice means more than a text.",
+      "FaceTime [Name] for a few minutes - video makes the distance feel smaller.",
       "FaceTime [Name] out of the blue - they'll love to see your face.",
       "Ask [Name] if they're free for a video call this week.",
       "Next time you're in the same city as [Name], make a plan - put a date on the calendar.",

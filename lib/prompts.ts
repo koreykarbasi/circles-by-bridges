@@ -322,7 +322,7 @@ const LABEL_PROMPTS: Record<string, string[]> = {
     "Send [Name] a message - I was just thinking about you and wanted to say hi.",
     "Jump on a FaceTime with [Name] - a real conversation is long overdue.",
     "Schedule a video call with [Name] to properly catch up.",
-    "Send [Name] a voice note - your voice means more than a text.",
+    "FaceTime [Name] for a few minutes - video makes the distance feel smaller.",
     "FaceTime [Name] out of the blue - they'll love to see your face.",
     "Ask [Name] if they're free for a video call this week.",
     "Next time you're in the same city as [Name], make a plan - put a date on the calendar.",
@@ -426,18 +426,19 @@ export function getPromptsForContact(
   const tagged = buildTaggedPrompts(circleLevel);
   let allPrompts: string[];
   if (isInternationalFriend) {
-    // For international friends, keep only circle TEXT prompts:
-    //   - Exclude generic circle CALL prompts → replaced by 5 FaceTime-framed prompts in the label set
-    //   - Exclude circle HANGOUT prompts → replaced by 2 contextually appropriate long-distance hangout
-    //     prompts in the label set ("next time in same city", "plan a trip to visit")
-    // Result (per circle): circle_text + 3 universal + label(5 call + 7 text + 2 hangout)
-    //   Circle 1: 17+3+7=27 text, 5 call, 2 hangout → hangout = 2/34 ≈ 6%
-    //   Circle 2: 17+3+7=27 text, 5 call, 2 hangout → hangout = 2/34 ≈ 6%
-    //   Circle 3: 16+3+7=26 text, 5 call, 2 hangout → hangout = 2/33 ≈ 6%
-    // Normal baseline (no labels): ~11% hangout — international is roughly half, matching
-    // "significantly fewer hangout suggestions". (The "~20% vs 33%" target in the task was
-    // based on the original smaller pool before EI prompt additions.)
-    allPrompts = tagged.filter((t) => t.actionType === "text").map((t) => t.text);
+    // Proportional sampling: keep circle participation across all action types but
+    // subsample call/text so hangout = ~20% of the circle pool.
+    const callPool = shuffleArray(tagged.filter((t) => t.actionType === "call"));
+    const textPool = shuffleArray(tagged.filter((t) => t.actionType === "text"));
+    const hangoutPool = shuffleArray(tagged.filter((t) => t.actionType === "hangout"));
+    const nonHangoutTarget = hangoutPool.length * 4; // hangout / (hangout + 4*hangout) = 20%
+    const callTarget = Math.min(callPool.length, Math.round(nonHangoutTarget * 0.4));
+    const textTarget = nonHangoutTarget - callTarget;
+    allPrompts = [
+      ...callPool.slice(0, callTarget).map((t) => t.text),
+      ...textPool.slice(0, textTarget).map((t) => t.text),
+      ...hangoutPool.map((t) => t.text),
+    ];
   } else {
     allPrompts = tagged.map((t) => t.text);
   }
