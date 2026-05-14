@@ -33,11 +33,11 @@ function defaultDatetimeLabel(daysFromNow: number): string {
 export default function CreateHangoutScreen() {
   const insets = useSafeAreaInsets();
   const { contacts } = useContacts();
-  const { contactName } = useLocalSearchParams<{ contactName?: string }>();
+  const { contactName, prefillTitle } = useLocalSearchParams<{ contactName?: string; prefillTitle?: string }>();
   const [step, setStep] = useState<1 | 2 | 3>(1);
 
   // Step 1
-  const [title, setTitle] = useState("");
+  const [title, setTitle] = useState(prefillTitle ?? "");
   const [description, setDescription] = useState("");
 
   // Step 2

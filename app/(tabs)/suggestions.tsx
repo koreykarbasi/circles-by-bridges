@@ -54,6 +54,19 @@ function buildSuggestion(contact: Contact): GeneratedSuggestion {
   };
 }
 
+function deriveHangoutTitle(contactName: string, prompt: string): string {
+  const lower = prompt.toLowerCase();
+  if (lower.includes("coffee")) return `Coffee with ${contactName}`;
+  if (lower.includes("lunch")) return `Lunch with ${contactName}`;
+  if (lower.includes("dinner")) return `Dinner with ${contactName}`;
+  if (lower.includes("brunch")) return `Brunch with ${contactName}`;
+  if (lower.includes("walk")) return `Walk with ${contactName}`;
+  if (lower.includes("drink")) return `Drinks with ${contactName}`;
+  if (lower.includes("movie")) return `Movie with ${contactName}`;
+  if (lower.includes("hangout") || lower.includes("hang out")) return `Hang out with ${contactName}`;
+  return `Hang out with ${contactName}`;
+}
+
 function buildCircle3Nudge(
   contact: Contact,
   lastSuggestedDates: Record<string, string>,
@@ -84,6 +97,7 @@ export default function SuggestionsScreen() {
   const { contacts, markContacted, markHangout } = useContacts();
   const [filterCircle, setFilterCircle] = useState<1 | 2 | 3 | null>(null);
   const [refreshKey, setRefreshKey] = useState(0);
+  const [shuffleJitter, setShuffleJitter] = useState<Record<string, number>>({});
   const [completedIds, setCompletedIds] = useState<Set<string>>(new Set());
   const [completedReminderIds, setCompletedReminderIds] = useState<Set<string>>(new Set());
   const [cardPrompts, setCardPrompts] = useState<Record<string, GeneratedSuggestion>>({});
@@ -140,13 +154,33 @@ export default function SuggestionsScreen() {
             daysSinceLastSug,
             daysSinceContact,
             daysUntilBday,
-          ),
+          ) + (shuffleJitter[c.id] ?? 0),
         };
       })
       .sort((a, b) => b.score - a.score)
-      .slice(0, 8)
+      .slice(0, 6)
       .map((x) => x.contact);
-  }, [contacts, filterCircle, lastSuggestedDates]);
+  }, [contacts, filterCircle, lastSuggestedDates, shuffleJitter]);
+
+  useEffect(() => {
+    const next: Record<string, number> = {};
+    for (const contact of rankedContacts) {
+      if (!cardPrompts[contact.id]) {
+        next[contact.id] = Math.random() * 0.01;
+      }
+    }
+    if (Object.keys(next).length > 0) {
+      setCardPrompts((prev) => {
+        const updated = { ...prev };
+        for (const contact of rankedContacts) {
+          if (!updated[contact.id]) {
+            updated[contact.id] = buildSuggestion(contact);
+          }
+        }
+        return updated;
+      });
+    }
+  }, [rankedContacts, cardPrompts]);
 
   const circle3Nudges = useMemo(() => {
     if (filterCircle && filterCircle !== 3) return [];
@@ -162,19 +196,11 @@ export default function SuggestionsScreen() {
   }, [contacts, filterCircle, completedIds, lastSuggestedDates]);
 
   const suggestions = useMemo(() => {
-    const result: GeneratedSuggestion[] = [];
-    for (const contact of rankedContacts) {
-      if (completedIds.has(contact.id)) continue;
-      const existing = cardPrompts[contact.id];
-      if (existing && existing.contact.id === contact.id) {
-        result.push(existing);
-      } else {
-        result.push(buildSuggestion(contact));
-      }
-    }
-    return result;
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [rankedContacts, completedIds, refreshKey, cardPrompts]);
+    return rankedContacts
+      .filter((contact) => !completedIds.has(contact.id))
+      .map((contact) => cardPrompts[contact.id])
+      .filter((s): s is GeneratedSuggestion => !!s);
+  }, [rankedContacts, completedIds, cardPrompts]);
 
   const suggestionKeyRef = useRef<string>("");
   useEffect(() => {
@@ -223,6 +249,21 @@ export default function SuggestionsScreen() {
       },
     }));
   }, [contacts]);
+
+  const handlePlanHangout = useCallback(
+    async (suggestion: GeneratedSuggestion) => {
+      await markContacted(suggestion.contact.id);
+      setCompletedIds((prev) => new Set(prev).add(suggestion.contact.id));
+      router.push({
+        pathname: "/create-hangout",
+        params: {
+          contactName: suggestion.contact.name,
+          prefillTitle: deriveHangoutTitle(suggestion.contact.name, suggestion.prompt),
+        },
+      });
+    },
+    [markContacted],
+  );
 
   const handleDone = useCallback(
     (contactId: string) => {
@@ -302,6 +343,11 @@ export default function SuggestionsScreen() {
     resetSeenPrompts();
     setCardPrompts({});
     setRefreshKey((k) => k + 1);
+    setShuffleJitter(() => {
+      const next: Record<string, number> = {};
+      for (const contact of contacts) next[contact.id] = Math.random() * 0.01;
+      return next;
+    });
     setCompletedIds(new Set());
     setCompletedReminderIds(new Set());
   }, []);
@@ -428,6 +474,13 @@ export default function SuggestionsScreen() {
 
       <View style={styles.suggestionsSectionHeader}>
         <Text style={styles.suggestionsSectionTitle}>Suggestions</Text>
+        <Pressable
+          onPress={handleRefreshAll}
+          hitSlop={8}
+          style={({ pressed }) => [styles.sectionShuffleBtn, pressed && { opacity: 0.5 }]}
+        >
+          <Ionicons name="shuffle-outline" size={18} color={Colors.textSecondary} />
+        </Pressable>
       </View>
 
       {contacts.length === 0 ? (
@@ -469,6 +522,7 @@ export default function SuggestionsScreen() {
               onRefresh={() => handleRefreshSingle(s.contact.id, s.prompt)}
               onCopyText={s.type === "text" ? () => handleCopyText(s.contact.id) : undefined}
               onCopied={s.type === "text" ? showCopiedToast : undefined}
+              onPlanHangout={s.type === "hangout" ? () => handlePlanHangout(s) : undefined}
             />
           );
         })
@@ -607,7 +661,13 @@ const styles = StyleSheet.create({
     gap: 0,
   },
   suggestionsSectionHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
     marginBottom: 12,
+  },
+  sectionShuffleBtn: {
+    padding: 4,
   },
   suggestionsSectionTitle: {
     fontSize: 17,
