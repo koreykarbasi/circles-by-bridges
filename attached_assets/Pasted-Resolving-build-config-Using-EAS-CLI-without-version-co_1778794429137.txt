@@ -1,0 +1,41 @@
+Resolving build config...
+Using EAS CLI without version control system is not recommended, use this mode only if you know what you are doing.
+Resolved "production" environment for the build. Learn more: https://docs.expo.dev/eas/environment-variables/#setting-the-environment-for-your-builds
+No environment variables with visibility "Plain text" and "Sensitive" found for the "production" environment on EAS.
+
+Specified value for "ios.bundleIdentifier" in app.json is ignored because an ios directory was detected in the project.
+EAS Build will use the value found in the native code.
+- Incrementing buildNumber from 2 to 3.
+✔ Incremented buildNumber from 2 to 3.
+ios.buildNumber field in app config is ignored when version source is set to remote, but this value will still be in the manifest available via expo-constants. It's recommended to remove this value from app config.
+✔ Using remote iOS credentials (Expo server)
+
+Distribution Certificate is not validated for non-interactive builds.
+Skipping Provisioning Profile validation on Apple Servers because we aren't authenticated.
+
+Project Credentials Configuration
+Project                   @replit-private-e233cf82-754c-4d5f-b97e-3116677677d5/bridges
+Bundle Identifier         app.replit.bridges
+                          
+App Store Configuration   
+                          
+Distribution Certificate  
+Serial Number             30E3374546B127B6358D6BD464DA3F09
+Expiration Date           Wed, 17 Mar 2027 14:01:34 PDT
+Apple Team                5BJJ2KP2X5 (Koushyar Karbasi)
+Updated                   1 month ago
+                          
+Provisioning Profile      
+Developer Portal ID       4R534P3WRV
+Status                    active
+Expiration                Wed, 17 Mar 2027 14:01:34 PDT
+Apple Team                5BJJ2KP2X5 (Koushyar Karbasi)
+Updated                   17 minutes ago
+                          
+All credentials are ready to build @replit-private-e233cf82-754c-4d5f-b97e-3116677677d5/bridges (app.replit.bridges)
+- Computing project fingerprint
+✖ Failed to compute project fingerprint
+⏩ To skip this step, set the environment variable: EAS_SKIP_AUTO_FINGERPRINT=1
+(0 , brace_expansion_1.default) is not a function
+Error: build:internal command failed.
+Failed to run eas build:internal
