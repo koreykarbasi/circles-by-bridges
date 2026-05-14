@@ -16,7 +16,8 @@
     "ios": {
       "supportsTablet": false,
       "bundleIdentifier": "com.bridges.app",
-      "buildNumber": "1"
+      "buildNumber": "1",
+      "infoPlist": {}
     },
     "android": {
       "package": "com.bridges.app",
