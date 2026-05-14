@@ -25,7 +25,7 @@ import * as Haptics from "expo-haptics";
 
 const PREDEFINED_LABELS = [
   "Childhood Friend", "College Friend", "Work Friend", "Neighbor",
-  "Family Friend", "Gym Buddy", "Travel Buddy", "Creative Partner",
+  "Family Friend", "International Friend", "Gym Buddy", "Travel Buddy", "Creative Partner",
   "Mentor", "Mentee",
 ];
 
