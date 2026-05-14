@@ -1,0 +1,193 @@
+🔍️ Scanning for pods...
+1.16.2
+> pod install
+Using Expo modules
+[34m[Expo] [0mEnabling modular headers for pod [32mExpoModulesCore[0m
+[34m[Expo] [0mEnabling modular headers for pod [32mReact-RCTAppDelegate[0m
+[34m[Expo] [0mEnabling modular headers for pod [32mReact-RCTFabric[0m
+[34m[Expo] [0mEnabling modular headers for pod [32mReactAppDependencyProvider[0m
+[34m[Expo] [0mEnabling modular headers for pod [32mReact-Core[0m
+[34m[Expo] [0mEnabling modular headers for pod [32mReactCodegen[0m
+[34m[Expo] [0mEnabling modular headers for pod [32mRCTRequired[0m
+[34m[Expo] [0mEnabling modular headers for pod [32mRCTTypeSafety[0m
+[34m[Expo] [0mEnabling modular headers for pod [32mReactCommon[0m
+[34m[Expo] [0mEnabling modular headers for pod [32mReact-NativeModulesApple[0m
+[34m[Expo] [0mEnabling modular headers for pod [32mYoga[0m
+[34m[Expo] [0mEnabling modular headers for pod [32mReact-Fabric[0m
+[34m[Expo] [0mEnabling modular headers for pod [32mReact-graphics[0m
+[34m[Expo] [0mEnabling modular headers for pod [32mReact-utils[0m
+[34m[Expo] [0mEnabling modular headers for pod [32mReact-featureflags[0m
+[34m[Expo] [0mEnabling modular headers for pod [32mReact-debug[0m
+[34m[Expo] [0mEnabling modular headers for pod [32mReact-ImageManager[0m
+[34m[Expo] [0mEnabling modular headers for pod [32mReact-rendererdebug[0m
+[34m[Expo] [0mEnabling modular headers for pod [32mReact-jsi[0m
+[34m[Expo] [0mEnabling modular headers for pod [32mReact-renderercss[0m
+[34m[Expo] [0mEnabling modular headers for pod [32mhermes-engine[0m
+[34m[Expo] [0mEnabling modular headers for pod [32mglog[0m
+[34m[Expo] [0mEnabling modular headers for pod [32mboost[0m
+[34m[Expo] [0mEnabling modular headers for pod [32mDoubleConversion[0m
+[34m[Expo] [0mEnabling modular headers for pod [32mfast_float[0m
+[34m[Expo] [0mEnabling modular headers for pod [32mfmt[0m
+[34m[Expo] [0mEnabling modular headers for pod [32mRCT-Folly[0m
+[34m[Expo] [0mEnabling modular headers for pod [32mSocketRocket[0m
+[34m[Expo] [0mEnabling modular headers for pod [32mSDWebImage[0m
+[34m[Expo] [0mEnabling modular headers for pod [32mSDWebImageAVIFCoder[0m
+[34m[Expo] [0mEnabling modular headers for pod [32mSDWebImageSVGCoder[0m
+[34m[Expo] [0mEnabling modular headers for pod [32mSDWebImageWebPCoder[0m
+[34m[Expo] [0mEnabling modular headers for pod [32mlibavif[0m
+[34m[Expo] [0mEnabling modular headers for pod [32mRNScreens[0m
+Found 9 modules for target `Bridges`
+link_native_modules! {:ios_packages=>[{:configurations=>[], :name=>"@react-native-async-storage/async-storage", :root=>"/Users/expo/workingdir/build/node_modules/@react-native-async-storage/async-storage", :path=>"../node_modules/@react-native-async-storage/async-storage", :podspec_path=>"/Users/expo/workingdir/build/node_modules/@react-native-async-storage/async-storage/RNCAsyncStorage.podspec", :script_phases=>[]}, {:configurations=>[], :name=>"expo", :root=>"/Users/expo/workingdir/build/node_modules/expo", :path=>"../node_modules/expo", :podspec_path=>"/Users/expo/workingdir/build/node_modules/expo/Expo.podspec", :script_phases=>[]}, {:configurations=>[], :name=>"react-native-gesture-handler", :root=>"/Users/expo/workingdir/build/node_modules/react-native-gesture-handler", :path=>"../node_modules/react-native-gesture-handler", :podspec_path=>"/Users/expo/workingdir/build/node_modules/react-native-gesture-handler/RNGestureHandler.podspec", :script_phases=>[]}, {:configurations=>[], :name=>"react-native-keyboard-controller", :root=>"/Users/expo/workingdir/build/node_modules/react-native-keyboard-controller", :path=>"../node_modules/react-native-keyboard-controller", :podspec_path=>"/Users/expo/workingdir/build/node_modules/react-native-keyboard-controller/react-native-keyboard-controller.podspec", :script_phases=>[]}, {:configurations=>[], :name=>"react-native-reanimated", :root=>"/Users/expo/workingdir/build/node_modules/react-native-reanimated", :path=>"../node_modules/react-native-reanimated", :podspec_path=>"/Users/expo/workingdir/build/node_modules/react-native-reanimated/RNReanimated.podspec", :script_phases=>[]}, {:configurations=>[], :name=>"react-native-safe-area-context", :root=>"/Users/expo/workingdir/build/node_modules/react-native-safe-area-context", :path=>"../node_modules/react-native-safe-area-context", :podspec_path=>"/Users/expo/workingdir/build/node_modules/react-native-safe-area-context/react-native-safe-area-context.podspec", :script_phases=>[]}, {:configurations=>[], :name=>"react-native-screens", :root=>"/Users/expo/workingdir/build/node_modules/react-native-screens", :path=>"../node_modules/react-native-screens", :podspec_path=>"/Users/expo/workingdir/build/node_modules/react-native-screens/RNScreens.podspec", :script_phases=>[]}, {:configurations=>[], :name=>"react-native-svg", :root=>"/Users/expo/workingdir/build/node_modules/react-native-svg", :path=>"../node_modules/react-native-svg", :podspec_path=>"/Users/expo/workingdir/build/node_modules/react-native-svg/RNSVG.podspec", :script_phases=>[]}, {:configurations=>[], :name=>"react-native-worklets", :root=>"/Users/expo/workingdir/build/node_modules/react-native-worklets", :path=>"../node_modules/react-native-worklets", :podspec_path=>"/Users/expo/workingdir/build/node_modules/react-native-worklets/RNWorklets.podspec", :script_phases=>[]}], :ios_project_root_path=>"/Users/expo/workingdir/build/ios", :react_native_path=>"../node_modules/react-native"}
+Auto-linking React Native modules for target `Bridges`: RNCAsyncStorage, RNGestureHandler, RNReanimated, RNSVG, RNScreens, RNWorklets, react-native-keyboard-controller, and react-native-safe-area-context
+Framework build type is static library
+[32m[ReactNativeDependencies] Setting up ReactNativeDependencies...[0m
+[32m[ReactNativeDependencies] Building from source: false[0m
+[32m[ReactNativeDependencies] Using release tarball[0m
+[32m[ReactNativeDependencies] Using tarball from URL: https://repo1.maven.org/maven2/com/facebook/react/react-native-artifacts/0.81.5/react-native-artifacts-0.81.5-reactnative-dependencies-debug.tar.gz[0m
+[32m[ReactNativeDependencies] Source: {:http=>"https://repo1.maven.org/maven2/com/facebook/react/react-native-artifacts/0.81.5/react-native-artifacts-0.81.5-reactnative-dependencies-debug.tar.gz"}[0m
+[32m[ReactNativeCore] Setting up ReactNativeCore...[0m
+[32m[ReactNativeCore] Building from source: false[0m
+[32m[ReactNativeCore] Using tarball from URL: https://repo1.maven.org/maven2/com/facebook/react/react-native-artifacts/0.81.5/react-native-artifacts-0.81.5-reactnative-core-debug.tar.gz[0m
+[32m[ReactNativeCore] Source: {:http=>"https://repo1.maven.org/maven2/com/facebook/react/react-native-artifacts/0.81.5/react-native-artifacts-0.81.5-reactnative-core-debug.tar.gz"}[0m
+Configuring the target with the New Architecture
+[32m[ReactNativeCore] Using React Native Core and React Native Dependencies prebuilt versions.[0m
+[31m
+[!] Invalid `Podfile` file: [31m[!] /Users/expo/.nvm/versions/node/v20.19.4/bin/node ./../node_modules/react-native/scripts/generate-codegen-artifacts.js -p /Users/expo/workingdir/build/ios/.. -o /Users/expo/workingdir/build/ios -t ios
+
+[36m[1m[Codegen][0m Analyzing /Users/expo/workingdir/build/package.json[0m
+[36m[1m[Codegen][0m [33mSearching for codegen-enabled libraries in the app.[0m
+[36m[1m[Codegen][0m [33mThe "codegenConfig" field is not defined in package.json. Assuming there is nothing to generate at the app level.[0m
+[36m[1m[Codegen][0m [33mSearching for codegen-enabled libraries in react-native.config.js[0m
+[36m[1m[Codegen][0m Found @react-native-async-storage/async-storage[0m
+[36m[1m[Codegen][0m Found react-native-gesture-handler[0m
+[36m[1m[Codegen][0m Found react-native-keyboard-controller[0m
+[36m[1m[Codegen][0m Found react-native-reanimated[0m
+[36m[1m[Codegen][0m Found react-native-safe-area-context[0m
+[36m[1m[Codegen][0m Found react-native-screens[0m
+[36m[1m[Codegen][0m Found react-native-svg[0m
+[36m[1m[Codegen][0m Found react-native-worklets[0m
+[36m[1m[Codegen][0m Processing rnasyncstorage[0m
+[36m[1m[Codegen][0m [33mSearching for podspec in the project dependencies.[0m
+[36m[1m[Codegen][0m Supported Apple platforms: ios, macos, tvos, visionos for rnasyncstorage[0m
+[36m[1m[Codegen][0m TypeError: (0 , brace_expansion_1.expand) is not a function[0m
+[36m[1m[Codegen][0m [33mDone.[0m
+[0m.
+[0m
+ #  from /Users/expo/workingdir/build/ios/Podfile:47
+ #  -------------------------------------------
+ #  
+ >    use_react_native!(
+ #      :path => config[:reactNativePath],
+ #  -------------------------------------------
+Couldn't install Pods. Updating the Pods project and trying again...
+> pod install --repo-update
+Using Expo modules
+[34m[Expo] [0mEnabling modular headers for pod [32mExpoModulesCore[0m
+[34m[Expo] [0mEnabling modular headers for pod [32mReact-RCTAppDelegate[0m
+[34m[Expo] [0mEnabling modular headers for pod [32mReact-RCTFabric[0m
+[34m[Expo] [0mEnabling modular headers for pod [32mReactAppDependencyProvider[0m
+[34m[Expo] [0mEnabling modular headers for pod [32mReact-Core[0m
+[34m[Expo] [0mEnabling modular headers for pod [32mReactCodegen[0m
+[34m[Expo] [0mEnabling modular headers for pod [32mRCTRequired[0m
+[34m[Expo] [0mEnabling modular headers for pod [32mRCTTypeSafety[0m
+[34m[Expo] [0mEnabling modular headers for pod [32mReactCommon[0m
+[34m[Expo] [0mEnabling modular headers for pod [32mReact-NativeModulesApple[0m
+[34m[Expo] [0mEnabling modular headers for pod [32mYoga[0m
+[34m[Expo] [0mEnabling modular headers for pod [32mReact-Fabric[0m
+[34m[Expo] [0mEnabling modular headers for pod [32mReact-graphics[0m
+[34m[Expo] [0mEnabling modular headers for pod [32mReact-utils[0m
+[34m[Expo] [0mEnabling modular headers for pod [32mReact-featureflags[0m
+[34m[Expo] [0mEnabling modular headers for pod [32mReact-debug[0m
+[34m[Expo] [0mEnabling modular headers for pod [32mReact-ImageManager[0m
+[34m[Expo] [0mEnabling modular headers for pod [32mReact-rendererdebug[0m
+[34m[Expo] [0mEnabling modular headers for pod [32mReact-jsi[0m
+[34m[Expo] [0mEnabling modular headers for pod [32mReact-renderercss[0m
+[34m[Expo] [0mEnabling modular headers for pod [32mhermes-engine[0m
+[34m[Expo] [0mEnabling modular headers for pod [32mglog[0m
+[34m[Expo] [0mEnabling modular headers for pod [32mboost[0m
+[34m[Expo] [0mEnabling modular headers for pod [32mDoubleConversion[0m
+[34m[Expo] [0mEnabling modular headers for pod [32mfast_float[0m
+[34m[Expo] [0mEnabling modular headers for pod [32mfmt[0m
+[34m[Expo] [0mEnabling modular headers for pod [32mRCT-Folly[0m
+[34m[Expo] [0mEnabling modular headers for pod [32mSocketRocket[0m
+[34m[Expo] [0mEnabling modular headers for pod [32mSDWebImage[0m
+[34m[Expo] [0mEnabling modular headers for pod [32mSDWebImageAVIFCoder[0m
+[34m[Expo] [0mEnabling modular headers for pod [32mSDWebImageSVGCoder[0m
+[34m[Expo] [0mEnabling modular headers for pod [32mSDWebImageWebPCoder[0m
+[34m[Expo] [0mEnabling modular headers for pod [32mlibavif[0m
+[34m[Expo] [0mEnabling modular headers for pod [32mRNScreens[0m
+Found 9 modules for target `Bridges`
+link_native_modules! {:ios_packages=>[{:configurations=>[], :name=>"@react-native-async-storage/async-storage", :root=>"/Users/expo/workingdir/build/node_modules/@react-native-async-storage/async-storage", :path=>"../node_modules/@react-native-async-storage/async-storage", :podspec_path=>"/Users/expo/workingdir/build/node_modules/@react-native-async-storage/async-storage/RNCAsyncStorage.podspec", :script_phases=>[]}, {:configurations=>[], :name=>"expo", :root=>"/Users/expo/workingdir/build/node_modules/expo", :path=>"../node_modules/expo", :podspec_path=>"/Users/expo/workingdir/build/node_modules/expo/Expo.podspec", :script_phases=>[]}, {:configurations=>[], :name=>"react-native-gesture-handler", :root=>"/Users/expo/workingdir/build/node_modules/react-native-gesture-handler", :path=>"../node_modules/react-native-gesture-handler", :podspec_path=>"/Users/expo/workingdir/build/node_modules/react-native-gesture-handler/RNGestureHandler.podspec", :script_phases=>[]}, {:configurations=>[], :name=>"react-native-keyboard-controller", :root=>"/Users/expo/workingdir/build/node_modules/react-native-keyboard-controller", :path=>"../node_modules/react-native-keyboard-controller", :podspec_path=>"/Users/expo/workingdir/build/node_modules/react-native-keyboard-controller/react-native-keyboard-controller.podspec", :script_phases=>[]}, {:configurations=>[], :name=>"react-native-reanimated", :root=>"/Users/expo/workingdir/build/node_modules/react-native-reanimated", :path=>"../node_modules/react-native-reanimated", :podspec_path=>"/Users/expo/workingdir/build/node_modules/react-native-reanimated/RNReanimated.podspec", :script_phases=>[]}, {:configurations=>[], :name=>"react-native-safe-area-context", :root=>"/Users/expo/workingdir/build/node_modules/react-native-safe-area-context", :path=>"../node_modules/react-native-safe-area-context", :podspec_path=>"/Users/expo/workingdir/build/node_modules/react-native-safe-area-context/react-native-safe-area-context.podspec", :script_phases=>[]}, {:configurations=>[], :name=>"react-native-screens", :root=>"/Users/expo/workingdir/build/node_modules/react-native-screens", :path=>"../node_modules/react-native-screens", :podspec_path=>"/Users/expo/workingdir/build/node_modules/react-native-screens/RNScreens.podspec", :script_phases=>[]}, {:configurations=>[], :name=>"react-native-svg", :root=>"/Users/expo/workingdir/build/node_modules/react-native-svg", :path=>"../node_modules/react-native-svg", :podspec_path=>"/Users/expo/workingdir/build/node_modules/react-native-svg/RNSVG.podspec", :script_phases=>[]}, {:configurations=>[], :name=>"react-native-worklets", :root=>"/Users/expo/workingdir/build/node_modules/react-native-worklets", :path=>"../node_modules/react-native-worklets", :podspec_path=>"/Users/expo/workingdir/build/node_modules/react-native-worklets/RNWorklets.podspec", :script_phases=>[]}], :ios_project_root_path=>"/Users/expo/workingdir/build/ios", :react_native_path=>"../node_modules/react-native"}
+Auto-linking React Native modules for target `Bridges`: RNCAsyncStorage, RNGestureHandler, RNReanimated, RNSVG, RNScreens, RNWorklets, react-native-keyboard-controller, and react-native-safe-area-context
+Framework build type is static library
+[32m[ReactNativeDependencies] Setting up ReactNativeDependencies...[0m
+[32m[ReactNativeDependencies] Building from source: false[0m
+[32m[ReactNativeDependencies] Using release tarball[0m
+[32m[ReactNativeDependencies] Using tarball from URL: https://repo1.maven.org/maven2/com/facebook/react/react-native-artifacts/0.81.5/react-native-artifacts-0.81.5-reactnative-dependencies-debug.tar.gz[0m
+[32m[ReactNativeDependencies] Source: {:http=>"https://repo1.maven.org/maven2/com/facebook/react/react-native-artifacts/0.81.5/react-native-artifacts-0.81.5-reactnative-dependencies-debug.tar.gz"}[0m
+[32m[ReactNativeCore] Setting up ReactNativeCore...[0m
+[32m[ReactNativeCore] Building from source: false[0m
+[32m[ReactNativeCore] Using tarball from URL: https://repo1.maven.org/maven2/com/facebook/react/react-native-artifacts/0.81.5/react-native-artifacts-0.81.5-reactnative-core-debug.tar.gz[0m
+[32m[ReactNativeCore] Source: {:http=>"https://repo1.maven.org/maven2/com/facebook/react/react-native-artifacts/0.81.5/react-native-artifacts-0.81.5-reactnative-core-debug.tar.gz"}[0m
+Configuring the target with the New Architecture
+[32m[ReactNativeCore] Using React Native Core and React Native Dependencies prebuilt versions.[0m
+[31m
+[!] Invalid `Podfile` file: [31m[!] /Users/expo/.nvm/versions/node/v20.19.4/bin/node ./../node_modules/react-native/scripts/generate-codegen-artifacts.js -p /Users/expo/workingdir/build/ios/.. -o /Users/expo/workingdir/build/ios -t ios
+
+[36m[1m[Codegen][0m Analyzing /Users/expo/workingdir/build/package.json[0m
+[36m[1m[Codegen][0m [33mSearching for codegen-enabled libraries in the app.[0m
+[36m[1m[Codegen][0m [33mThe "codegenConfig" field is not defined in package.json. Assuming there is nothing to generate at the app level.[0m
+[36m[1m[Codegen][0m [33mSearching for codegen-enabled libraries in react-native.config.js[0m
+[36m[1m[Codegen][0m Found @react-native-async-storage/async-storage[0m
+[36m[1m[Codegen][0m Found react-native-gesture-handler[0m
+[36m[1m[Codegen][0m Found react-native-keyboard-controller[0m
+[36m[1m[Codegen][0m Found react-native-reanimated[0m
+[36m[1m[Codegen][0m Found react-native-safe-area-context[0m
+[36m[1m[Codegen][0m Found react-native-screens[0m
+[36m[1m[Codegen][0m Found react-native-svg[0m
+[36m[1m[Codegen][0m Found react-native-worklets[0m
+[36m[1m[Codegen][0m Processing rnasyncstorage[0m
+[36m[1m[Codegen][0m [33mSearching for podspec in the project dependencies.[0m
+[36m[1m[Codegen][0m Supported Apple platforms: ios, macos, tvos, visionos for rnasyncstorage[0m
+[36m[1m[Codegen][0m TypeError: (0 , brace_expansion_1.expand) is not a function[0m
+[36m[1m[Codegen][0m [33mDone.[0m
+[0m.
+[0m
+ #  from /Users/expo/workingdir/build/ios/Podfile:47
+ #  -------------------------------------------
+ #  
+ >    use_react_native!(
+ #      :path => config[:reactNativePath],
+ #  -------------------------------------------
+Couldn't install Pods. Updating the Pods project and trying again...
+Command `pod install` failed.
+└─ Cause: Invalid `Podfile` file: [31m[!] /Users/expo/.nvm/versions/node/v20.19.4/bin/node ./../node_modules/react-native/scripts/generate-codegen-artifacts.js -p /Users/expo/workingdir/build/ios/.. -o /Users/expo/workingdir/build/ios -t ios
+
+[36m[1m[Codegen][0m Analyzing /Users/expo/workingdir/build/package.json[0m
+[36m[1m[Codegen][0m [33mSearching for codegen-enabled libraries in the app.[0m
+[36m[1m[Codegen][0m [33mThe "codegenConfig" field is not defined in package.json. Assuming there is nothing to generate at the app level.[0m
+[36m[1m[Codegen][0m [33mSearching for codegen-enabled libraries in react-native.config.js[0m
+[36m[1m[Codegen][0m Found @react-native-async-storage/async-storage[0m
+[36m[1m[Codegen][0m Found react-native-gesture-handler[0m
+[36m[1m[Codegen][0m Found react-native-keyboard-controller[0m
+[36m[1m[Codegen][0m Found react-native-reanimated[0m
+[36m[1m[Codegen][0m Found react-native-safe-area-context[0m
+[36m[1m[Codegen][0m Found react-native-screens[0m
+[36m[1m[Codegen][0m Found react-native-svg[0m
+[36m[1m[Codegen][0m Found react-native-worklets[0m
+[36m[1m[Codegen][0m Processing rnasyncstorage[0m
+[36m[1m[Codegen][0m [33mSearching for podspec in the project dependencies.[0m
+[36m[1m[Codegen][0m Supported Apple platforms: ios, macos, tvos, visionos for rnasyncstorage[0m
+[36m[1m[Codegen][0m TypeError: (0 , brace_expansion_1.expand) is not a function[0m
+[36m[1m[Codegen][0m [33mDone.[0m
+[0m.
+[0m
+ #  from /Users/expo/workingdir/build/ios/Podfile:47
+ #  -------------------------------------------
+ #  
+ >    use_react_native!(
+ #      :path => config[:reactNativePath],
+ #  -------------------------------------------
+
+pod install --repo-update --ansi exited with non-zero code: 1
+/bin/bash -eo pipefail /var/folders/5_/4knlryn57n39p2c_jw8567z00000gn/T/eas-build/d229395b-feff-44d5-96b8-ace9d21ac334/steps/step-014/scripts/959fd788-1082-4add-b875-2234f52cae92.sh exited with non-zero code: 1
