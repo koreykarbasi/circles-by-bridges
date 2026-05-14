@@ -11,7 +11,7 @@ import {
 import Colors from "@/constants/colors";
 
 const ITEM_HEIGHT = 34;
-const VISIBLE_ITEMS = 5;
+const VISIBLE_ITEMS = 3;
 const PICKER_HEIGHT = ITEM_HEIGHT * VISIBLE_ITEMS;
 
 const MONTHS = [
@@ -123,7 +123,7 @@ function WheelColumn({ items, selectedIndex, onIndexChange, width }: WheelColumn
         showsVerticalScrollIndicator={false}
         snapToInterval={ITEM_HEIGHT}
         decelerationRate="fast"
-        contentContainerStyle={{ paddingVertical: ITEM_HEIGHT * 2 }}
+        contentContainerStyle={{ paddingVertical: ITEM_HEIGHT }}
         onScrollBeginDrag={handleScrollBeginDrag}
         onMomentumScrollEnd={handleMomentumScrollEnd}
         onScrollEndDrag={handleScrollEndDrag}
@@ -474,7 +474,7 @@ const styles = StyleSheet.create({
   },
   selectionHighlight: {
     position: "absolute",
-    top: ITEM_HEIGHT * 2,
+    top: ITEM_HEIGHT,
     left: 0,
     right: 0,
     height: ITEM_HEIGHT,
