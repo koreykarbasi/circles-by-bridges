@@ -17,7 +17,18 @@
       "supportsTablet": false,
       "bundleIdentifier": "com.bridges.app",
       "buildNumber": "1",
-      "infoPlist": {}
+      "infoPlist": {},
+      "entitlements": {
+        "aps-environment": "production"
+      },
+      "privacyManifests": {
+        "NSPrivacyAccessedAPITypes": [
+          {
+            "NSPrivacyAccessedAPIType": "NSPrivacyAccessedAPICategoryUserDefaults",
+            "NSPrivacyAccessedAPITypeReasons": ["CA92.1"]
+          }
+        ]
+      }
     },
     "android": {
       "package": "com.bridges.app",
