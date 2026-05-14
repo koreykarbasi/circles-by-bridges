@@ -16,15 +16,8 @@
     "ios": {
       "supportsTablet": false,
       "bundleIdentifier": "com.bridges.app",
-      "buildNumber": "1",
-      "infoPlist": {
-        "CFBundleDisplayName": "Bridges",
-        "NSContactsUsageDescription": "Bridges uses your contacts to help you import people into your relationship circles so you can stay connected with the people who matter most.",
-        "NSPhotoLibraryUsageDescription": "Bridges uses your photo library so you can add profile photos for yourself and your contacts.",
-        "NSCameraUsageDescription": "Bridges uses your camera so you can take profile photos for yourself and your contacts."
-      }
+      "buildNumber": "1"
     },
-    "_comment_appStoreName": "App Store listing name is 'Bridges: Social Health' — set manually in App Store Connect during submission, not here",
     "android": {
       "package": "com.bridges.app",
       "adaptiveIcon": {
@@ -51,6 +44,19 @@
         {
           "icon": "./assets/images/app-icon.png",
           "color": "#9B7DFF"
+        }
+      ],
+      [
+        "expo-contacts",
+        {
+          "contactsPermission": "Bridges uses your contacts to help you import people into your relationship circles so you can stay connected with the people who matter most."
+        }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Bridges uses your photo library so you can add profile photos for yourself and your contacts.",
+          "cameraPermission": "Bridges uses your camera so you can take profile photos for yourself and your contacts."
         }
       ]
     ],
