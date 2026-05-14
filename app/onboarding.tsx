@@ -50,7 +50,7 @@ const STEPS: OnboardingStep[] = [
 export default function OnboardingScreen() {
   const insets = useSafeAreaInsets();
   const { completeOnboarding } = useOnboarding();
-  const { addContact } = useContacts();
+  const { addContact, getCircleContacts } = useContacts();
   const flatListRef = useRef<FlatList>(null);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [circle1Contacts, setCircle1Contacts] = useState<ImportedContact[]>([]);
@@ -122,6 +122,7 @@ export default function OnboardingScreen() {
             <CircleImportPage
               circleLevel={1}
               selectedContacts={circle1Contacts}
+              existingCount={getCircleContacts(1).length}
               onSelect={(c) => setCircle1Contacts((prev) => [...prev, c])}
               onDeselect={(name) =>
                 setCircle1Contacts((prev) => prev.filter((c) => c.name !== name))
@@ -133,6 +134,7 @@ export default function OnboardingScreen() {
             <CircleImportPage
               circleLevel={2}
               selectedContacts={circle2Contacts}
+              existingCount={getCircleContacts(2).length}
               onSelect={(c) => setCircle2Contacts((prev) => [...prev, c])}
               onDeselect={(name) =>
                 setCircle2Contacts((prev) => prev.filter((c) => c.name !== name))
@@ -144,6 +146,7 @@ export default function OnboardingScreen() {
             <CircleImportPage
               circleLevel={3}
               selectedContacts={circle3Contacts}
+              existingCount={getCircleContacts(3).length}
               onSelect={(c) => setCircle3Contacts((prev) => [...prev, c])}
               onDeselect={(name) =>
                 setCircle3Contacts((prev) => prev.filter((c) => c.name !== name))
@@ -399,15 +402,18 @@ function FeaturesPage() {
 function CircleImportPage({
   circleLevel,
   selectedContacts,
+  existingCount,
   onSelect,
   onDeselect,
 }: {
   circleLevel: 1 | 2 | 3;
   selectedContacts: ImportedContact[];
+  existingCount: number;
   onSelect: (c: ImportedContact) => void;
   onDeselect: (name: string) => void;
 }) {
   const cfg = CIRCLE_CONFIG[circleLevel];
+  const remainingSlots = Math.max(0, cfg.max - existingCount);
 
   const prompts: Record<number, string> = {
     1: "These are the people you talk to almost every day. Your ride-or-die crew.",
@@ -430,7 +436,7 @@ function CircleImportPage({
                 {cfg.label}
               </Text>
               <Text style={[pageStyles.circleBadgeCount, { color: cfg.color }]}>
-                {selectedContacts.length}/{cfg.max}
+                {existingCount + selectedContacts.length}/{cfg.max}
               </Text>
             </View>
           </View>
@@ -443,7 +449,7 @@ function CircleImportPage({
             selectedContacts={selectedContacts}
             onSelect={onSelect}
             onDeselect={onDeselect}
-            maxSelections={cfg.max}
+            maxSelections={remainingSlots}
           />
         </Animated.View>
       </ScrollView>

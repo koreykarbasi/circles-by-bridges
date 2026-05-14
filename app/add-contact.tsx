@@ -320,16 +320,19 @@ export default function AddContactScreen() {
               const cfg = CIRCLE_CONFIG[level];
               const isActive = circleLevel === level;
               const count = getCircleContacts(level).length;
+              const isFull = count >= cfg.max && !isActive;
               return (
                 <Pressable
                   key={level}
                   onPress={() => {
+                    if (isFull) return;
                     Haptics.selectionAsync();
                     setCircleLevel(level);
                   }}
                   style={[
                     styles.circleOption,
                     isActive && { backgroundColor: cfg.color + "15", borderColor: cfg.color + "50" },
+                    isFull && { opacity: 0.38 },
                   ]}
                 >
                   <View style={[styles.circleOptionDot, { backgroundColor: cfg.color }]} />
@@ -340,7 +343,7 @@ export default function AddContactScreen() {
                     {cfg.label}
                   </Text>
                   <Text style={[styles.circleOptionCount, isActive && { color: cfg.color }]}>
-                    {count}/{cfg.max}
+                    {isFull ? "Full" : `${count}/${cfg.max}`}
                   </Text>
                 </Pressable>
               );
