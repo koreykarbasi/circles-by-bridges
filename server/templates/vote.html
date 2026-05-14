@@ -452,7 +452,7 @@ function attachDragHandlers() {
       if (fromIdx < 0 || toIdx < 0) return;
       order.splice(fromIdx, 1);
       order.splice(toIdx, 0, dragSrc);
-      renderSection(type);
+      renderSection(type, true);
       updateSubmitBtn();
     });
   });
@@ -528,7 +528,7 @@ function attachTouchHandlers() {
         order.splice(fromIdx, 1);
         order.splice(currentIdx, 0, card.dataset.id);
       }
-      renderSection(type);
+      renderSection(type, true);
       updateSubmitBtn();
     });
   });
@@ -537,10 +537,13 @@ function attachTouchHandlers() {
 // renderSection: updates ONLY the card list inside an existing section element.
 // The section header (title + subtitle) is left untouched — it was rendered once
 // by renderRankSection on initial load and must NOT be re-added on every drag/reject.
-function renderSection(type) {
+function renderSection(type, animate = false) {
   const list = document.getElementById('list-' + type);
   if (!list) return;
   const order = rankings[type] || [];
+  const prevPositions = animate
+    ? new Map(Array.from(list.querySelectorAll('.rank-card')).map(card => [card.dataset.id, card.getBoundingClientRect().top]))
+    : null;
   list.innerHTML = '';
 
   order.forEach((optId, idx) => {
@@ -574,13 +577,37 @@ function renderSection(type) {
     list.appendChild(cardEl);
   });
 
+  if (animate && prevPositions) {
+    const nextCards = Array.from(list.querySelectorAll('.rank-card'));
+    nextCards.forEach(card => {
+      const prevTop = prevPositions.get(card.dataset.id);
+      if (prevTop == null) return;
+      const delta = prevTop - card.getBoundingClientRect().top;
+      if (!delta) return;
+      card.style.transition = 'none';
+      card.style.transform = `translateY(${delta}px)`;
+      card.style.willChange = 'transform';
+    });
+    requestAnimationFrame(() => {
+      nextCards.forEach(card => {
+        if (!card.style.transform) return;
+        card.style.transition = 'transform 180ms ease-out';
+        card.style.transform = '';
+        window.setTimeout(() => {
+          card.style.transition = '';
+          card.style.willChange = '';
+        }, 220);
+      });
+    });
+  }
+
   attachDragHandlers();
   attachTouchHandlers();
 }
 
 function toggleReject(optId, type) {
   rejected[optId] = !rejected[optId];
-  renderSection(type);
+  renderSection(type, true);
   updateSubmitBtn();
 }
 
