@@ -72,6 +72,9 @@
         }
       ]
     ],
+    "extra": {
+      "apiUrl": "https://circles-bridges.replit.app"
+    },
     "experiments": {
       "typedRoutes": true
     }

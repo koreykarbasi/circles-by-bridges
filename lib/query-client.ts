@@ -1,6 +1,7 @@
 import { Platform } from "react-native";
 import { fetch as expoFetch } from "expo/fetch";
 import { QueryClient, QueryFunction } from "@tanstack/react-query";
+import Constants from "expo-constants";
 
 const fetchFn = Platform.OS === "web" ? globalThis.fetch : expoFetch;
 
@@ -12,12 +13,14 @@ export function getApiUrl(): string {
   let host = process.env.EXPO_PUBLIC_DOMAIN;
 
   if (!host) {
+    const apiUrl = Constants.expoConfig?.extra?.apiUrl as string | undefined;
+    if (apiUrl) {
+      return apiUrl.endsWith("/") ? apiUrl : apiUrl + "/";
+    }
     throw new Error("EXPO_PUBLIC_DOMAIN is not set");
   }
 
-  let url = new URL(`https://${host}`);
-
-  return url.href;
+  return new URL(`https://${host}`).href;
 }
 
 async function throwIfResNotOk(res: Response) {
