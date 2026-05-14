@@ -794,23 +794,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
       }
 
-      // Validate voterName against the invitee list when one is present
-      if (plan.inviteeNames && plan.inviteeNames.length > 0) {
-        const normalizedVoter = voterName.toLowerCase().trim();
-        const match = plan.inviteeNames.some(
-          (name) => name.toLowerCase().trim() === normalizedVoter
-        );
-        if (!match) {
-          return res.status(403).json({ message: "Your name does not match the invitee list for this survey" });
-        }
-      }
-
       // Check deadline
       if (plan.deadline) {
         const deadlineDate = new Date(plan.deadline);
         if (!isNaN(deadlineDate.getTime()) && new Date() > deadlineDate) {
           return res.status(400).json({ message: "Voting has closed for this survey" });
         }
+      }
+
+      const existingVotes = await storage.getVotesByPlanId(plan.id);
+      const totalVoters = new Set(existingVotes.map((v) => v.voterName)).size;
+      const voterAlreadySubmitted = existingVotes.some(
+        (v) => v.voterName.toLowerCase().trim() === voterName.toLowerCase().trim()
+      );
+      const voterCap = (plan.inviteeNames?.length ?? 0) + 3;
+      if (!voterAlreadySubmitted && totalVoters >= voterCap) {
+        return res.status(400).json({ message: "This survey has reached its voting limit" });
       }
 
       // Validate all submitted optionIds belong to this plan
