@@ -22,9 +22,9 @@ import { DateWheelPicker } from "@/components/DateWheelPicker";
 import * as Haptics from "expo-haptics";
 
 const PREDEFINED_LABELS = [
-  "Childhood Friend", "College Friend", "Work Friend", "Neighbor",
-  "Family Friend", "International Friend", "Gym Buddy", "Travel Buddy", "Creative Partner",
-  "Mentor", "Mentee",
+  "Family", "Childhood Friend", "College Friend", "Work Friend", "Neighbor",
+  "Family Friend", "International Friend", "Gym Buddy", "Travel Buddy",
+  "Mentor",
 ];
 
 const MONTH_NAMES = [

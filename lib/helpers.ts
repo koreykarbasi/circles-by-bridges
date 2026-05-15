@@ -28,11 +28,12 @@ export function getDaysUntilBirthday(birthday?: string): number | null {
     day = bday.getDate();
   }
   if (isNaN(month) || isNaN(day)) return null;
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
   const thisYear = new Date(now.getFullYear(), month, day);
-  if (thisYear < now) {
+  if (thisYear < today) {
     thisYear.setFullYear(thisYear.getFullYear() + 1);
   }
-  return Math.floor((thisYear.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+  return Math.floor((thisYear.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
 }
 
 export function formatLastContacted(dateStr?: string): string {

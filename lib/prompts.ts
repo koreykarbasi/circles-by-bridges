@@ -294,23 +294,21 @@ const LABEL_PROMPTS: Record<string, string[]> = {
     "Reminisce about your favorite trip together with [Name].",
     "Ask [Name] where they want to go next.",
   ],
-  "creative partner": [
-    "Ask [Name] what creative project they're working on.",
-    "Suggest a creative collaboration with [Name].",
-    "Share something inspiring you found that [Name] would appreciate.",
-    "Give [Name] feedback on their latest work.",
+  "family": [
+    "Call [Name] just to hear their voice - no agenda, just connection.",
+    "Tell [Name] something specific you're grateful for about who they are.",
+    "Ask [Name] how they're really doing - not just the surface version.",
+    "Share a family memory with [Name] and ask what they remember about it.",
+    "Tell [Name] something you've always admired about them but never said out loud.",
+    "Ask [Name] what they need most from you right now.",
+    "Check in on [Name] - family deserves the same intention as any close friend.",
+    "Tell [Name] that you love them and that you mean it.",
   ],
   "mentor": [
     "Thank [Name] for something specific they've taught you.",
     "Ask [Name] for guidance on a challenge you're facing.",
     "Update [Name] on your progress - they'd love to hear it.",
     "Share a win with [Name] and credit their influence.",
-  ],
-  "mentee": [
-    "Check in on [Name]'s progress and offer encouragement.",
-    "Share a resource or tip that could help [Name].",
-    "Ask [Name] what they're struggling with and offer support.",
-    "Celebrate a recent achievement of [Name].",
   ],
   "international friend": [
     "Ask [Name] when they started feeling at home in their new city.",
