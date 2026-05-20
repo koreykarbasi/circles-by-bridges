@@ -10,7 +10,7 @@ import {
   ActivityIndicator,
 } from "react-native";
 import * as Contacts from "expo-contacts";
-import * as ImageManipulator from "expo-image-manipulator";
+import * as FileSystem from "expo-file-system";
 import { Ionicons } from "@expo/vector-icons";
 import { Avatar } from "./Avatar";
 import Colors from "@/constants/colors";
@@ -76,14 +76,10 @@ export function ContactsImport({ selectedContacts, onSelect, onDeselect, maxSele
               let photoUri: string | undefined;
               if (c.imageAvailable && c.image?.uri) {
                 try {
-                  const compressed = await ImageManipulator.manipulateAsync(
-                    c.image.uri,
-                    [{ resize: { width: 200, height: 200 } }],
-                    { compress: 0.6, format: ImageManipulator.SaveFormat.JPEG, base64: true }
-                  );
-                  if (compressed.base64) {
-                    photoUri = `data:image/jpeg;base64,${compressed.base64}`;
-                  }
+                  const base64 = await FileSystem.readAsStringAsync(c.image.uri, {
+                    encoding: FileSystem.EncodingType.Base64,
+                  });
+                  photoUri = `data:image/jpeg;base64,${base64}`;
                 } catch {
                 }
               }
