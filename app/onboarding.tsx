@@ -262,40 +262,16 @@ function AuthPage({ onSuccess }: { onSuccess: () => void }) {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState("");
 
-  const googleWebClientId = process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID ?? "";
-  const googleIosClientId = process.env.EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID ?? "";
-  const googleAndroidClientId = process.env.EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID ?? "";
-  // Show Google button when any platform client ID is configured
-  const showGoogleButton = !!(googleWebClientId || googleIosClientId || googleAndroidClientId);
-  const [, googleResponse, googlePromptAsync] = Google.useAuthRequest({
-    webClientId: googleWebClientId || "not-configured",
-    iosClientId: googleIosClientId || "not-configured",
-    androidClientId: googleAndroidClientId || "not-configured",
-  });
+  const showGoogleButton = !!(
+    process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID ||
+    process.env.EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID ||
+    process.env.EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID
+  );
 
   // Auto-advance if already signed in
   useEffect(() => {
     if (user) onSuccess();
   }, [user?.id]);
-
-  // Handle Google OAuth response
-  useEffect(() => {
-    if (googleResponse?.type === "success") {
-      const token = googleResponse.authentication?.accessToken;
-      if (token) {
-        setIsSubmitting(true);
-        setError("");
-        loginWithGoogle(token)
-          .catch((e: unknown) => {
-            const msg = e instanceof Error ? e.message : "Google sign in failed";
-            setError(extractMessage(msg));
-          })
-          .finally(() => setIsSubmitting(false));
-      }
-    } else if (googleResponse?.type === "error") {
-      setError("Google sign in was cancelled or failed.");
-    }
-  }, [googleResponse]);
 
   const handleEmailAuth = async () => {
     const trimmedEmail = email.trim().toLowerCase();
@@ -405,20 +381,23 @@ function AuthPage({ onSuccess }: { onSuccess: () => void }) {
             />
           )}
 
-          {/* Sign in with Google — shown when any platform client ID is configured */}
+          {/* Sign in with Google — rendered as a separate component so the hook
+              only runs when real credentials are configured */}
           {showGoogleButton && (
-            <TouchableOpacity
-              style={authStyles.socialButton}
-              onPress={() => {
+            <GoogleAuthButton
+              onToken={(token) => {
+                setIsSubmitting(true);
                 setError("");
-                googlePromptAsync();
+                loginWithGoogle(token)
+                  .catch((e: unknown) => {
+                    const msg = e instanceof Error ? e.message : "Google sign in failed";
+                    setError(extractMessage(msg));
+                  })
+                  .finally(() => setIsSubmitting(false));
               }}
+              onError={(msg) => setError(msg)}
               disabled={isSubmitting}
-              activeOpacity={0.75}
-            >
-              <Ionicons name="logo-google" size={20} color={Colors.text} />
-              <Text style={authStyles.socialButtonText}>Continue with Google</Text>
-            </TouchableOpacity>
+            />
           )}
 
           {(Platform.OS === "ios" || showGoogleButton) && (
@@ -577,6 +556,47 @@ function extractMessage(raw: string): string {
     return raw.slice(colonIdx + 2);
   }
   return raw;
+}
+
+// ─── Google Auth Button ───────────────────────────────────────────────────────
+// Separate component so Google.useAuthRequest is only called when
+// real credentials are configured (avoids crash when env vars are unset).
+
+function GoogleAuthButton({
+  onToken,
+  onError,
+  disabled,
+}: {
+  onToken: (accessToken: string) => void;
+  onError: (message: string) => void;
+  disabled: boolean;
+}) {
+  const [, response, promptAsync] = Google.useAuthRequest({
+    webClientId: process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID,
+    iosClientId: process.env.EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID,
+    androidClientId: process.env.EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID,
+  });
+
+  useEffect(() => {
+    if (response?.type === "success") {
+      const token = response.authentication?.accessToken;
+      if (token) onToken(token);
+    } else if (response?.type === "error") {
+      onError("Google sign in was cancelled or failed.");
+    }
+  }, [response]);
+
+  return (
+    <TouchableOpacity
+      style={authStyles.socialButton}
+      onPress={() => promptAsync()}
+      disabled={disabled}
+      activeOpacity={0.75}
+    >
+      <Ionicons name="logo-google" size={20} color={Colors.text} />
+      <Text style={authStyles.socialButtonText}>Continue with Google</Text>
+    </TouchableOpacity>
+  );
 }
 
 // ─── Welcome Page ─────────────────────────────────────────────────────────────
