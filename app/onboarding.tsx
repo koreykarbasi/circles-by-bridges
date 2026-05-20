@@ -126,7 +126,7 @@ export default function OnboardingScreen() {
         case "features":
           return <FeaturesPage />;
         case "auth":
-          return <AuthPage onSuccess={goNext} />;
+          return <AuthPage onSuccess={goNext} isActive={currentIndex === 3} />;
         case "circle1":
           return (
             <CircleImportPage
@@ -248,7 +248,7 @@ export default function OnboardingScreen() {
 
 // ─── Auth Page ────────────────────────────────────────────────────────────────
 
-function AuthPage({ onSuccess }: { onSuccess: () => void }) {
+function AuthPage({ onSuccess, isActive }: { onSuccess: () => void; isActive: boolean }) {
   const { user, login, register, loginWithApple, loginWithGoogle } = useAuth();
   const insets = useSafeAreaInsets();
   const webBottomInset = Platform.OS === "web" ? 34 : 0;
@@ -268,22 +268,18 @@ function AuthPage({ onSuccess }: { onSuccess: () => void }) {
     process.env.EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID
   );
 
-  // Guard so onSuccess is called at most once (handles both the
-  // "already signed in on mount" path and the explicit form-submit path).
-  const advancedRef = React.useRef(false);
-  const advance = useCallback(() => {
-    if (!advancedRef.current) {
-      advancedRef.current = true;
+  // Auto-advance when this step becomes visible and a session already exists
+  // (returning user with a cached session). The isActive guard ensures we only
+  // fire when the auth slide is actually the current page — not while it is
+  // mounted off-screen behind the welcome/circles/features slides.
+  useEffect(() => {
+    if (isActive && user) {
       onSuccess();
     }
-  }, [onSuccess]);
-
-  // Auto-advance if the user already has a valid session when this step mounts
-  // (returning user whose session is cached in AsyncStorage).
-  useEffect(() => {
-    if (user) advance();
+  // Only re-check when the step becomes active; user identity changing mid-step
+  // is handled by the direct onSuccess() calls in the form handlers below.
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [isActive]);
 
   const handleEmailAuth = async () => {
     const trimmedEmail = email.trim().toLowerCase();
@@ -312,7 +308,7 @@ function AuthPage({ onSuccess }: { onSuccess: () => void }) {
       } else {
         await login(trimmedEmail, password);
       }
-      advance();
+      onSuccess();
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : "Something went wrong.";
       setError(extractMessage(msg));
@@ -339,7 +335,7 @@ function AuthPage({ onSuccess }: { onSuccess: () => void }) {
         givenName: credential.fullName?.givenName,
         familyName: credential.fullName?.familyName,
       });
-      advance();
+      onSuccess();
     } catch (e: unknown) {
       const code = (e as { code?: string }).code;
       if (code !== "ERR_REQUEST_CANCELED") {
