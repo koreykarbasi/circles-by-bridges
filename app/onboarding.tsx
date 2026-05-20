@@ -269,8 +269,8 @@ function AuthPage({ onSuccess }: { onSuccess: () => void }) {
   const showGoogleButton = !!(googleWebClientId || googleIosClientId || googleAndroidClientId);
   const [, googleResponse, googlePromptAsync] = Google.useAuthRequest({
     webClientId: googleWebClientId || "not-configured",
-    iosClientId: googleIosClientId || undefined,
-    androidClientId: googleAndroidClientId || undefined,
+    iosClientId: googleIosClientId || "not-configured",
+    androidClientId: googleAndroidClientId || "not-configured",
   });
 
   // Auto-advance if already signed in
