@@ -262,11 +262,15 @@ function AuthPage({ onSuccess }: { onSuccess: () => void }) {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState("");
 
-  const googleClientId = process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID ?? "";
+  const googleWebClientId = process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID ?? "";
+  const googleIosClientId = process.env.EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID ?? "";
+  const googleAndroidClientId = process.env.EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID ?? "";
+  // Show Google button when any platform client ID is configured
+  const showGoogleButton = !!(googleWebClientId || googleIosClientId || googleAndroidClientId);
   const [, googleResponse, googlePromptAsync] = Google.useAuthRequest({
-    webClientId: googleClientId || "not-configured",
-    iosClientId: process.env.EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID,
-    androidClientId: process.env.EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID,
+    webClientId: googleWebClientId || "not-configured",
+    iosClientId: googleIosClientId || undefined,
+    androidClientId: googleAndroidClientId || undefined,
   });
 
   // Auto-advance if already signed in
@@ -401,8 +405,8 @@ function AuthPage({ onSuccess }: { onSuccess: () => void }) {
             />
           )}
 
-          {/* Sign in with Google — shown when client ID is configured */}
-          {!!googleClientId && (
+          {/* Sign in with Google — shown when any platform client ID is configured */}
+          {showGoogleButton && (
             <TouchableOpacity
               style={authStyles.socialButton}
               onPress={() => {
@@ -417,7 +421,7 @@ function AuthPage({ onSuccess }: { onSuccess: () => void }) {
             </TouchableOpacity>
           )}
 
-          {(Platform.OS === "ios" || !!googleClientId) && (
+          {(Platform.OS === "ios" || showGoogleButton) && (
             <View style={authStyles.divider}>
               <View style={authStyles.dividerLine} />
               <Text style={authStyles.dividerText}>or</Text>

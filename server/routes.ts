@@ -288,17 +288,26 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (!identityToken || typeof identityToken !== "string") {
         return res.status(400).json({ message: "Identity token required" });
       }
-      const parts = identityToken.split(".");
-      if (parts.length !== 3) {
-        return res.status(400).json({ message: "Invalid token format" });
-      }
+
+      // Verify the Apple identity token against Apple's public JWKS.
+      // This validates the signature, issuer, audience, and expiry.
       let payload: { sub?: string; email?: string };
       try {
-        const decoded = Buffer.from(parts[1], "base64url").toString("utf-8");
-        payload = JSON.parse(decoded);
-      } catch {
-        return res.status(400).json({ message: "Invalid token" });
+        const { createRemoteJWKSet, jwtVerify } = await import("jose");
+        const APPLE_JWKS = createRemoteJWKSet(
+          new URL("https://appleid.apple.com/auth/keys")
+        );
+        const BUNDLE_ID = "com.bridges.app";
+        const { payload: verified } = await jwtVerify(identityToken, APPLE_JWKS, {
+          issuer: "https://appleid.apple.com",
+          audience: BUNDLE_ID,
+        });
+        payload = verified as { sub?: string; email?: string };
+      } catch (verifyErr) {
+        console.error("Apple token verification failed:", verifyErr);
+        return res.status(401).json({ message: "Apple identity token is invalid or expired" });
       }
+
       const { sub: appleSub, email } = payload;
       if (!appleSub) {
         return res.status(400).json({ message: "Invalid Apple token" });
