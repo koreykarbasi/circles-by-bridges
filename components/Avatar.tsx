@@ -13,6 +13,10 @@ export function Avatar({ name, color, size = 44, photoUri }: AvatarProps) {
   const [imgError, setImgError] = useState(false);
   const fontSize = size * 0.38;
 
+  React.useEffect(() => {
+    setImgError(false);
+  }, [photoUri]);
+
   if (photoUri && !imgError) {
     return (
       <Image
