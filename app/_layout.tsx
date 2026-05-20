@@ -68,6 +68,8 @@ function RootLayoutNav() {
   const { user, isCacheHydrated } = useAuth();
   const { hasCompletedOnboarding, isReplayRequested } = useOnboarding();
   const segments = useSegments();
+  const segmentsRef = useRef(segments);
+  segmentsRef.current = segments;
   const responseListener = useRef<{ remove(): void } | null>(null);
 
   // Auth is now embedded inside onboarding, so the only safe signal that onboarding
@@ -107,7 +109,7 @@ function RootLayoutNav() {
     if (!onboardingDone) {
       // Don't replace if already on onboarding — avoids resetting the pager mid-flow
       // (e.g., when user signs in on the embedded auth step).
-      const alreadyOnOnboarding = segments[0] === "onboarding";
+      const alreadyOnOnboarding = segmentsRef.current[0] === "onboarding";
       if (!alreadyOnOnboarding) {
         router.replace("/onboarding");
       }
@@ -120,7 +122,7 @@ function RootLayoutNav() {
     } else {
       router.replace("/(tabs)");
     }
-  }, [user, hasCompletedOnboarding, isReplayRequested, isCacheHydrated, segments[0]]);
+  }, [user, hasCompletedOnboarding, isReplayRequested, isCacheHydrated]);
 
   if (hasCompletedOnboarding === null || !isCacheHydrated) {
     return (

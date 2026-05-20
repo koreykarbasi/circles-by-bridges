@@ -76,10 +76,15 @@ export function ContactsImport({ selectedContacts, onSelect, onDeselect, maxSele
               let photoUri: string | undefined;
               if (c.imageAvailable && c.image?.uri) {
                 try {
-                  const base64 = await FileSystem.readAsStringAsync(c.image.uri, {
+                  const tempPath = `${FileSystem.cacheDirectory}cp_${Date.now()}_${Math.random().toString(36).slice(2)}.jpg`;
+                  await FileSystem.copyAsync({ from: c.image.uri, to: tempPath });
+                  const base64 = await FileSystem.readAsStringAsync(tempPath, {
                     encoding: FileSystem.EncodingType.Base64,
                   });
-                  photoUri = `data:image/jpeg;base64,${base64}`;
+                  if (base64) {
+                    photoUri = `data:image/jpeg;base64,${base64}`;
+                  }
+                  FileSystem.deleteAsync(tempPath, { idempotent: true }).catch(() => {});
                 } catch {
                 }
               }
