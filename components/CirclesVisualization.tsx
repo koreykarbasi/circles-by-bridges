@@ -22,7 +22,7 @@ interface CirclesVisualizationProps {
 
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
 const VIZ_SIZE = Math.min(SCREEN_WIDTH - 48, 320);
-const MAX_OUTER_SHOWN = 35;
+const MAX_OUTER_SHOWN = 14;
 
 function OrbitingAvatar({
   contact,
