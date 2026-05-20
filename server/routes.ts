@@ -282,6 +282,104 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  app.post("/api/auth/apple", authRateLimiter, async (req, res) => {
+    try {
+      const { identityToken, fullName } = req.body;
+      if (!identityToken || typeof identityToken !== "string") {
+        return res.status(400).json({ message: "Identity token required" });
+      }
+      const parts = identityToken.split(".");
+      if (parts.length !== 3) {
+        return res.status(400).json({ message: "Invalid token format" });
+      }
+      let payload: { sub?: string; email?: string };
+      try {
+        const decoded = Buffer.from(parts[1], "base64url").toString("utf-8");
+        payload = JSON.parse(decoded);
+      } catch {
+        return res.status(400).json({ message: "Invalid token" });
+      }
+      const { sub: appleSub, email } = payload;
+      if (!appleSub) {
+        return res.status(400).json({ message: "Invalid Apple token" });
+      }
+      const userEmail = email
+        ? email.toLowerCase().trim()
+        : `apple_${appleSub.replace(/[^a-z0-9]/gi, "")}@bridges.apple`;
+      let user = await storage.getUserByEmail(userEmail);
+      if (!user) {
+        const hashedPassword = await bcrypt.hash(
+          Math.random().toString(36) + Date.now(),
+          10
+        );
+        user = await storage.createUser({ email: userEmail, password: hashedPassword });
+        if (fullName?.givenName) {
+          const name = [fullName.givenName, fullName.familyName]
+            .filter(Boolean)
+            .join(" ")
+            .trim();
+          if (name) await storage.updateUser(user.id, { username: name });
+        }
+        const updated = await storage.getUser(user.id);
+        if (updated) user = updated;
+      }
+      req.session.userId = user.id;
+      req.session.save((err) => {
+        if (err) {
+          console.error("Session save error (apple):", err);
+          return res.status(500).json({ message: "Sign in failed" });
+        }
+        res.json({ id: user!.id, email: user!.email, name: user!.username, profilePhotoUri: user!.profilePhotoUri });
+      });
+    } catch (err) {
+      console.error("Apple auth error:", err);
+      res.status(500).json({ message: "Apple sign in failed" });
+    }
+  });
+
+  app.post("/api/auth/google", authRateLimiter, async (req, res) => {
+    try {
+      const { accessToken } = req.body;
+      if (!accessToken || typeof accessToken !== "string") {
+        return res.status(400).json({ message: "Access token required" });
+      }
+      const googleRes = await fetch(
+        `https://www.googleapis.com/oauth2/v3/userinfo`,
+        { headers: { Authorization: `Bearer ${accessToken}` } }
+      );
+      if (!googleRes.ok) {
+        return res.status(401).json({ message: "Invalid Google token" });
+      }
+      const data = await googleRes.json() as { sub?: string; email?: string; name?: string };
+      const { email, name } = data;
+      if (!email) {
+        return res.status(400).json({ message: "Email not available from Google" });
+      }
+      let user = await storage.getUserByEmail(email.toLowerCase().trim());
+      if (!user) {
+        const hashedPassword = await bcrypt.hash(
+          Math.random().toString(36) + Date.now(),
+          10
+        );
+        user = await storage.createUser({ email: email.toLowerCase().trim(), password: hashedPassword });
+        if (name) await storage.updateUser(user.id, { username: name.trim() });
+        const updated = await storage.getUser(user.id);
+        if (updated) user = updated;
+      }
+      req.session.userId = user.id;
+      req.session.save((err) => {
+        if (err) {
+          console.error("Session save error (google):", err);
+          return res.status(500).json({ message: "Sign in failed" });
+        }
+        res.json({ id: user!.id, email: user!.email, name: user!.username, profilePhotoUri: user!.profilePhotoUri });
+      });
+    } catch (err) {
+      console.error("Google auth error:", err);
+      res.status(500).json({ message: "Google sign in failed" });
+    }
+  });
+
   app.post("/api/auth/logout", (req, res) => {
     req.session.destroy((err) => {
       if (err) {

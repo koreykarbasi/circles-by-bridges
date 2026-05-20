@@ -1,5 +1,5 @@
 entrypoint = "README.md"
-modules = ["python-3.11", "nodejs-20", "postgresql-16"]
+modules = ["python-3.11", "nodejs-20", "postgresql-16", "javascript"]
 
 [nix]
 channel = "stable-24_05"

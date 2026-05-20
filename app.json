@@ -19,7 +19,8 @@
       "buildNumber": "1",
       "infoPlist": {},
       "entitlements": {
-        "aps-environment": "production"
+        "aps-environment": "production",
+        "com.apple.developer.applesignin": ["Default"]
       },
       "privacyManifests": {
         "NSPrivacyAccessedAPITypes": [
@@ -70,7 +71,8 @@
           "photosPermission": "Bridges uses your photo library so you can add profile photos for yourself and your contacts.",
           "cameraPermission": "Bridges uses your camera so you can take profile photos for yourself and your contacts."
         }
-      ]
+      ],
+      "expo-apple-authentication"
     ],
     "extra": {
       "apiUrl": "https://circles-bridges.replit.app"

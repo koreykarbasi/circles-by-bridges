@@ -1,4 +1,4 @@
-import React, { useState, useRef, useCallback } from "react";
+import React, { useState, useRef, useCallback, useEffect } from "react";
 import {
   View,
   Text,
@@ -9,22 +9,23 @@ import {
   ScrollView,
   Platform,
   Image,
+  KeyboardAvoidingView,
+  TextInput,
+  TouchableOpacity,
+  ActivityIndicator,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { Ionicons, MaterialCommunityIcons, Feather } from "@expo/vector-icons";
-import Animated, {
-  useSharedValue,
-  useAnimatedStyle,
-  withSpring,
-  FadeIn,
-} from "react-native-reanimated";
+import { Ionicons } from "@expo/vector-icons";
+import Animated, { FadeIn } from "react-native-reanimated";
 import Colors from "@/constants/colors";
 import { CIRCLE_CONFIG } from "@/lib/types";
 import { ContactsImport, ImportedContact } from "@/components/ContactsImport";
 import { useOnboarding } from "@/lib/onboarding-context";
 import { useContacts } from "@/lib/contacts-context";
-import { AVATAR_COLORS } from "@/lib/types";
+import { useAuth } from "@/lib/auth-context";
 import * as Haptics from "expo-haptics";
+import * as AppleAuthentication from "expo-apple-authentication";
+import * as Google from "expo-auth-session/providers/google";
 
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
 
@@ -32,6 +33,7 @@ type OnboardingStep =
   | "welcome"
   | "circles"
   | "features"
+  | "auth"
   | "circle1"
   | "circle2"
   | "circle3"
@@ -41,6 +43,7 @@ const STEPS: OnboardingStep[] = [
   "welcome",
   "circles",
   "features",
+  "auth",
   "circle1",
   "circle2",
   "circle3",
@@ -89,22 +92,27 @@ export default function OnboardingScreen() {
     ];
 
     for (const contact of allContacts) {
-      await addContact({
-        name: contact.name,
-        circleLevel: contact.circleLevel,
-        interests: [],
-        labels: [],
-        birthday: contact.birthday,
-        phone: contact.phone,
-        notes: undefined,
-        lastContacted: undefined,
-      });
+      try {
+        await addContact({
+          name: contact.name,
+          circleLevel: contact.circleLevel,
+          interests: [],
+          labels: [],
+          birthday: contact.birthday,
+          phone: contact.phone,
+          notes: undefined,
+          lastContacted: undefined,
+        });
+      } catch {
+        // Continue saving remaining contacts even if one fails
+      }
     }
 
     await completeOnboarding();
   }, [circle1Contacts, circle2Contacts, circle3Contacts, addContact, completeOnboarding]);
 
   const currentStep = STEPS[currentIndex];
+  const isAuthStep = currentStep === "auth";
   const isImportStep = ["circle1", "circle2", "circle3"].includes(currentStep);
   const isSkippable = currentStep === "circle2" || currentStep === "circle3";
 
@@ -117,6 +125,8 @@ export default function OnboardingScreen() {
           return <CirclesPage />;
         case "features":
           return <FeaturesPage />;
+        case "auth":
+          return <AuthPage onSuccess={goNext} />;
         case "circle1":
           return (
             <CircleImportPage
@@ -163,7 +173,7 @@ export default function OnboardingScreen() {
           return null;
       }
     },
-    [circle1Contacts, circle2Contacts, circle3Contacts],
+    [circle1Contacts, circle2Contacts, circle3Contacts, goNext],
   );
 
   return (
@@ -209,36 +219,363 @@ export default function OnboardingScreen() {
         })}
       />
 
-      <View style={[styles.bottomBar, { paddingBottom: insets.bottom + 16 + webBottomInset }]}>
-        {currentStep === "done" ? (
-          <Pressable
-            onPress={handleFinish}
-            disabled={saving}
-            style={({ pressed }) => [styles.primaryButton, pressed && { opacity: 0.8 }]}
-          >
-            <Text style={styles.primaryButtonText}>
-              {saving ? "Setting up..." : "Let's Go!"}
-            </Text>
-          </Pressable>
-        ) : (
-          <Pressable
-            onPress={goNext}
-            style={({ pressed }) => [styles.primaryButton, pressed && { opacity: 0.8 }]}
-          >
-            <Text style={styles.primaryButtonText}>
-              {isImportStep
-                ? isSkippable
-                  ? "Continue"
-                  : "Next"
-                : "Next"}
-            </Text>
-            <Ionicons name="arrow-forward" size={18} color="#fff" />
-          </Pressable>
-        )}
-      </View>
+      {!isAuthStep && (
+        <View style={[styles.bottomBar, { paddingBottom: insets.bottom + 16 + webBottomInset }]}>
+          {currentStep === "done" ? (
+            <Pressable
+              onPress={handleFinish}
+              disabled={saving}
+              style={({ pressed }) => [styles.primaryButton, pressed && { opacity: 0.8 }]}
+            >
+              <Text style={styles.primaryButtonText}>
+                {saving ? "Setting up..." : "Let's Go!"}
+              </Text>
+            </Pressable>
+          ) : (
+            <Pressable
+              onPress={goNext}
+              style={({ pressed }) => [styles.primaryButton, pressed && { opacity: 0.8 }]}
+            >
+              <Text style={styles.primaryButtonText}>Next</Text>
+              <Ionicons name="arrow-forward" size={18} color="#fff" />
+            </Pressable>
+          )}
+        </View>
+      )}
     </View>
   );
 }
+
+// ─── Auth Page ────────────────────────────────────────────────────────────────
+
+function AuthPage({ onSuccess }: { onSuccess: () => void }) {
+  const { user, login, register, loginWithApple, loginWithGoogle } = useAuth();
+  const insets = useSafeAreaInsets();
+  const webBottomInset = Platform.OS === "web" ? 34 : 0;
+
+  const [mode, setMode] = useState<"signup" | "signin">("signup");
+  const [name, setName] = useState("");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [error, setError] = useState("");
+
+  const googleClientId = process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID ?? "";
+  const [, googleResponse, googlePromptAsync] = Google.useAuthRequest({
+    webClientId: googleClientId || "not-configured",
+    iosClientId: process.env.EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID,
+    androidClientId: process.env.EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID,
+  });
+
+  // Auto-advance if already signed in
+  useEffect(() => {
+    if (user) onSuccess();
+  }, [user?.id]);
+
+  // Handle Google OAuth response
+  useEffect(() => {
+    if (googleResponse?.type === "success") {
+      const token = googleResponse.authentication?.accessToken;
+      if (token) {
+        setIsSubmitting(true);
+        setError("");
+        loginWithGoogle(token)
+          .catch((e: unknown) => {
+            const msg = e instanceof Error ? e.message : "Google sign in failed";
+            setError(extractMessage(msg));
+          })
+          .finally(() => setIsSubmitting(false));
+      }
+    } else if (googleResponse?.type === "error") {
+      setError("Google sign in was cancelled or failed.");
+    }
+  }, [googleResponse]);
+
+  const handleEmailAuth = async () => {
+    const trimmedEmail = email.trim().toLowerCase();
+    const trimmedName = name.trim();
+
+    if (!trimmedEmail) {
+      setError("Please enter your email.");
+      return;
+    }
+    if (password.length < 6) {
+      setError("Password must be at least 6 characters.");
+      return;
+    }
+    if (mode === "signup" && password !== confirmPassword) {
+      setError("Passwords do not match.");
+      return;
+    }
+
+    setError("");
+    setIsSubmitting(true);
+
+    try {
+      if (mode === "signup") {
+        await register(trimmedEmail, password, trimmedName || undefined);
+        await login(trimmedEmail, password);
+      } else {
+        await login(trimmedEmail, password);
+      }
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : "Something went wrong.";
+      setError(extractMessage(msg));
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleAppleSignIn = async () => {
+    setError("");
+    try {
+      const credential = await AppleAuthentication.signInAsync({
+        requestedScopes: [
+          AppleAuthentication.AppleAuthenticationScope.FULL_NAME,
+          AppleAuthentication.AppleAuthenticationScope.EMAIL,
+        ],
+      });
+      if (!credential.identityToken) {
+        setError("Apple sign in failed. Please try again.");
+        return;
+      }
+      setIsSubmitting(true);
+      await loginWithApple(credential.identityToken, {
+        givenName: credential.fullName?.givenName,
+        familyName: credential.fullName?.familyName,
+      });
+    } catch (e: unknown) {
+      const code = (e as { code?: string }).code;
+      if (code !== "ERR_REQUEST_CANCELED") {
+        const msg = e instanceof Error ? e.message : "Apple sign in failed.";
+        setError(extractMessage(msg));
+      }
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleToggleMode = () => {
+    setMode((m) => (m === "signup" ? "signin" : "signup"));
+    setError("");
+    setPassword("");
+    setConfirmPassword("");
+  };
+
+  return (
+    <View style={pageStyles.page}>
+      <KeyboardAvoidingView
+        style={{ flex: 1 }}
+        behavior={Platform.OS === "ios" ? "padding" : "height"}
+        keyboardVerticalOffset={0}
+      >
+        <ScrollView
+          contentContainerStyle={[
+            authStyles.scrollContent,
+            { paddingBottom: insets.bottom + 24 + webBottomInset },
+          ]}
+          keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator={false}
+        >
+          <Animated.View entering={FadeIn.duration(400)}>
+            <Text style={pageStyles.title}>
+              {mode === "signup" ? "Create your account" : "Welcome back"}
+            </Text>
+            <Text style={pageStyles.subtitle}>
+              {mode === "signup"
+                ? "Set up your account to start building stronger friendships."
+                : "Sign in to continue to your circles."}
+            </Text>
+          </Animated.View>
+
+          {/* Sign in with Apple — iOS only */}
+          {Platform.OS === "ios" && (
+            <AppleAuthentication.AppleAuthenticationButton
+              buttonType={AppleAuthentication.AppleAuthenticationButtonType.SIGN_IN}
+              buttonStyle={AppleAuthentication.AppleAuthenticationButtonStyle.BLACK}
+              cornerRadius={14}
+              style={authStyles.appleButton}
+              onPress={handleAppleSignIn}
+            />
+          )}
+
+          {/* Sign in with Google — shown when client ID is configured */}
+          {!!googleClientId && (
+            <TouchableOpacity
+              style={authStyles.socialButton}
+              onPress={() => {
+                setError("");
+                googlePromptAsync();
+              }}
+              disabled={isSubmitting}
+              activeOpacity={0.75}
+            >
+              <Ionicons name="logo-google" size={20} color={Colors.text} />
+              <Text style={authStyles.socialButtonText}>Continue with Google</Text>
+            </TouchableOpacity>
+          )}
+
+          {(Platform.OS === "ios" || !!googleClientId) && (
+            <View style={authStyles.divider}>
+              <View style={authStyles.dividerLine} />
+              <Text style={authStyles.dividerText}>or</Text>
+              <View style={authStyles.dividerLine} />
+            </View>
+          )}
+
+          {/* Mode tabs */}
+          <View style={authStyles.modeTabs}>
+            <Pressable
+              style={[authStyles.modeTab, mode === "signup" && authStyles.modeTabActive]}
+              onPress={() => mode !== "signup" && handleToggleMode()}
+            >
+              <Text style={[authStyles.modeTabText, mode === "signup" && authStyles.modeTabTextActive]}>
+                Sign up
+              </Text>
+            </Pressable>
+            <Pressable
+              style={[authStyles.modeTab, mode === "signin" && authStyles.modeTabActive]}
+              onPress={() => mode !== "signin" && handleToggleMode()}
+            >
+              <Text style={[authStyles.modeTabText, mode === "signin" && authStyles.modeTabTextActive]}>
+                Sign in
+              </Text>
+            </Pressable>
+          </View>
+
+          {/* Name field (signup only) */}
+          {mode === "signup" && (
+            <View style={authStyles.inputGroup}>
+              <Text style={authStyles.inputLabel}>Name (optional)</Text>
+              <TextInput
+                style={authStyles.input}
+                placeholder="Your name"
+                placeholderTextColor={Colors.textTertiary}
+                value={name}
+                onChangeText={(t) => { setName(t); setError(""); }}
+                autoComplete="name"
+                textContentType="name"
+                returnKeyType="next"
+              />
+            </View>
+          )}
+
+          {/* Email */}
+          <View style={authStyles.inputGroup}>
+            <Text style={authStyles.inputLabel}>Email</Text>
+            <TextInput
+              style={authStyles.input}
+              placeholder="you@example.com"
+              placeholderTextColor={Colors.textTertiary}
+              value={email}
+              onChangeText={(t) => { setEmail(t); setError(""); }}
+              autoCapitalize="none"
+              autoComplete="email"
+              textContentType="emailAddress"
+              keyboardType="email-address"
+              returnKeyType="next"
+            />
+          </View>
+
+          {/* Password */}
+          <View style={authStyles.inputGroup}>
+            <Text style={authStyles.inputLabel}>Password</Text>
+            <View style={authStyles.passwordRow}>
+              <TextInput
+                style={[authStyles.input, { flex: 1 }]}
+                placeholder="At least 6 characters"
+                placeholderTextColor={Colors.textTertiary}
+                value={password}
+                onChangeText={(t) => { setPassword(t); setError(""); }}
+                secureTextEntry={!showPassword}
+                autoComplete={mode === "signup" ? "new-password" : "current-password"}
+                textContentType={mode === "signup" ? "newPassword" : "password"}
+                returnKeyType={mode === "signup" ? "next" : "done"}
+                onSubmitEditing={mode === "signin" ? handleEmailAuth : undefined}
+              />
+              <TouchableOpacity
+                style={authStyles.eyeButton}
+                onPress={() => setShowPassword((v) => !v)}
+                hitSlop={8}
+              >
+                <Ionicons
+                  name={showPassword ? "eye-off-outline" : "eye-outline"}
+                  size={20}
+                  color={Colors.textSecondary}
+                />
+              </TouchableOpacity>
+            </View>
+          </View>
+
+          {/* Confirm password (signup only) */}
+          {mode === "signup" && (
+            <View style={authStyles.inputGroup}>
+              <Text style={authStyles.inputLabel}>Confirm password</Text>
+              <TextInput
+                style={authStyles.input}
+                placeholder="Re-enter your password"
+                placeholderTextColor={Colors.textTertiary}
+                value={confirmPassword}
+                onChangeText={(t) => { setConfirmPassword(t); setError(""); }}
+                secureTextEntry={!showPassword}
+                autoComplete="new-password"
+                textContentType="newPassword"
+                returnKeyType="done"
+                onSubmitEditing={handleEmailAuth}
+              />
+            </View>
+          )}
+
+          {/* Error */}
+          {!!error && (
+            <View style={authStyles.errorBox}>
+              <Ionicons name="alert-circle-outline" size={16} color={Colors.danger} />
+              <Text style={authStyles.errorText}>{error}</Text>
+            </View>
+          )}
+
+          {/* Submit */}
+          <Pressable
+            style={({ pressed }) => [
+              authStyles.submitButton,
+              (pressed || isSubmitting) && { opacity: 0.75 },
+            ]}
+            onPress={handleEmailAuth}
+            disabled={isSubmitting}
+          >
+            {isSubmitting ? (
+              <ActivityIndicator size="small" color="#fff" />
+            ) : (
+              <Text style={authStyles.submitButtonText}>
+                {mode === "signup" ? "Create account" : "Sign in"}
+              </Text>
+            )}
+          </Pressable>
+        </ScrollView>
+      </KeyboardAvoidingView>
+    </View>
+  );
+}
+
+function extractMessage(raw: string): string {
+  const jsonStart = raw.indexOf("{");
+  if (jsonStart > -1) {
+    try {
+      const parsed = JSON.parse(raw.slice(jsonStart)) as { message?: string };
+      if (parsed.message) return parsed.message;
+    } catch {}
+  }
+  // Strip leading HTTP status code like "400: ..."
+  const colonIdx = raw.indexOf(": ");
+  if (colonIdx > -1 && colonIdx < 5) {
+    return raw.slice(colonIdx + 2);
+  }
+  return raw;
+}
+
+// ─── Welcome Page ─────────────────────────────────────────────────────────────
 
 function WelcomePage() {
   return (
@@ -275,6 +612,8 @@ function WelcomePage() {
     </View>
   );
 }
+
+// ─── Circles Page ─────────────────────────────────────────────────────────────
 
 function CirclesPage() {
   return (
@@ -335,6 +674,8 @@ function CirclesPage() {
     </View>
   );
 }
+
+// ─── Features Page ────────────────────────────────────────────────────────────
 
 function FeaturesPage() {
   const features = [
@@ -399,6 +740,8 @@ function FeaturesPage() {
   );
 }
 
+// ─── Circle Import Page ───────────────────────────────────────────────────────
+
 function CircleImportPage({
   circleLevel,
   selectedContacts,
@@ -457,6 +800,8 @@ function CircleImportPage({
   );
 }
 
+// ─── Done Page ────────────────────────────────────────────────────────────────
+
 function DonePage({ total }: { total: number }) {
   return (
     <View style={pageStyles.page}>
@@ -497,6 +842,8 @@ function DonePage({ total }: { total: number }) {
     </View>
   );
 }
+
+// ─── Styles ───────────────────────────────────────────────────────────────────
 
 const styles = StyleSheet.create({
   container: {
@@ -726,38 +1073,36 @@ const pageStyles = StyleSheet.create({
     borderRadius: 20,
   },
   circleBadgeDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
+    width: 10,
+    height: 10,
+    borderRadius: 5,
   },
   circleBadgeLabel: {
     fontSize: 14,
     fontFamily: "Nunito_700Bold",
   },
   circleBadgeCount: {
-    fontSize: 12,
+    fontSize: 13,
     fontFamily: "Nunito_600SemiBold",
+    opacity: 0.8,
   },
   importContainer: {
-    marginTop: 16,
-    flex: 1,
+    marginTop: 8,
   },
   doneIllustration: {
     alignItems: "center",
-    marginBottom: 24,
+    marginBottom: 28,
   },
   doneCircle: {
-    width: 90,
-    height: 90,
-    borderRadius: 45,
+    width: 96,
+    height: 96,
+    borderRadius: 48,
     backgroundColor: Colors.success + "18",
-    borderWidth: 2,
-    borderColor: Colors.success + "40",
     alignItems: "center",
     justifyContent: "center",
   },
   doneFeatures: {
-    marginTop: 28,
+    marginTop: 24,
     gap: 12,
   },
   doneItem: {
@@ -769,5 +1114,138 @@ const pageStyles = StyleSheet.create({
     fontSize: 15,
     fontFamily: "Nunito_600SemiBold",
     color: Colors.text,
+  },
+});
+
+const authStyles = StyleSheet.create({
+  scrollContent: {
+    paddingHorizontal: 28,
+    paddingTop: 16,
+  },
+  appleButton: {
+    width: "100%",
+    height: 52,
+    marginTop: 20,
+    marginBottom: 10,
+  },
+  socialButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 10,
+    height: 52,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    backgroundColor: Colors.surface,
+    marginBottom: 10,
+  },
+  socialButtonText: {
+    fontSize: 15,
+    fontFamily: "Nunito_600SemiBold",
+    color: Colors.text,
+  },
+  divider: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginVertical: 16,
+    gap: 10,
+  },
+  dividerLine: {
+    flex: 1,
+    height: 1,
+    backgroundColor: Colors.border,
+  },
+  dividerText: {
+    fontSize: 13,
+    fontFamily: "Nunito_400Regular",
+    color: Colors.textTertiary,
+  },
+  modeTabs: {
+    flexDirection: "row",
+    backgroundColor: Colors.surface,
+    borderRadius: 12,
+    padding: 3,
+    marginBottom: 20,
+    borderWidth: 1,
+    borderColor: Colors.borderLight,
+  },
+  modeTab: {
+    flex: 1,
+    paddingVertical: 10,
+    alignItems: "center",
+    borderRadius: 10,
+  },
+  modeTabActive: {
+    backgroundColor: Colors.primary,
+  },
+  modeTabText: {
+    fontSize: 14,
+    fontFamily: "Nunito_600SemiBold",
+    color: Colors.textSecondary,
+  },
+  modeTabTextActive: {
+    color: "#fff",
+  },
+  inputGroup: {
+    marginBottom: 14,
+  },
+  inputLabel: {
+    fontSize: 13,
+    fontFamily: "Nunito_600SemiBold",
+    color: Colors.textSecondary,
+    marginBottom: 6,
+  },
+  input: {
+    height: 50,
+    backgroundColor: Colors.surface,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    paddingHorizontal: 14,
+    fontSize: 15,
+    fontFamily: "Nunito_400Regular",
+    color: Colors.text,
+  },
+  passwordRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 0,
+  },
+  eyeButton: {
+    position: "absolute",
+    right: 14,
+    top: 0,
+    bottom: 0,
+    justifyContent: "center",
+  },
+  errorBox: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    backgroundColor: Colors.danger + "15",
+    borderRadius: 10,
+    padding: 10,
+    marginBottom: 12,
+  },
+  errorText: {
+    flex: 1,
+    fontSize: 13,
+    fontFamily: "Nunito_400Regular",
+    color: Colors.danger,
+  },
+  submitButton: {
+    height: 52,
+    backgroundColor: Colors.primary,
+    borderRadius: 14,
+    alignItems: "center",
+    justifyContent: "center",
+    marginTop: 4,
+    marginBottom: 20,
+  },
+  submitButtonText: {
+    fontSize: 16,
+    fontFamily: "Nunito_700Bold",
+    color: "#fff",
   },
 });

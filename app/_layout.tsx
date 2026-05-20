@@ -1,5 +1,5 @@
 import { QueryClientProvider } from "@tanstack/react-query";
-import { Stack, router } from "expo-router";
+import { Stack, router, useSegments } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
 import React, { useEffect, useRef } from "react";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
@@ -66,23 +66,24 @@ async function savePushToken(token: string) {
 
 function RootLayoutNav() {
   const { user, isCacheHydrated } = useAuth();
-  const { hasCompletedOnboarding, isReplayRequested, completeOnboarding } = useOnboarding();
+  const { hasCompletedOnboarding, isReplayRequested } = useOnboarding();
+  const segments = useSegments();
   const responseListener = useRef<{ remove(): void } | null>(null);
 
-  // A valid server session is a stronger signal than AsyncStorage — treat authenticated
-  // users as having completed onboarding, unless they explicitly requested a replay.
-  const effectivelyCompleted =
-    hasCompletedOnboarding || (user !== null && !isReplayRequested);
+  // Auth is now embedded inside onboarding, so the only safe signal that onboarding
+  // is fully done is the explicit AsyncStorage flag — not the presence of a user session.
+  // Using user !== null as a shortcut would redirect authenticated users away from
+  // onboarding before they finish adding their contacts.
+  const onboardingDone = hasCompletedOnboarding === true && !isReplayRequested;
 
-  // Register for push notifications once in the main app and user is authenticated
+  // Push notifications gate: only register after both onboarding and auth are complete.
   useEffect(() => {
-    if (!user || !effectivelyCompleted) return;
+    if (!user || !onboardingDone) return;
 
     registerForPushNotifications().then((token) => {
       if (token) savePushToken(token);
     });
 
-    // Handle notification taps — deep-link to the relevant screen
     responseListener.current = Notifications.addNotificationResponseReceivedListener((response) => {
       const data = response.notification.request.content.data as Record<string, string> | undefined;
       if (data?.hangoutId) {
@@ -98,24 +99,28 @@ function RootLayoutNav() {
       responseListener.current?.remove();
       responseListener.current = null;
     };
-  }, [user?.id, effectivelyCompleted]);
+  }, [user?.id, onboardingDone]);
 
   useEffect(() => {
     if (hasCompletedOnboarding === null || !isCacheHydrated) return;
 
-    if (!effectivelyCompleted) {
-      router.replace("/onboarding");
-    } else if (!user) {
+    if (!onboardingDone) {
+      // Don't replace if already on onboarding — avoids resetting the pager mid-flow
+      // (e.g., when user signs in on the embedded auth step).
+      const alreadyOnOnboarding = segments[0] === "onboarding";
+      if (!alreadyOnOnboarding) {
+        router.replace("/onboarding");
+      }
+      return;
+    }
+
+    // Onboarding complete — route by auth state
+    if (!user) {
       router.replace("/auth");
     } else {
-      // Silently sync AsyncStorage when the session is the reason we skipped onboarding,
-      // so future cold-starts don't flicker through the onboarding route first.
-      if (!hasCompletedOnboarding && !isReplayRequested) {
-        completeOnboarding();
-      }
       router.replace("/(tabs)");
     }
-  }, [user, hasCompletedOnboarding, isReplayRequested, isCacheHydrated, completeOnboarding]);
+  }, [user, hasCompletedOnboarding, isReplayRequested, isCacheHydrated, segments[0]]);
 
   if (hasCompletedOnboarding === null || !isCacheHydrated) {
     return (

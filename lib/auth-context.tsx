@@ -48,6 +48,8 @@ interface AuthContextValue {
   login: (email: string, password: string) => Promise<void>;
   register: (email: string, password: string, name?: string) => Promise<void>;
   loginAsGuest: (name: string) => Promise<void>;
+  loginWithApple: (identityToken: string, fullName?: { givenName?: string | null; familyName?: string | null }) => Promise<void>;
+  loginWithGoogle: (accessToken: string) => Promise<void>;
   logout: () => Promise<void>;
   updateProfilePhoto: (uri: string) => Promise<void>;
   updateName: (name: string) => Promise<void>;
@@ -70,7 +72,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (cached) {
         setUser(cached);
       }
-      // Mark cache as read — navigation can now fire without waiting for network
       setIsCacheHydrated(true);
 
       try {
@@ -109,12 +110,27 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const register = useCallback(async (email: string, password: string, name?: string) => {
     await apiRequest("POST", "/api/auth/register", { email, password, name });
-    // Server uses silent-success pattern: no session is created during registration.
-    // Caller should redirect the user to the sign-in screen.
   }, []);
 
   const loginAsGuest = useCallback(async (name: string) => {
     const res = await apiRequest("POST", "/api/auth/guest", { name });
+    const data = await res.json();
+    setUser(data);
+    writeAuthCache(data);
+  }, []);
+
+  const loginWithApple = useCallback(async (
+    identityToken: string,
+    fullName?: { givenName?: string | null; familyName?: string | null }
+  ) => {
+    const res = await apiRequest("POST", "/api/auth/apple", { identityToken, fullName });
+    const data = await res.json();
+    setUser(data);
+    writeAuthCache(data);
+  }, []);
+
+  const loginWithGoogle = useCallback(async (accessToken: string) => {
+    const res = await apiRequest("POST", "/api/auth/google", { accessToken });
     const data = await res.json();
     setUser(data);
     writeAuthCache(data);
@@ -141,8 +157,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const value = useMemo(
-    () => ({ user, isLoading, isCacheHydrated, login, register, loginAsGuest, logout, updateProfilePhoto, updateName }),
-    [user, isLoading, isCacheHydrated, login, register, loginAsGuest, logout, updateProfilePhoto, updateName],
+    () => ({
+      user, isLoading, isCacheHydrated,
+      login, register, loginAsGuest,
+      loginWithApple, loginWithGoogle,
+      logout, updateProfilePhoto, updateName,
+    }),
+    [user, isLoading, isCacheHydrated, login, register, loginAsGuest, loginWithApple, loginWithGoogle, logout, updateProfilePhoto, updateName],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
