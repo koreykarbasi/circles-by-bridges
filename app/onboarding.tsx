@@ -268,10 +268,22 @@ function AuthPage({ onSuccess }: { onSuccess: () => void }) {
     process.env.EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID
   );
 
-  // Auto-advance if already signed in
+  // Guard so onSuccess is called at most once (handles both the
+  // "already signed in on mount" path and the explicit form-submit path).
+  const advancedRef = React.useRef(false);
+  const advance = useCallback(() => {
+    if (!advancedRef.current) {
+      advancedRef.current = true;
+      onSuccess();
+    }
+  }, [onSuccess]);
+
+  // Auto-advance if the user already has a valid session when this step mounts
+  // (returning user whose session is cached in AsyncStorage).
   useEffect(() => {
-    if (user) onSuccess();
-  }, [user?.id]);
+    if (user) advance();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const handleEmailAuth = async () => {
     const trimmedEmail = email.trim().toLowerCase();
@@ -300,6 +312,7 @@ function AuthPage({ onSuccess }: { onSuccess: () => void }) {
       } else {
         await login(trimmedEmail, password);
       }
+      advance();
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : "Something went wrong.";
       setError(extractMessage(msg));
@@ -326,6 +339,7 @@ function AuthPage({ onSuccess }: { onSuccess: () => void }) {
         givenName: credential.fullName?.givenName,
         familyName: credential.fullName?.familyName,
       });
+      advance();
     } catch (e: unknown) {
       const code = (e as { code?: string }).code;
       if (code !== "ERR_REQUEST_CANCELED") {
