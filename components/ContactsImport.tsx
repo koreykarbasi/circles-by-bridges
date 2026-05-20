@@ -10,6 +10,7 @@ import {
   ActivityIndicator,
 } from "react-native";
 import * as Contacts from "expo-contacts";
+import * as ImageManipulator from "expo-image-manipulator";
 import { Ionicons } from "@expo/vector-icons";
 import { Avatar } from "./Avatar";
 import Colors from "@/constants/colors";
@@ -63,23 +64,38 @@ export function ContactsImport({ selectedContacts, onSelect, onDeselect, maxSele
           ],
           sort: Contacts.SortTypes.FirstName,
         });
-        const mapped: DeviceContact[] = data
-          .filter((c) => c.name)
-          .map((c) => {
-            let birthday: string | undefined;
-            if (c.birthday && c.birthday.month != null && c.birthday.day != null) {
-              const month = c.birthday.month + 1;
-              birthday = `${String(month).padStart(2, "0")}/${String(c.birthday.day).padStart(2, "0")}`;
-            }
-            const photoUri = c.imageAvailable && c.image?.uri ? c.image.uri : undefined;
-            return {
-              id: c.id ?? c.name ?? "",
-              name: c.name ?? "",
-              phone: c.phoneNumbers?.[0]?.number,
-              birthday,
-              photoUri,
-            };
-          });
+        const mapped: DeviceContact[] = await Promise.all(
+          data
+            .filter((c) => c.name)
+            .map(async (c) => {
+              let birthday: string | undefined;
+              if (c.birthday && c.birthday.month != null && c.birthday.day != null) {
+                const month = c.birthday.month + 1;
+                birthday = `${String(month).padStart(2, "0")}/${String(c.birthday.day).padStart(2, "0")}`;
+              }
+              let photoUri: string | undefined;
+              if (c.imageAvailable && c.image?.uri) {
+                try {
+                  const compressed = await ImageManipulator.manipulateAsync(
+                    c.image.uri,
+                    [{ resize: { width: 200, height: 200 } }],
+                    { compress: 0.6, format: ImageManipulator.SaveFormat.JPEG, base64: true }
+                  );
+                  if (compressed.base64) {
+                    photoUri = `data:image/jpeg;base64,${compressed.base64}`;
+                  }
+                } catch {
+                }
+              }
+              return {
+                id: c.id ?? c.name ?? "",
+                name: c.name ?? "",
+                phone: c.phoneNumbers?.[0]?.number,
+                birthday,
+                photoUri,
+              };
+            })
+        );
         setDeviceContacts(mapped);
       }
     } catch (err) {

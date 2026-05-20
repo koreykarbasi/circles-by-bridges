@@ -22,7 +22,7 @@ interface CirclesVisualizationProps {
 
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
 const VIZ_SIZE = Math.min(SCREEN_WIDTH - 48, 320);
-const MAX_OUTER_SHOWN = 8;
+const MAX_OUTER_SHOWN = 15;
 
 function OrbitingAvatar({
   contact,
@@ -129,8 +129,7 @@ export function CirclesVisualization({ contacts, user }: CirclesVisualizationPro
 
   const c3Shown = useMemo(() => {
     if (c3All.length <= MAX_OUTER_SHOWN) return c3All;
-    const shuffled = [...c3All].sort(() => Math.random() - 0.5);
-    return shuffled.slice(0, MAX_OUTER_SHOWN);
+    return [...c3All].sort((a, b) => a.id.localeCompare(b.id)).slice(0, MAX_OUTER_SHOWN);
   }, [c3All.length]);
 
   const c3Overflow = c3All.length - c3Shown.length;

@@ -14,6 +14,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { router, useLocalSearchParams } from "expo-router";
 import * as ImagePicker from "expo-image-picker";
+import * as ImageManipulator from "expo-image-manipulator";
 import Colors from "@/constants/colors";
 import { useContacts } from "@/lib/contacts-context";
 import { CIRCLE_CONFIG } from "@/lib/types";
@@ -83,18 +84,21 @@ export default function EditContactScreen() {
       mediaTypes: ["images"],
       allowsEditing: true,
       aspect: [1, 1],
-      quality: 0.7,
-      base64: true,
+      quality: 1,
     });
-    if (!result.canceled && result.assets[0]?.base64) {
-      const base64 = result.assets[0].base64;
-      const estimatedBytes = base64.length * 0.75;
-      if (estimatedBytes > 5 * 1024 * 1024) {
-        Alert.alert("Photo is too large", "Please choose a smaller image (under 5 MB).");
-        return;
+    if (!result.canceled && result.assets[0]) {
+      try {
+        const compressed = await ImageManipulator.manipulateAsync(
+          result.assets[0].uri,
+          [{ resize: { width: 200, height: 200 } }],
+          { compress: 0.6, format: ImageManipulator.SaveFormat.JPEG, base64: true }
+        );
+        if (compressed.base64) {
+          setPhotoUri(`data:image/jpeg;base64,${compressed.base64}`);
+        }
+      } catch {
+        Alert.alert("Photo error", "Could not process the photo. Please try a different image.");
       }
-      const dataUri = `data:image/jpeg;base64,${base64}`;
-      setPhotoUri(dataUri);
     }
   };
 

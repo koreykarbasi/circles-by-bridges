@@ -14,6 +14,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { router, useLocalSearchParams } from "expo-router";
 import * as ImagePicker from "expo-image-picker";
+import * as ImageManipulator from "expo-image-manipulator";
 import Colors from "@/constants/colors";
 import { useContacts } from "@/lib/contacts-context";
 import { CIRCLE_CONFIG } from "@/lib/types";
@@ -87,21 +88,20 @@ export default function AddContactScreen() {
       mediaTypes: ImagePicker.MediaTypeOptions.Images,
       allowsEditing: true,
       aspect: [1, 1],
-      quality: 0.7,
-      base64: true,
+      quality: 1,
     });
     if (!result.canceled && result.assets[0]) {
-      const asset = result.assets[0];
-      if (asset.base64) {
-        const estimatedBytes = asset.base64.length * 0.75;
-        if (estimatedBytes > 5 * 1024 * 1024) {
-          Alert.alert("Photo is too large", "Please choose a smaller image (under 5 MB).");
-          return;
+      try {
+        const compressed = await ImageManipulator.manipulateAsync(
+          result.assets[0].uri,
+          [{ resize: { width: 200, height: 200 } }],
+          { compress: 0.6, format: ImageManipulator.SaveFormat.JPEG, base64: true }
+        );
+        if (compressed.base64) {
+          setPhotoUri(`data:image/jpeg;base64,${compressed.base64}`);
         }
-        const mimeType = asset.mimeType || "image/jpeg";
-        setPhotoUri(`data:${mimeType};base64,${asset.base64}`);
-      } else {
-        setPhotoUri(asset.uri);
+      } catch {
+        Alert.alert("Photo error", "Could not process the photo. Please try a different image.");
       }
     }
   };
@@ -155,20 +155,25 @@ export default function AddContactScreen() {
     setSaving(true);
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
 
-    await addContact({
-      name: name.trim(),
-      circleLevel,
-      interests: selectedInterests,
-      labels: selectedLabels,
-      birthday: birthday.trim() || undefined,
-      notes: notes.trim() || undefined,
-      phone: phone.trim() || undefined,
-      email: email.trim() || undefined,
-      lastContacted: undefined,
-      photoUri: photoUri || undefined,
-    });
-
-    router.back();
+    try {
+      await addContact({
+        name: name.trim(),
+        circleLevel,
+        interests: selectedInterests,
+        labels: selectedLabels,
+        birthday: birthday.trim() || undefined,
+        notes: notes.trim() || undefined,
+        phone: phone.trim() || undefined,
+        email: email.trim() || undefined,
+        lastContacted: undefined,
+        photoUri: photoUri || undefined,
+      });
+      router.back();
+    } catch {
+      Alert.alert("Save failed", "Could not save the contact. Please try again.");
+    } finally {
+      setSaving(false);
+    }
   };
 
   const webTopInset = Platform.OS === "web" ? 67 : 0;

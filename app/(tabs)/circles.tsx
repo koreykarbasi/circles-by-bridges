@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useEffect, useRef } from "react";
-import { View, Text, StyleSheet, ScrollView, Pressable, TextInput, Platform, Alert } from "react-native";
+import { View, Text, StyleSheet, ScrollView, Pressable, TextInput, Platform, Modal } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import Colors from "@/constants/colors";
@@ -20,6 +20,7 @@ export default function CirclesScreen() {
   const [activeCircle, setActiveCircle] = useState<1 | 2 | 3>(1);
   const [searchQuery, setSearchQuery] = useState("");
   const [bellSheetOpen, setBellSheetOpen] = useState(false);
+  const [addSheetOpen, setAddSheetOpen] = useState(false);
   const searchRef = useRef<TextInput>(null);
 
   useEffect(() => {
@@ -41,6 +42,7 @@ export default function CirclesScreen() {
   }, [circleContacts, searchQuery]);
 
   const config = CIRCLE_CONFIG[activeCircle];
+  const isCircleFull = circleContacts.length >= config.max;
   const profileCompletion = useMemo(() => computeProfileCompletion(contacts), [contacts]);
   const bellDotColor = useMemo(
     () => computeBellDotColor(contacts, profileCompletion.isComplete),
@@ -49,24 +51,9 @@ export default function CirclesScreen() {
   const webTopInset = Platform.OS === "web" ? 67 : 0;
 
   const showAddOptions = () => {
+    if (isCircleFull) return;
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    Alert.alert(
-      `Add to ${config.label}`,
-      undefined,
-      [
-        {
-          text: "Import from Contacts",
-          onPress: () =>
-            router.push({ pathname: "/import-contacts", params: { circle: String(activeCircle) } }),
-        },
-        {
-          text: "Add Manually",
-          onPress: () =>
-            router.push({ pathname: "/add-contact", params: { circle: String(activeCircle) } }),
-        },
-        { text: "Cancel", style: "cancel" },
-      ],
-    );
+    setAddSheetOpen(true);
   };
 
   return (
@@ -107,9 +94,14 @@ export default function CirclesScreen() {
             </Pressable>
             <Pressable
               onPress={showAddOptions}
-              style={({ pressed }) => [styles.addButton, pressed && { opacity: 0.7 }]}
+              disabled={isCircleFull}
+              style={({ pressed }) => [
+                styles.addButton,
+                isCircleFull && styles.addButtonDisabled,
+                !isCircleFull && pressed && { opacity: 0.7 },
+              ]}
             >
-              <Ionicons name="add" size={24} color="#fff" />
+              <Ionicons name="add" size={24} color={isCircleFull ? Colors.textTertiary : "#fff"} />
             </Pressable>
           </View>
         </View>
@@ -232,6 +224,51 @@ export default function CirclesScreen() {
         contacts={contacts}
         isComplete={profileCompletion.isComplete}
       />
+
+      <Modal
+        visible={addSheetOpen}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setAddSheetOpen(false)}
+      >
+        <Pressable style={styles.sheetBackdrop} onPress={() => setAddSheetOpen(false)} />
+        <View style={[styles.addSheet, { paddingBottom: Math.max(insets.bottom, 20) }]}>
+          <View style={styles.sheetHandle} />
+          <Text style={styles.sheetTitle}>Add to {config.label}</Text>
+          <Pressable
+            onPress={() => {
+              setAddSheetOpen(false);
+              router.push({ pathname: "/import-contacts", params: { circle: String(activeCircle) } });
+            }}
+            style={({ pressed }) => [styles.sheetOption, pressed && { opacity: 0.7 }]}
+          >
+            <View style={styles.sheetOptionIcon}>
+              <Ionicons name="people-outline" size={22} color={Colors.primary} />
+            </View>
+            <View style={styles.sheetOptionText}>
+              <Text style={styles.sheetOptionLabel}>Import from Contacts</Text>
+              <Text style={styles.sheetOptionSub}>Pick from your phone's contacts</Text>
+            </View>
+            <Ionicons name="chevron-forward" size={18} color={Colors.textTertiary} />
+          </Pressable>
+          <Pressable
+            onPress={() => {
+              setAddSheetOpen(false);
+              router.push({ pathname: "/add-contact", params: { circle: String(activeCircle) } });
+            }}
+            style={({ pressed }) => [styles.sheetOption, pressed && { opacity: 0.7 }]}
+          >
+            <View style={styles.sheetOptionIcon}>
+              <Ionicons name="person-add-outline" size={22} color={Colors.primary} />
+            </View>
+            <View style={styles.sheetOptionText}>
+              <Text style={styles.sheetOptionLabel}>Add Manually</Text>
+              <Text style={styles.sheetOptionSub}>Enter a name and details by hand</Text>
+            </View>
+            <Ionicons name="chevron-forward" size={18} color={Colors.textTertiary} />
+          </Pressable>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -435,5 +472,65 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontFamily: "Nunito_600SemiBold",
     color: Colors.accent,
+  },
+  addButtonDisabled: {
+    backgroundColor: Colors.surface,
+    borderWidth: 1,
+    borderColor: Colors.border,
+  },
+  sheetBackdrop: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.5)",
+  },
+  addSheet: {
+    backgroundColor: Colors.surface,
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    paddingTop: 12,
+    paddingHorizontal: 20,
+  },
+  sheetHandle: {
+    width: 36,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: Colors.border,
+    alignSelf: "center",
+    marginBottom: 16,
+  },
+  sheetTitle: {
+    fontSize: 17,
+    fontFamily: "Nunito_700Bold",
+    color: Colors.text,
+    marginBottom: 16,
+  },
+  sheetOption: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 14,
+    paddingVertical: 14,
+    borderTopWidth: 1,
+    borderTopColor: Colors.border,
+  },
+  sheetOptionIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: Colors.primary + "18",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  sheetOptionText: {
+    flex: 1,
+  },
+  sheetOptionLabel: {
+    fontSize: 15,
+    fontFamily: "Nunito_600SemiBold",
+    color: Colors.text,
+  },
+  sheetOptionSub: {
+    fontSize: 12,
+    fontFamily: "Nunito_400Regular",
+    color: Colors.textSecondary,
+    marginTop: 2,
   },
 });
