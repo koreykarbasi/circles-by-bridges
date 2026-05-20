@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useState } from "react";
 import { View, Text, Image, StyleSheet } from "react-native";
 import { getInitials } from "@/lib/helpers";
 
@@ -10,9 +10,10 @@ interface AvatarProps {
 }
 
 export function Avatar({ name, color, size = 44, photoUri }: AvatarProps) {
+  const [imgError, setImgError] = useState(false);
   const fontSize = size * 0.38;
 
-  if (photoUri) {
+  if (photoUri && !imgError) {
     return (
       <Image
         source={{ uri: photoUri }}
@@ -21,6 +22,7 @@ export function Avatar({ name, color, size = 44, photoUri }: AvatarProps) {
           height: size,
           borderRadius: size / 2,
         }}
+        onError={() => setImgError(true)}
       />
     );
   }
