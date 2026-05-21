@@ -99,6 +99,12 @@ export function ContactsImport({ selectedContacts, onSelect, onDeselect, maxSele
     }
   }, []);
 
+  useEffect(() => {
+    if (Platform.OS !== "web") {
+      requestPermission();
+    }
+  }, [requestPermission]);
+
   const filteredContacts = deviceContacts.filter((c) =>
     c.name.toLowerCase().includes(search.toLowerCase()),
   );
@@ -138,57 +144,6 @@ export function ContactsImport({ selectedContacts, onSelect, onDeselect, maxSele
           <Text style={styles.manualLabel}>
             {isWeb ? "Add people by name" : "Contacts access not available. Add manually:"}
           </Text>
-          <View style={styles.manualRow}>
-            <TextInput
-              style={styles.manualInput}
-              placeholder="Enter a name..."
-              placeholderTextColor={Colors.textTertiary}
-              value={manualName}
-              onChangeText={setManualName}
-              onSubmitEditing={handleAddManual}
-              autoCapitalize="words"
-            />
-            <Pressable
-              onPress={handleAddManual}
-              disabled={!manualName.trim()}
-              style={({ pressed }) => [
-                styles.manualAddBtn,
-                !manualName.trim() && { opacity: 0.4 },
-                pressed && { opacity: 0.7 },
-              ]}
-            >
-              <Ionicons name="add" size={22} color="#fff" />
-            </Pressable>
-          </View>
-        </View>
-        {selectedContacts.length > 0 && (
-          <View style={styles.selectedList}>
-            {selectedContacts.map((c) => (
-              <View key={c.name} style={styles.selectedChip}>
-                <Text style={styles.selectedChipText}>{c.name}</Text>
-                <Pressable onPress={() => onDeselect(c.name)} hitSlop={6}>
-                  <Ionicons name="close-circle" size={18} color={Colors.textTertiary} />
-                </Pressable>
-              </View>
-            ))}
-          </View>
-        )}
-      </View>
-    );
-  }
-
-  if (!permission) {
-    return (
-      <View style={styles.container}>
-        <Pressable
-          onPress={requestPermission}
-          style={({ pressed }) => [styles.enableButton, pressed && { opacity: 0.8 }]}
-        >
-          <Ionicons name="people-outline" size={22} color="#fff" />
-          <Text style={styles.enableButtonText}>Enable Contacts</Text>
-        </Pressable>
-        <View style={styles.manualEntry}>
-          <Text style={styles.orText}>or add manually</Text>
           <View style={styles.manualRow}>
             <TextInput
               style={styles.manualInput}
@@ -324,22 +279,6 @@ const styles = StyleSheet.create({
     color: Colors.textSecondary,
     marginTop: 12,
   },
-  enableButton: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 8,
-    backgroundColor: Colors.primary,
-    paddingVertical: 14,
-    paddingHorizontal: 24,
-    borderRadius: 14,
-    marginBottom: 16,
-  },
-  enableButtonText: {
-    fontSize: 16,
-    fontFamily: "Nunito_700Bold",
-    color: "#fff",
-  },
   manualEntry: {
     marginTop: 8,
   },
@@ -347,13 +286,6 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontFamily: "Nunito_400Regular",
     color: Colors.textSecondary,
-    marginBottom: 8,
-  },
-  orText: {
-    fontSize: 13,
-    fontFamily: "Nunito_400Regular",
-    color: Colors.textTertiary,
-    textAlign: "center",
     marginBottom: 8,
   },
   manualRow: {
