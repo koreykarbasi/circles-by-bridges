@@ -60,6 +60,7 @@ export function ContactsImport({ selectedContacts, onSelect, onDeselect, maxSele
             Contacts.Fields.PhoneNumbers,
             Contacts.Fields.Birthday,
             Contacts.Fields.Image,
+            Contacts.Fields.RawImage,
           ],
           sort: Contacts.SortTypes.FirstName,
         });
@@ -73,9 +74,9 @@ export function ContactsImport({ selectedContacts, onSelect, onDeselect, maxSele
                 birthday = `${String(month).padStart(2, "0")}/${String(c.birthday.day).padStart(2, "0")}`;
               }
               let photoUri: string | undefined;
-              if (c.imageAvailable && c.image?.base64) {
+              if (c.imageAvailable && c.rawImage?.base64) {
                 try {
-                  photoUri = `data:image/jpeg;base64,${c.image.base64}`;
+                  photoUri = `data:image/jpeg;base64,${c.rawImage.base64}`;
                 } catch {
                 }
               }
