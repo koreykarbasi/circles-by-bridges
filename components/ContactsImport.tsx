@@ -117,7 +117,7 @@ export function ContactsImport({ selectedContacts, onSelect, onDeselect, maxSele
     if (isSelected(contact.name)) {
       onDeselect(contact.name);
     } else {
-      if (maxSelections && selectedContacts.length >= maxSelections) return;
+      if (maxSelections !== undefined && selectedContacts.length >= maxSelections) return;
       onSelect({
         name: contact.name,
         phone: contact.phone,
@@ -130,7 +130,7 @@ export function ContactsImport({ selectedContacts, onSelect, onDeselect, maxSele
   const handleAddManual = () => {
     if (!manualName.trim()) return;
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    if (maxSelections && selectedContacts.length >= maxSelections) return;
+    if (maxSelections !== undefined && selectedContacts.length >= maxSelections) return;
     onSelect({ name: manualName.trim() });
     setManualName("");
   };
@@ -223,7 +223,7 @@ export function ContactsImport({ selectedContacts, onSelect, onDeselect, maxSele
         scrollEnabled={false}
         renderItem={({ item }) => {
           const selected = isSelected(item.name);
-          const disabled = !selected && !!maxSelections && selectedContacts.length >= maxSelections;
+          const disabled = !selected && maxSelections !== undefined && selectedContacts.length >= maxSelections;
           return (
             <Pressable
               onPress={() => handleToggle(item)}
