@@ -10,7 +10,6 @@ import {
   ActivityIndicator,
 } from "react-native";
 import * as Contacts from "expo-contacts";
-import * as FileSystem from "expo-file-system";
 import { Ionicons } from "@expo/vector-icons";
 import { Avatar } from "./Avatar";
 import Colors from "@/constants/colors";
@@ -74,14 +73,9 @@ export function ContactsImport({ selectedContacts, onSelect, onDeselect, maxSele
                 birthday = `${String(month).padStart(2, "0")}/${String(c.birthday.day).padStart(2, "0")}`;
               }
               let photoUri: string | undefined;
-              if (c.imageAvailable && c.image?.uri) {
+              if (c.imageAvailable && c.image?.base64) {
                 try {
-                  const base64 = await FileSystem.readAsStringAsync(c.image.uri, {
-                    encoding: FileSystem.EncodingType.Base64,
-                  });
-                  if (base64) {
-                    photoUri = `data:image/jpeg;base64,${base64}`;
-                  }
+                  photoUri = `data:image/jpeg;base64,${c.image.base64}`;
                 } catch {
                 }
               }
