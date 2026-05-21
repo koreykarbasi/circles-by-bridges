@@ -74,10 +74,11 @@ export function ContactsImport({ selectedContacts, onSelect, onDeselect, maxSele
                 birthday = `${String(month).padStart(2, "0")}/${String(c.birthday.day).padStart(2, "0")}`;
               }
               let photoUri: string | undefined;
-              if (c.imageAvailable && c.rawImage?.base64) {
-                try {
+              if (c.imageAvailable) {
+                if (c.rawImage?.base64) {
                   photoUri = `data:image/jpeg;base64,${c.rawImage.base64}`;
-                } catch {
+                } else if (c.image?.uri) {
+                  photoUri = c.image.uri;
                 }
               }
               return {
