@@ -16,6 +16,7 @@ import { CIRCLE_CONFIG, HangoutPlan } from "@/lib/types";
 import { generateReminders, Reminder } from "@/lib/reminders";
 import { getSmartPrompt, getActionType, getNextPrompt, loadSyncedPrompts } from "@/lib/prompts";
 import { loadSchedulerData, markSuggested, getDaysSinceLastSuggestedSync, scoreSuggestion, isInCooldown } from "@/lib/suggestion-scheduler";
+import { useDismissedSuggestions, dismissSuggestion, clearDismissedSuggestions } from "@/lib/suggestions-store";
 import { getTextCopyMessage } from "@/components/SuggestionCard";
 import * as Clipboard from "expo-clipboard";
 import { router, useFocusEffect } from "expo-router";
@@ -77,7 +78,7 @@ export default function HomeScreen() {
   const { contacts, markContacted, markHangout, refreshContacts } = useContacts();
   const [refreshing, setRefreshing] = useState(false);
   const [dismissedReminders, setDismissedReminders] = useState<Set<string>>(new Set());
-  const [dismissedSuggestions, setDismissedSuggestions] = useState<Set<string>>(new Set());
+  const dismissedSuggestions = useDismissedSuggestions();
   const [suggestionPrompts, setSuggestionPrompts] = useState<Map<string, string>>(new Map());
   const [lastSuggestedDates, setLastSuggestedDates] = useState<Record<string, string>>({});
   const [bellSheetOpen, setBellSheetOpen] = useState(false);
@@ -128,6 +129,9 @@ export default function HomeScreen() {
         setSuggestionPrompts((prev) => new Map(prev).set(contact.id, prompt));
       }
 
+      let actionType = getActionType(circleLevel, prompt);
+      if (circleLevel === 3 && actionType === "call") actionType = "text";
+
       return {
         contactId: contact.id,
         contactName: contact.name,
@@ -135,7 +139,7 @@ export default function HomeScreen() {
         photoUri: contact.photoUri,
         circleLevel,
         prompt,
-        actionType: getActionType(circleLevel, prompt),
+        actionType,
       };
     },
     [suggestionPrompts],
@@ -182,7 +186,7 @@ export default function HomeScreen() {
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
     setDismissedReminders(new Set());
-    setDismissedSuggestions(new Set());
+    clearDismissedSuggestions();
     setSuggestionPrompts(new Map());
     await refreshContacts();
     setRefreshing(false);
@@ -191,6 +195,7 @@ export default function HomeScreen() {
   const handleReminderComplete = useCallback(
     async (reminder: Reminder) => {
       setDismissedReminders((prev) => new Set(prev).add(reminder.id));
+      if (reminder.type === "birthday") return;
       if (reminder.type === "hangout-overdue" || reminder.type === "hangout-6month") {
         await markHangout(reminder.contactId);
       }
@@ -224,7 +229,7 @@ export default function HomeScreen() {
 
   const handleSuggestionDone = useCallback(
     async (suggestion: Suggestion) => {
-      setDismissedSuggestions((prev) => new Set(prev).add(suggestion.contactId));
+      dismissSuggestion(suggestion.contactId);
       await markContacted(suggestion.contactId);
       if (suggestion.actionType === "hangout") {
         await markHangout(suggestion.contactId);
@@ -295,7 +300,7 @@ export default function HomeScreen() {
         try { await Clipboard.setStringAsync(message); } catch {}
       }
       showCopiedToast();
-      setDismissedSuggestions((prev) => new Set(prev).add(suggestion.contactId));
+      dismissSuggestion(suggestion.contactId);
       await markContacted(suggestion.contactId);
     },
     [markContacted, contacts, showCopiedToast],
@@ -304,7 +309,7 @@ export default function HomeScreen() {
   const handleSuggestionHangout = useCallback(
     async (suggestion: Suggestion) => {
       await markContacted(suggestion.contactId);
-      setDismissedSuggestions((prev) => new Set(prev).add(suggestion.contactId));
+      dismissSuggestion(suggestion.contactId);
       router.push({
         pathname: "/create-hangout",
         params: { contactName: suggestion.contactName },

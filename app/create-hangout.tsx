@@ -571,7 +571,7 @@ export default function CreateHangoutScreen() {
 const CIRCLE_BADGE: Record<number, { label: string; color: string }> = {
   1: { label: "Core", color: "#FF6B8A" },
   2: { label: "Close", color: "#9B7DFF" },
-  3: { label: "Acquaintance", color: "#4ECDC4" },
+  3: { label: "Friend", color: "#4ECDC4" },
 };
 
 const styles = StyleSheet.create({

@@ -227,7 +227,12 @@ function generateCircle3Reminders(contact: Contact): Reminder[] {
   }
 
   const daysSinceHangout = getDaysSince(contact.lastHangout ?? undefined);
-  if (daysSinceHangout !== null && daysSinceHangout > 60) {
+  const daysSinceContact = getDaysSince(contact.lastContacted ?? undefined);
+  const hangoutOverdue =
+    daysSinceHangout !== null
+      ? daysSinceHangout > 60
+      : daysSinceContact !== null && daysSinceContact > 45;
+  if (hangoutOverdue) {
     reminders.push({
       id: `hangout-${contact.id}`,
       contactId: contact.id,
@@ -236,12 +241,14 @@ function generateCircle3Reminders(contact: Contact): Reminder[] {
       type: "hangout-overdue",
       priority: 45,
       title: `Plan a hangout with ${contact.name}`,
-      subtitle: `Last hangout was ${Math.floor(daysSinceHangout / 7)} weeks ago`,
+      subtitle:
+        daysSinceHangout !== null
+          ? `Last hangout was ${Math.floor(daysSinceHangout / 7)} weeks ago`
+          : "You haven't hung out with them yet",
       actionType: "hangout",
     });
   }
 
-  const daysSinceContact = getDaysSince(contact.lastContacted ?? undefined);
   if (daysSinceContact !== null && daysSinceContact > 90) {
     reminders.push({
       id: `checkin-${contact.id}`,

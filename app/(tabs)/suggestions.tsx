@@ -12,6 +12,7 @@ import { getSmartPrompt, getNextPrompt, getActionType, resetSeenPrompts, loadSyn
 import { getDaysSince, getDaysUntilBirthday, formatLastContacted, formatBirthdayCountdown, getContactUrgency } from "@/lib/helpers";
 import { generateReminders } from "@/lib/reminders";
 import { loadSchedulerData, markSuggested, getDaysSinceLastSuggestedSync, scoreSuggestion, isInCooldown } from "@/lib/suggestion-scheduler";
+import { useDismissedSuggestions, dismissSuggestion, clearDismissedSuggestions } from "@/lib/suggestions-store";
 import type { Contact } from "@/lib/types";
 import type { Reminder } from "@/lib/reminders";
 import { router } from "expo-router";
@@ -74,7 +75,7 @@ export default function SuggestionsScreen() {
   const [filterCircle, setFilterCircle] = useState<1 | 2 | 3 | null>(null);
   const [refreshKey, setRefreshKey] = useState(0);
   const [shuffleJitter, setShuffleJitter] = useState<Record<string, number>>({});
-  const [completedIds, setCompletedIds] = useState<Set<string>>(new Set());
+  const completedIds = useDismissedSuggestions();
   const [completedReminderIds, setCompletedReminderIds] = useState<Set<string>>(new Set());
   const [cardPrompts, setCardPrompts] = useState<Record<string, GeneratedSuggestion>>({});
   const [remindersCollapsed, setRemindersCollapsed] = useState(false);
@@ -213,7 +214,7 @@ export default function SuggestionsScreen() {
   const handlePlanHangout = useCallback(
     async (suggestion: GeneratedSuggestion) => {
       await markContacted(suggestion.contact.id);
-      setCompletedIds((prev) => new Set(prev).add(suggestion.contact.id));
+      dismissSuggestion(suggestion.contact.id);
       router.push({
         pathname: "/create-hangout",
         params: {
@@ -228,7 +229,7 @@ export default function SuggestionsScreen() {
   const handleDone = useCallback(
     (contactId: string) => {
       markContacted(contactId);
-      setCompletedIds((prev) => new Set(prev).add(contactId));
+      dismissSuggestion(contactId);
     },
     [markContacted],
   );
@@ -253,7 +254,7 @@ export default function SuggestionsScreen() {
   const handleCopyText = useCallback(
     (contactId: string) => {
       markContacted(contactId);
-      setCompletedIds((prev) => new Set(prev).add(contactId));
+      dismissSuggestion(contactId);
     },
     [markContacted],
   );
@@ -261,6 +262,7 @@ export default function SuggestionsScreen() {
   const handleReminderComplete = useCallback(
     async (reminder: Reminder) => {
       setCompletedReminderIds((prev) => new Set(prev).add(reminder.id));
+      if (reminder.type === "birthday") return;
       if (reminder.type === "hangout-overdue") {
         await markHangout(reminder.contactId);
       }
@@ -308,7 +310,7 @@ export default function SuggestionsScreen() {
       for (const contact of contacts) next[contact.id] = Math.random() * 0.01;
       return next;
     });
-    setCompletedIds(new Set());
+    clearDismissedSuggestions();
     setCompletedReminderIds(new Set());
   }, []);
 
@@ -341,7 +343,7 @@ export default function SuggestionsScreen() {
           onPress={() => {
             Haptics.selectionAsync();
             setFilterCircle(null);
-            setCompletedIds(new Set());
+            clearDismissedSuggestions();
             setCompletedReminderIds(new Set());
             setCardPrompts({});
           }}
@@ -368,7 +370,7 @@ export default function SuggestionsScreen() {
               onPress={() => {
                 Haptics.selectionAsync();
                 setFilterCircle(level);
-                setCompletedIds(new Set());
+                clearDismissedSuggestions();
                 setCompletedReminderIds(new Set());
                 setCardPrompts({});
               }}

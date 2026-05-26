@@ -104,7 +104,7 @@ export function BellSheet({ visible, onClose, contacts, isComplete }: BellSheetP
       recommended.push({
         id: "fill-c3",
         priority: "yellow",
-        title: "Add an Acquaintance",
+        title: "Add a Friend",
         subtitle: "Start building your outer circle",
         onPress: () => {
           onClose();
