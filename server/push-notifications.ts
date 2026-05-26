@@ -40,13 +40,33 @@ function buildMessages(
   const daysUntilBirthday = getDaysUntilBirthday(contact.birthday);
 
   if (contact.circleLevel === 1) {
-    // Birthday: within 7 days
-    if (daysUntilBirthday !== null && daysUntilBirthday <= 7) {
-      const body =
-        daysUntilBirthday === 0 ? "Today is their birthday!" :
-        daysUntilBirthday === 1 ? "Their birthday is tomorrow" :
-        `Birthday in ${daysUntilBirthday} days`;
-      messages.push({ title: `${contact.name}'s birthday is coming up`, body, contactId: contact.id });
+    // Birthday milestones: 30d, 14d, 7d, day-of
+    if (daysUntilBirthday !== null) {
+      if (daysUntilBirthday === 0) {
+        messages.push({
+          title: `Happy birthday, ${contact.name}!`,
+          body: `Today is ${contact.name}'s birthday — wish them a happy birthday!`,
+          contactId: contact.id,
+        });
+      } else if (daysUntilBirthday <= 7) {
+        messages.push({
+          title: `${contact.name}'s birthday is coming up`,
+          body: `${contact.name}'s birthday is a week away — make sure you have everything sorted!`,
+          contactId: contact.id,
+        });
+      } else if (daysUntilBirthday <= 14) {
+        messages.push({
+          title: `${contact.name}'s birthday in 2 weeks`,
+          body: `${contact.name}'s birthday is 2 weeks away — is your gift and their birthday plans finalised?`,
+          contactId: contact.id,
+        });
+      } else if (daysUntilBirthday <= 30) {
+        messages.push({
+          title: `${contact.name}'s birthday is a month away`,
+          body: `${contact.name}'s birthday is coming up. Would you like to plan something special?`,
+          contactId: contact.id,
+        });
+      }
     }
     // Check-in overdue: > 7 days
     const daysSinceContact = getDaysSince(contact.lastContacted);
@@ -57,13 +77,21 @@ function buildMessages(
       messages.push({ title: `Check in with ${contact.name}`, body, contactId: contact.id });
     }
   } else if (contact.circleLevel === 2) {
-    // Birthday: within 7 days
-    if (daysUntilBirthday !== null && daysUntilBirthday <= 7) {
-      const body =
-        daysUntilBirthday === 0 ? "Today is their birthday!" :
-        daysUntilBirthday === 1 ? "Their birthday is tomorrow" :
-        `Birthday in ${daysUntilBirthday} days`;
-      messages.push({ title: `${contact.name}'s birthday is coming up`, body, contactId: contact.id });
+    // Birthday milestones: 7d and day-of
+    if (daysUntilBirthday !== null) {
+      if (daysUntilBirthday === 0) {
+        messages.push({
+          title: `Happy birthday, ${contact.name}!`,
+          body: `Today is ${contact.name}'s birthday — wish them a happy birthday!`,
+          contactId: contact.id,
+        });
+      } else if (daysUntilBirthday <= 7) {
+        messages.push({
+          title: `${contact.name}'s birthday is coming up`,
+          body: `${contact.name}'s birthday is coming up in a week.`,
+          contactId: contact.id,
+        });
+      }
     }
     // Hangout overdue: > 3 weeks
     const daysSinceHangout = getDaysSince(contact.lastHangout);
@@ -73,8 +101,16 @@ function buildMessages(
         : `${Math.floor(daysSinceHangout / 7)} weeks since your last hangout`;
       messages.push({ title: `Plan a hangout with ${contact.name}`, body, contactId: contact.id });
     }
+  } else if (contact.circleLevel === 3) {
+    // Birthday: day-of only
+    if (daysUntilBirthday === 0) {
+      messages.push({
+        title: `${contact.name}'s birthday`,
+        body: `Today is ${contact.name}'s birthday.`,
+        contactId: contact.id,
+      });
+    }
   }
-  // Circle 3: no push notifications
 
   return messages;
 }

@@ -24,7 +24,6 @@ interface GeneratedSuggestion {
   urgency: "overdue" | "soon" | "ok";
   birthdayLabel?: string;
   lastContactedLabel?: string;
-  isCircle3Nudge?: boolean;
 }
 
 function buildSuggestion(contact: Contact): GeneratedSuggestion {
@@ -42,7 +41,8 @@ function buildSuggestion(contact: Contact): GeneratedSuggestion {
     { isOverdue: urgency === "overdue", hasBirthdaySoon, labels: contact.labels },
   );
 
-  const type = getActionType(contact.circleLevel as 1 | 2 | 3, prompt);
+  let type = getActionType(contact.circleLevel as 1 | 2 | 3, prompt);
+  if (contact.circleLevel === 3 && type === "call") type = "text";
 
   return {
     contact,
@@ -67,30 +67,6 @@ function deriveHangoutTitle(contactName: string, prompt: string): string {
   return `Hang out with ${contactName}`;
 }
 
-function buildCircle3Nudge(
-  contact: Contact,
-  lastSuggestedDates: Record<string, string>,
-): GeneratedSuggestion | null {
-  const daysSince = getDaysSince(contact.lastContacted ?? undefined);
-  if (daysSince === null || daysSince < 90) return null;
-
-  const daysSinceLastSug = getDaysSinceLastSuggestedSync(contact.id, lastSuggestedDates);
-  if (daysSinceLastSug !== null && daysSinceLastSug <= 60) return null;
-
-  const is6Month = daysSince >= 180;
-  const lastContactedLabel = formatLastContacted(contact.lastContacted ?? undefined);
-
-  return {
-    contact,
-    prompt: is6Month
-      ? `It's been 6 months since you last spoke to ${contact.name} — it might be time to reconnect.`
-      : `You haven't spoken to ${contact.name} in 3 months — want to set up a hangout or give them a call?`,
-    type: "hangout",
-    urgency: is6Month ? "overdue" : "soon",
-    lastContactedLabel,
-    isCircle3Nudge: true,
-  };
-}
 
 export default function SuggestionsScreen() {
   const insets = useSafeAreaInsets();
@@ -130,8 +106,8 @@ export default function SuggestionsScreen() {
 
   const rankedContacts = useMemo(() => {
     const filtered = filterCircle
-      ? contacts.filter((c) => c.circleLevel === filterCircle && c.circleLevel !== 3)
-      : contacts.filter((c) => c.circleLevel !== 3);
+      ? contacts.filter((c) => c.circleLevel === filterCircle)
+      : contacts;
 
     const inCooldown = (c: typeof contacts[0]) => {
       const daysSinceLastSug = getDaysSinceLastSuggestedSync(c.id, lastSuggestedDates);
@@ -182,19 +158,6 @@ export default function SuggestionsScreen() {
     }
   }, [rankedContacts, cardPrompts]);
 
-  const circle3Nudges = useMemo(() => {
-    if (filterCircle && filterCircle !== 3) return [];
-    const c3 = filterCircle === 3
-      ? contacts.filter((c) => c.circleLevel === 3)
-      : contacts.filter((c) => c.circleLevel === 3);
-
-    return c3
-      .filter((c) => !completedIds.has(c.id))
-      .map((c) => buildCircle3Nudge(c, lastSuggestedDates))
-      .filter((n): n is GeneratedSuggestion => n !== null)
-      .slice(0, 3);
-  }, [contacts, filterCircle, completedIds, lastSuggestedDates]);
-
   const suggestions = useMemo(() => {
     return rankedContacts
       .filter((contact) => !completedIds.has(contact.id))
@@ -204,17 +167,14 @@ export default function SuggestionsScreen() {
 
   const suggestionKeyRef = useRef<string>("");
   useEffect(() => {
-    const shownIds = [
-      ...suggestions.map((s) => s.contact.id),
-      ...circle3Nudges.map((s) => s.contact.id),
-    ];
+    const shownIds = suggestions.map((s) => s.contact.id);
     const key = shownIds.join(",");
     if (key !== "" && key !== suggestionKeyRef.current) {
       suggestionKeyRef.current = key;
       shownIds.forEach((id) => markSuggested(id));
       loadSchedulerData().then(setLastSuggestedDates);
     }
-  }, [suggestions, circle3Nudges]);
+  }, [suggestions]);
 
   const handleRefreshSingle = useCallback((contactId: string, currentPrompt: string) => {
     const contact = contacts.find((c) => c.id === contactId);
@@ -353,7 +313,6 @@ export default function SuggestionsScreen() {
   }, []);
 
   const webTopInset = Platform.OS === "web" ? 67 : 0;
-  const allSuggestions = useMemo(() => [...suggestions, ...circle3Nudges], [suggestions, circle3Nudges]);
 
   return (
     <View style={styles.screenWrapper}>
@@ -491,20 +450,20 @@ export default function SuggestionsScreen() {
           actionLabel="Add someone"
           onAction={() => router.push("/(tabs)/circles")}
         />
-      ) : allSuggestions.length === 0 ? (
+      ) : suggestions.length === 0 ? (
         <EmptyState
           icon="checkmark-circle-outline"
           title="All caught up!"
           subtitle="You've completed all suggestions. Tap below for new ones."
         />
       ) : (
-        allSuggestions.map((s) => {
+        suggestions.map((s) => {
           const daysSinceContact = getDaysSince(s.contact.lastContacted ?? undefined);
           const daysUntilBday = getDaysUntilBirthday(s.contact.birthday ?? undefined);
           const hasBirthdaySoon = daysUntilBday !== null && daysUntilBday <= 14;
           return (
             <SuggestionCard
-              key={s.contact.id + "-" + (s.isCircle3Nudge ? "nudge" : refreshKey)}
+              key={s.contact.id + "-" + refreshKey}
               contactName={s.contact.name}
               avatarColor={s.contact.avatarColor}
               photoUri={s.contact.photoUri}

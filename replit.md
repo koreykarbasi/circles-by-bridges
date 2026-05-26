@@ -43,20 +43,21 @@ Bridges is a relationship management app based on Dunbar's social brain theory. 
 - User profile photo in center of circles visualization
 - Photo uploads for user profiles and contacts (expo-image-picker, base64 encoding)
 - Social Health Checklist (birthday reminders, overdue check-ins)
-- Contact management with circle assignments (Core 5, Close 10, Acquaintances 35)
+- Contact management with circle assignments (Core 5, Close 10, Friends 35)
 - Contact labels (predefined + custom free-text) for relationship context
 - Birthday required for Core Circle (circle 1) contacts
 - Two distinct alert types: Reminders (priority obligations) and Suggestions (proactive outreach)
 - Priority-based reminders engine with circle-specific rules:
-  - Circle 1: Birthday reminders (30-day advance, escalating), check-in overdue (>7 days)
-  - Circle 2: Birthday reminders (30-day advance), hangout overdue (>3 weeks), check-in overdue (>30 days)
-  - Circle 3: Birthday reminder on day-of ONLY (no advance, no check-in/hangout reminders)
-- Circle 3 suggestions: 3-month nudge + 6-month reconnect nudge (not reminders)
-- Suggestion frequency scoring: Circle 2 = ~2x/week, Circle 1 = ~1x/week, Circle 3 = only at 90/180-day thresholds
+  - Circle 1: Birthday milestones at 30d/14d/7d/day-of, check-in overdue (>7 days)
+  - Circle 2: Birthday milestones at 7d/day-of, hangout overdue (>3 weeks), check-in overdue (>30 days)
+  - Circle 3 (Friends): Birthday day-of only, hangout overdue (>60 days), check-in overdue (>90 days)
+- Birthday reminders have no action-type badge (call/text hidden for birthday type)
+- Suggestion frequency scoring: Circle 2 = ~2x/week, Circle 1 = ~1x/week, Circle 3 = every 15 days
 - Suggestion scheduler: AsyncStorage-backed tracking prevents repeat suggestions, cycling bonus up to +400 based on days since last suggested
+- Circle 3 suggestions included in regular pool (text/hangout only, no call); scored with base 1000
 - Text suggestions: copyable starter template ("Hey {name}, I was just thinking about you — …") with real name substituted; auto-marks contact as contacted on copy
 - Hangout suggestions: calendar button navigates to create-hangout, auto-marks contact as contacted
-- Home page: max 3 reminders + 2 suggestions, priority-ordered, cross-off to mark done
+- Home page: up to 5 reminders + top-3 deterministic suggestions (all circles, scored by priority), cross-off to mark done
 - Suggestions tab: collapsible full reminders list + suggestions below
 - Personalized suggestions/prompts with separate call/text/hangout lists per circle
 - Label-based prompts (Childhood Friend, College Friend, Work Friend, etc.)
@@ -66,7 +67,7 @@ Bridges is a relationship management app based on Dunbar's social brain theory. 
 - Action type badges on suggestion cards (call/text/hangout)
 - Profile completion system: Stage 1 (home banner + Circles tab badge) until 3 Circle 1 with birthdays + 2 Circle 2 + 1 Circle 3; Stage 2 (Circles encouragement card only); Circle 1 contacts without birthdays get inline nudge in circles view
 - Auth state caching: user cached in AsyncStorage/localStorage, resolve navigation immediately on startup without spinner (background verify with server)
-- New contacts default lastContacted to today (server-side)
+- New contacts get randomized lastContacted on creation: C1=0–14 days ago, C2=0–30 days ago, C3=30–60 days ago (server-side)
 - Hangout planning accessible from: home header calendar button, home "Plan a hangout" banner, circles header button, and per-contact calendar icon on every contact card
 - Hangout 3-step creation flow (Title → Invitees → Survey Builder)
 - Survey builder: activity options (multiple or fixed), time slots, optional location, plus-one toggle, deadline

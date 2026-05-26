@@ -38,7 +38,7 @@ export function ReminderItem({ reminder, onComplete, onYes, onNo, onPlanHangout 
   const circleColor = CIRCLE_CONFIG[reminder.circleLevel as 1 | 2 | 3]?.color ?? Colors.primary;
   const priorityColor = getPriorityColor(reminder.priority);
   const typeIcon = TYPE_ICONS[reminder.type] ?? "alert-circle-outline";
-  const actionIcon = ACTION_ICONS[reminder.actionType] ?? "chatbubble-outline";
+  const actionIcon = (reminder.actionType ? ACTION_ICONS[reminder.actionType] : undefined) ?? "chatbubble-outline";
   const isHangout6Month = reminder.type === "hangout-6month";
 
   const opacity = useSharedValue(1);
@@ -129,7 +129,9 @@ export function ReminderItem({ reminder, onComplete, onYes, onNo, onPlanHangout 
           </View>
         ) : (
           <View style={styles.actions}>
-            <Ionicons name={actionIcon} size={14} color={Colors.textTertiary} style={{ marginRight: 4 }} />
+            {reminder.type !== "birthday" && reminder.actionType && (
+              <Ionicons name={actionIcon} size={14} color={Colors.textTertiary} style={{ marginRight: 4 }} />
+            )}
             <Pressable
               onPress={handleComplete}
               hitSlop={6}

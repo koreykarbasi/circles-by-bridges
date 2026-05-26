@@ -81,7 +81,6 @@ export default function HomeScreen() {
   const [suggestionPrompts, setSuggestionPrompts] = useState<Map<string, string>>(new Map());
   const [lastSuggestedDates, setLastSuggestedDates] = useState<Record<string, string>>({});
   const [bellSheetOpen, setBellSheetOpen] = useState(false);
-  const [shuffleCount, setShuffleCount] = useState(0);
   const [copiedToast, setCopiedToast] = useState(false);
   const copiedToastAnim = useRef(new Animated.Value(0)).current;
   const copiedToastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -142,81 +141,34 @@ export default function HomeScreen() {
     [suggestionPrompts],
   );
 
-  const shownSuggestionIds = useRef<string[]>([]);
   const suggestionKeyRef = useRef<string>("");
 
   const suggestions = useMemo(() => {
     const reminderContactIds = new Set(visibleReminders.map((r) => r.contactId));
 
-    const isEligibleForNewSlot = (c: typeof contacts[0]): boolean => {
+    const eligible = contacts.filter((c) => {
       if (dismissedSuggestions.has(c.id)) return false;
       if (reminderContactIds.has(c.id)) return false;
-      if (c.circleLevel === 3) return false;
       const daysSinceLastSug = getDaysSinceLastSuggestedSync(c.id, lastSuggestedDates);
       return !isInCooldown(c.circleLevel as 1 | 2 | 3, daysSinceLastSug);
-    };
-
-    const circle3NudgeContact = contacts.find((c) => {
-      if (c.circleLevel !== 3) return false;
-      if (dismissedSuggestions.has(c.id)) return false;
-      if (reminderContactIds.has(c.id)) return false;
-      const daysSince = getDaysSince(c.lastContacted ?? undefined);
-      if (daysSince === null || daysSince < 90) return false;
-      const daysSinceLastSug = getDaysSinceLastSuggestedSync(c.id, lastSuggestedDates);
-      return daysSinceLastSug === null || daysSinceLastSug > 60;
     });
 
-    const c1c2SlotCount = circle3NudgeContact
-      ? MAX_SUGGESTIONS - 1
-      : MAX_SUGGESTIONS;
+    const ranked = eligible
+      .map((c) => {
+        const daysSinceLastSug = getDaysSinceLastSuggestedSync(c.id, lastSuggestedDates);
+        const daysSinceContact = getDaysSince(c.lastContacted ?? undefined);
+        const daysUntilBday = getDaysUntilBirthday(c.birthday ?? undefined);
+        return {
+          contact: c,
+          score: scoreSuggestion(c.circleLevel as 1 | 2 | 3, daysSinceLastSug, daysSinceContact, daysUntilBday),
+        };
+      })
+      .sort((a, b) => b.score - a.score)
+      .slice(0, MAX_SUGGESTIONS)
+      .map((x) => x.contact);
 
-    const currentStableIds = shownSuggestionIds.current.filter(
-      (id) => !dismissedSuggestions.has(id) && !reminderContactIds.has(id),
-    ).slice(0, c1c2SlotCount);
-    const stableSet = new Set(currentStableIds);
-    const slotsNeeded = c1c2SlotCount - currentStableIds.length;
-
-    let newContacts: typeof contacts = [];
-    if (slotsNeeded > 0) {
-      newContacts = contacts
-        .filter((c) => !stableSet.has(c.id) && isEligibleForNewSlot(c))
-        .map((c) => {
-          const daysSinceLastSug = getDaysSinceLastSuggestedSync(c.id, lastSuggestedDates);
-          const daysSinceContact = getDaysSince(c.lastContacted ?? undefined);
-          const daysUntilBday = getDaysUntilBirthday(c.birthday ?? undefined);
-          return { contact: c, score: scoreSuggestion(c.circleLevel as 1 | 2 | 3, daysSinceLastSug, daysSinceContact, daysUntilBday) };
-        })
-        .sort((a, b) => b.score - a.score)
-        .slice(0, slotsNeeded)
-        .map((x) => x.contact);
-    }
-
-    const allC1C2Ids = [...currentStableIds, ...newContacts.map((c) => c.id)];
-    shownSuggestionIds.current = allC1C2Ids;
-
-    const result: Suggestion[] = allC1C2Ids
-      .map((id) => contacts.find((c) => c.id === id))
-      .filter((c): c is typeof contacts[0] => c !== undefined)
-      .map((c) => getSuggestionForContact(c));
-
-    if (circle3NudgeContact) {
-      const daysSince = getDaysSince(circle3NudgeContact.lastContacted ?? undefined)!;
-      const is6Month = daysSince >= 180;
-      result.push({
-        contactId: circle3NudgeContact.id,
-        contactName: circle3NudgeContact.name,
-        avatarColor: circle3NudgeContact.avatarColor,
-        photoUri: circle3NudgeContact.photoUri,
-        circleLevel: 3 as 1 | 2 | 3,
-        prompt: is6Month
-          ? `It's been 6 months since you last spoke to ${circle3NudgeContact.name} — it might be time to reconnect.`
-          : `You haven't spoken to ${circle3NudgeContact.name} in 3 months — want to set up a hangout or give them a call?`,
-        actionType: "hangout",
-      });
-    }
-
-    return result;
-  }, [contacts, dismissedSuggestions, visibleReminders, getSuggestionForContact, lastSuggestedDates, shuffleCount]);
+    return ranked.map((c) => getSuggestionForContact(c));
+  }, [contacts, dismissedSuggestions, visibleReminders, getSuggestionForContact, lastSuggestedDates]);
 
   useEffect(() => {
     const key = suggestions.map((s) => s.contactId).join(",");
@@ -360,14 +312,6 @@ export default function HomeScreen() {
     },
     [markContacted],
   );
-
-  const handleShuffleSuggestions = useCallback(() => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    shownSuggestionIds.current = [];
-    setDismissedSuggestions(new Set());
-    setSuggestionPrompts(new Map());
-    setShuffleCount((c) => c + 1);
-  }, []);
 
   const profileCompletion = useMemo(() => computeProfileCompletion(contacts), [contacts]);
   const bellDotColor = useMemo(
@@ -531,13 +475,6 @@ export default function HomeScreen() {
               <Ionicons name="bulb-outline" size={18} color={Colors.warning} />
               <Text style={styles.sectionTitle}>Suggestions</Text>
               <View style={{ flex: 1 }} />
-              <Pressable
-                onPress={handleShuffleSuggestions}
-                hitSlop={8}
-                style={({ pressed }) => [styles.shuffleBtn, pressed && { opacity: 0.5 }]}
-              >
-                <Ionicons name="shuffle-outline" size={18} color={Colors.textSecondary} />
-              </Pressable>
             </View>
 
             {suggestions.length === 0 && (

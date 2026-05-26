@@ -265,7 +265,7 @@ export function CirclesVisualization({ contacts, user }: CirclesVisualizationPro
         </View>
         <View style={styles.legendItem}>
           <View style={[styles.legendDot, { backgroundColor: Colors.circle3 }]} />
-          <Text style={styles.legendText}>Acquaintances ({c3All.length})</Text>
+          <Text style={styles.legendText}>Friends ({c3All.length})</Text>
         </View>
       </View>
     </View>

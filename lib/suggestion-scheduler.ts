@@ -6,7 +6,7 @@ const SCHEDULER_KEY = "bridges_suggestion_scheduler_v2";
 export const CIRCLE_COOLDOWN_DAYS: Record<1 | 2 | 3, number> = {
   1: 7,
   2: 3,
-  3: 60,
+  3: 15,
 };
 
 export function isInCooldown(
@@ -115,7 +115,7 @@ export function scoreSuggestion(
 
   if (circleLevel === 2) score += 2000;
   else if (circleLevel === 1) score += 1200;
-  else score += 300;
+  else score += 1000;
 
   if (daysSinceLastSuggested === null) {
     score += 400;

@@ -495,7 +495,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
         circleLevel: level,
         userId: req.session.userId!,
         avatarColor,
-        lastContacted: safe.lastContacted ?? new Date().toISOString(),
+        lastContacted: (() => {
+          if (safe.lastContacted) return safe.lastContacted;
+          const now = new Date();
+          const daysBack =
+            level === 1 ? Math.floor(Math.random() * 15) :
+            level === 2 ? Math.floor(Math.random() * 31) :
+            30 + Math.floor(Math.random() * 31);
+          now.setDate(now.getDate() - daysBack);
+          return now.toISOString();
+        })(),
       });
       res.status(201).json(contact);
     } catch (err) {
