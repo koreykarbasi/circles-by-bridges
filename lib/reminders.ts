@@ -224,6 +224,17 @@ function generateCircle3Reminders(contact: Contact): Reminder[] {
       title: `Today is ${contact.name}'s birthday.`,
       subtitle: "Today is their birthday",
     });
+  } else if (daysUntil === 1) {
+    reminders.push({
+      id: `birthday-0d-${contact.id}`,
+      contactId: contact.id,
+      contactName: contact.name,
+      circleLevel: contact.circleLevel,
+      type: "birthday",
+      priority: 68,
+      title: `${contact.name}'s birthday is tomorrow.`,
+      subtitle: "Tomorrow is their birthday",
+    });
   }
 
   const daysSinceHangout = getDaysSince(contact.lastHangout ?? undefined);

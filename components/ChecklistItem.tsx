@@ -1,12 +1,13 @@
 import React from "react";
 import { View, Text, StyleSheet, Pressable } from "react-native";
-import { Ionicons, Feather } from "@expo/vector-icons";
+import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import Colors from "@/constants/colors";
 import * as Haptics from "expo-haptics";
 
 interface ChecklistItemProps {
-  icon: keyof typeof Ionicons.glyphMap;
+  icon: string;
   iconColor: string;
+  iconLibrary?: "material";
   title: string;
   subtitle: string;
   onComplete: () => void;
@@ -33,6 +34,7 @@ const PRIORITY_COLORS: Record<string, string> = {
 export function ChecklistItem({
   icon,
   iconColor,
+  iconLibrary,
   title,
   subtitle,
   onComplete,
@@ -49,7 +51,11 @@ export function ChecklistItem({
         <View style={[styles.priorityBar, { backgroundColor: PRIORITY_COLORS[priorityLevel] }]} />
       )}
       <View style={[styles.iconContainer, { backgroundColor: iconColor + "18" }]}>
-        <Ionicons name={icon} size={20} color={iconColor} />
+        {iconLibrary === "material" ? (
+          <MaterialCommunityIcons name={icon as any} size={20} color={iconColor} />
+        ) : (
+          <Ionicons name={icon as keyof typeof Ionicons.glyphMap} size={20} color={iconColor} />
+        )}
       </View>
       <View style={styles.content}>
         <Text style={styles.title} numberOfLines={1}>{title}</Text>
@@ -71,20 +77,20 @@ export function ChecklistItem({
                 Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
                 onYes?.();
               }}
-              hitSlop={6}
-              style={({ pressed }) => [styles.yesNoButton, styles.yesButton, pressed && { opacity: 0.5 }]}
+              hitSlop={4}
+              style={({ pressed }) => [styles.yesBtn, pressed && { opacity: 0.7 }]}
             >
-              <Ionicons name="checkmark" size={16} color="#fff" />
+              <Ionicons name="checkmark" size={16} color={Colors.success} />
             </Pressable>
             <Pressable
               onPress={() => {
                 Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
                 onNo?.();
               }}
-              hitSlop={6}
-              style={({ pressed }) => [styles.yesNoButton, styles.noButton, pressed && { opacity: 0.5 }]}
+              hitSlop={4}
+              style={({ pressed }) => [styles.noBtn, pressed && { opacity: 0.7 }]}
             >
-              <Ionicons name="close" size={16} color="#fff" />
+              <Ionicons name="close" size={16} color={Colors.danger} />
             </Pressable>
           </>
         ) : (
@@ -96,9 +102,9 @@ export function ChecklistItem({
                   onSnooze();
                 }}
                 hitSlop={6}
-                style={({ pressed }) => [styles.actionButton, pressed && { opacity: 0.5 }]}
+                style={({ pressed }) => [styles.snoozeBtn, pressed && { opacity: 0.5 }]}
               >
-                <Feather name="clock" size={18} color={Colors.textTertiary} />
+                <Ionicons name="chevron-forward" size={16} color={Colors.textTertiary} />
               </Pressable>
             )}
             <Pressable
@@ -107,9 +113,9 @@ export function ChecklistItem({
                 onComplete();
               }}
               hitSlop={6}
-              style={({ pressed }) => [styles.actionButton, pressed && { opacity: 0.5 }]}
+              style={({ pressed }) => [styles.checkBtn, pressed && { opacity: 0.5 }]}
             >
-              <Ionicons name="checkmark-circle" size={22} color={Colors.success} />
+              <Ionicons name="checkmark-circle" size={26} color={Colors.success} />
             </Pressable>
           </>
         )}
@@ -122,34 +128,33 @@ const styles = StyleSheet.create({
   container: {
     flexDirection: "row",
     alignItems: "center",
-    paddingVertical: 12,
-    paddingHorizontal: 14,
     backgroundColor: Colors.surface,
     borderRadius: 14,
+    padding: 12,
     marginBottom: 8,
     borderWidth: 1,
     borderColor: Colors.border,
-    overflow: "hidden",
+    gap: 10,
   },
   priorityBar: {
     position: "absolute",
     left: 0,
-    top: 0,
-    bottom: 0,
+    top: 8,
+    bottom: 8,
     width: 3,
-    borderTopLeftRadius: 14,
-    borderBottomLeftRadius: 14,
+    borderRadius: 2,
   },
   iconContainer: {
-    width: 36,
-    height: 36,
+    width: 38,
+    height: 38,
     borderRadius: 10,
     alignItems: "center",
     justifyContent: "center",
+    flexShrink: 0,
   },
   content: {
     flex: 1,
-    marginLeft: 12,
+    minWidth: 0,
   },
   title: {
     fontSize: 14,
@@ -161,47 +166,53 @@ const styles = StyleSheet.create({
     alignItems: "center",
     gap: 6,
     marginTop: 2,
+    flexWrap: "wrap",
   },
   subtitle: {
     fontSize: 12,
     fontFamily: "Nunito_400Regular",
     color: Colors.textSecondary,
-    flexShrink: 1,
   },
   actionBadge: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 2,
-    paddingHorizontal: 5,
-    paddingVertical: 1,
-    borderRadius: 4,
+    gap: 3,
     backgroundColor: Colors.surfaceElevated,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
   },
   actionText: {
-    fontSize: 9,
-    fontFamily: "Nunito_600SemiBold",
+    fontSize: 10,
+    fontFamily: "Nunito_400Regular",
     color: Colors.textTertiary,
   },
   actions: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 6,
-    marginLeft: 8,
+    gap: 4,
+    flexShrink: 0,
   },
-  actionButton: {
-    padding: 4,
-  },
-  yesNoButton: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
+  yesBtn: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: Colors.success + "18",
     alignItems: "center",
     justifyContent: "center",
   },
-  yesButton: {
-    backgroundColor: Colors.success,
+  noBtn: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: Colors.danger + "18",
+    alignItems: "center",
+    justifyContent: "center",
   },
-  noButton: {
-    backgroundColor: Colors.accent,
+  snoozeBtn: {
+    padding: 4,
+  },
+  checkBtn: {
+    padding: 2,
   },
 });

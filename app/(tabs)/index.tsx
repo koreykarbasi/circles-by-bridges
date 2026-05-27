@@ -15,8 +15,8 @@ import { formatLastContacted, getDaysSince, getDaysUntilBirthday } from "@/lib/h
 import { CIRCLE_CONFIG, HangoutPlan } from "@/lib/types";
 import { generateReminders, Reminder } from "@/lib/reminders";
 import { getSmartPrompt, getActionType, getNextPrompt, loadSyncedPrompts } from "@/lib/prompts";
-import { scoreSuggestion } from "@/lib/suggestion-scheduler";
-import { useDismissedSuggestions, dismissSuggestion, clearDismissedSuggestions, getCachedPrompt, setCachedPrompt, clearPromptCache } from "@/lib/suggestions-store";
+import { getDaysSinceLastSuggestedSync, scoreSuggestion } from "@/lib/suggestion-scheduler";
+import { useDismissedSuggestions, dismissSuggestion, clearDismissedSuggestions, getCachedPrompt, setCachedPrompt, clearPromptCache, useSchedulerDates, markContactSuggested } from "@/lib/suggestions-store";
 import { getTextCopyMessage } from "@/components/SuggestionCard";
 import * as Clipboard from "expo-clipboard";
 import { router, useFocusEffect } from "expo-router";
@@ -26,10 +26,10 @@ import { getViewedTimestamps, hasUnreadVotes } from "@/lib/hangout-notifications
 const MAX_REMINDERS = 5;
 const MAX_SUGGESTIONS = 3;
 
-function getReminderIcon(reminder: Reminder): keyof typeof Ionicons.glyphMap {
+function getReminderIcon(reminder: Reminder): string {
   switch (reminder.type) {
     case "birthday":
-      return "balloon-outline";
+      return "cake-variant-outline";
     case "hangout-overdue":
       return "calendar-outline";
     case "hangout-6month":
@@ -39,6 +39,10 @@ function getReminderIcon(reminder: Reminder): keyof typeof Ionicons.glyphMap {
     default:
       return "notifications-outline";
   }
+}
+
+function getReminderIconLibrary(reminder: Reminder): "material" | undefined {
+  return reminder.type === "birthday" ? "material" : undefined;
 }
 
 function getReminderIconColor(reminder: Reminder): string {
@@ -79,6 +83,7 @@ export default function HomeScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [dismissedReminders, setDismissedReminders] = useState<Set<string>>(new Set());
   const dismissedSuggestions = useDismissedSuggestions();
+  const lastSuggestedDates = useSchedulerDates();
   const [suggestionPrompts, setSuggestionPrompts] = useState<Map<string, string>>(new Map());
   const [bellSheetOpen, setBellSheetOpen] = useState(false);
   const [copiedToast, setCopiedToast] = useState(false);
@@ -158,11 +163,12 @@ export default function HomeScreen() {
 
     const ranked = eligible
       .map((c) => {
+        const daysSinceLastSug = getDaysSinceLastSuggestedSync(c.id, lastSuggestedDates);
         const daysSinceContact = getDaysSince(c.lastContacted ?? undefined);
         const daysUntilBday = getDaysUntilBirthday(c.birthday ?? undefined);
         return {
           contact: c,
-          score: scoreSuggestion(c.circleLevel as 1 | 2 | 3, null, daysSinceContact, daysUntilBday),
+          score: scoreSuggestion(c.circleLevel as 1 | 2 | 3, daysSinceLastSug, daysSinceContact, daysUntilBday),
         };
       })
       .sort((a, b) => b.score - a.score)
@@ -170,7 +176,7 @@ export default function HomeScreen() {
       .map((x) => x.contact);
 
     return ranked.map((c) => getSuggestionForContact(c));
-  }, [contacts, dismissedSuggestions, visibleReminders, getSuggestionForContact]);
+  }, [contacts, dismissedSuggestions, visibleReminders, getSuggestionForContact, lastSuggestedDates]);
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
@@ -220,6 +226,7 @@ export default function HomeScreen() {
   const handleSuggestionDone = useCallback(
     async (suggestion: Suggestion) => {
       dismissSuggestion(suggestion.contactId);
+      markContactSuggested(suggestion.contactId).catch(() => {});
       await markContacted(suggestion.contactId);
       if (suggestion.actionType === "hangout") {
         await markHangout(suggestion.contactId);
@@ -292,6 +299,7 @@ export default function HomeScreen() {
       }
       showCopiedToast();
       dismissSuggestion(suggestion.contactId);
+      markContactSuggested(suggestion.contactId).catch(() => {});
       await markContacted(suggestion.contactId);
     },
     [markContacted, contacts, showCopiedToast],
@@ -301,6 +309,7 @@ export default function HomeScreen() {
     async (suggestion: Suggestion) => {
       await markContacted(suggestion.contactId);
       dismissSuggestion(suggestion.contactId);
+      markContactSuggested(suggestion.contactId).catch(() => {});
       router.push({
         pathname: "/create-hangout",
         params: { contactName: suggestion.contactName },
@@ -436,6 +445,7 @@ export default function HomeScreen() {
               <ChecklistItem
                 key={reminder.id}
                 icon={getReminderIcon(reminder)}
+                iconLibrary={getReminderIconLibrary(reminder)}
                 iconColor={getReminderIconColor(reminder)}
                 title={reminder.title}
                 subtitle={reminder.subtitle}

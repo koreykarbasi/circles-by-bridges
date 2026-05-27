@@ -1,7 +1,7 @@
 import React, { useCallback } from "react";
 import { View, Text, StyleSheet, Pressable } from "react-native";
 import Animated, { useSharedValue, useAnimatedStyle, withTiming, Easing, runOnJS } from "react-native-reanimated";
-import { Ionicons } from "@expo/vector-icons";
+import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import Colors from "@/constants/colors";
 import { CIRCLE_CONFIG } from "@/lib/types";
 import * as Haptics from "expo-haptics";
@@ -16,7 +16,6 @@ interface ReminderItemProps {
 }
 
 const TYPE_ICONS: Record<string, keyof typeof Ionicons.glyphMap> = {
-  birthday: "balloon-outline",
   "hangout-overdue": "calendar-outline",
   "check-in-overdue": "time-outline",
   "hangout-6month": "help-circle-outline",
@@ -41,6 +40,7 @@ export function ReminderItem({ reminder, onComplete, onYes, onNo, onPlanHangout 
   const actionIcon = (reminder.actionType ? ACTION_ICONS[reminder.actionType] : undefined) ?? "chatbubble-outline";
   const isHangout6Month = reminder.type === "hangout-6month";
 
+  const isBirthday = reminder.type === "birthday";
   const opacity = useSharedValue(1);
   const height = useSharedValue<number | undefined>(undefined);
   const marginBottom = useSharedValue(8);
@@ -81,7 +81,11 @@ export function ReminderItem({ reminder, onComplete, onYes, onNo, onPlanHangout 
     <Animated.View style={[styles.container, animatedStyle]}>
       <View style={styles.row}>
         <View style={[styles.iconContainer, { backgroundColor: priorityColor + "18" }]}>
-          <Ionicons name={typeIcon} size={18} color={priorityColor} />
+          {isBirthday ? (
+            <MaterialCommunityIcons name="cake-variant-outline" size={18} color={priorityColor} />
+          ) : (
+            <Ionicons name={typeIcon} size={18} color={priorityColor} />
+          )}
         </View>
         <View style={styles.content}>
           <Text style={styles.title} numberOfLines={2}>{reminder.title}</Text>
