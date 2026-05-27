@@ -15,7 +15,7 @@ import { formatLastContacted, getDaysSince, getDaysUntilBirthday } from "@/lib/h
 import { CIRCLE_CONFIG, HangoutPlan } from "@/lib/types";
 import { generateReminders, Reminder } from "@/lib/reminders";
 import { getSmartPrompt, getActionType, getNextPrompt, loadSyncedPrompts } from "@/lib/prompts";
-import { getDaysSinceLastSuggestedSync, scoreSuggestion } from "@/lib/suggestion-scheduler";
+import { getDaysSinceLastSuggestedSync, scoreSuggestion, isInCooldown } from "@/lib/suggestion-scheduler";
 import { useDismissedSuggestions, dismissSuggestion, clearDismissedSuggestions, getCachedPrompt, setCachedPrompt, clearPromptCache, useSchedulerDates, markContactSuggested } from "@/lib/suggestions-store";
 import { getTextCopyMessage } from "@/components/SuggestionCard";
 import * as Clipboard from "expo-clipboard";
@@ -158,6 +158,8 @@ export default function HomeScreen() {
     const eligible = contacts.filter((c) => {
       if (dismissedSuggestions.has(c.id)) return false;
       if (reminderContactIds.has(c.id)) return false;
+      const daysSinceLastSug = getDaysSinceLastSuggestedSync(c.id, lastSuggestedDates);
+      if (isInCooldown(c.circleLevel as 1 | 2 | 3, daysSinceLastSug)) return false;
       return true;
     });
 

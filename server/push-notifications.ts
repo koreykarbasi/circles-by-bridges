@@ -97,7 +97,7 @@ function buildReminderMessages(contact: ContactRow): PushMessage[] {
     if (daysUntilBirthday !== null && daysUntilBirthday === 7) {
       messages.push({
         title: `${contact.name}'s birthday is coming up`,
-        body: `${contact.name}'s birthday is a week away — plan something special.`,
+        body: `${contact.name}'s birthday is coming up in a week.`,
         contactId: contact.id,
       });
     }
