@@ -43,7 +43,7 @@ function buildBirthdayDayOfMessages(contact: ContactRow): PushMessage[] {
   if (contact.circleLevel === 1 || contact.circleLevel === 2) {
     messages.push({
       title: `Happy birthday, ${contact.name}!`,
-      body: `Today is ${contact.name}'s birthday — reach out and wish them a happy birthday!`,
+      body: `Today is ${contact.name}'s birthday — wish them a happy birthday!`,
       contactId: contact.id,
     });
   } else if (contact.circleLevel === 3) {
@@ -79,7 +79,7 @@ function buildReminderMessages(contact: ContactRow): PushMessage[] {
       } else if (daysUntilBirthday === 30) {
         messages.push({
           title: `${contact.name}'s birthday is a month away`,
-          body: `${contact.name}'s birthday is coming up. Would you like to plan something special?`,
+          body: `${contact.name}'s birthday is coming up — would you like to plan a surprise party or plan their gift?`,
           contactId: contact.id,
         });
       }

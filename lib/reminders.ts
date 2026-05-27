@@ -70,7 +70,7 @@ function generateCircle1Reminders(contact: Contact): Reminder[] {
         circleLevel: contact.circleLevel,
         type: "birthday",
         priority: 170,
-        title: `${contact.name}'s birthday is a month away. Would you like to plan something special?`,
+        title: `${contact.name}'s birthday is a month away — would you like to plan a surprise party or plan their gift?`,
         subtitle: `Birthday in ${Math.floor(daysUntil / 7)} weeks`,
       });
     }
@@ -224,17 +224,6 @@ function generateCircle3Reminders(contact: Contact): Reminder[] {
       title: `Today is ${contact.name}'s birthday.`,
       subtitle: "Today is their birthday",
     });
-  } else if (daysUntil === 1) {
-    reminders.push({
-      id: `birthday-0d-${contact.id}`,
-      contactId: contact.id,
-      contactName: contact.name,
-      circleLevel: contact.circleLevel,
-      type: "birthday",
-      priority: 68,
-      title: `${contact.name}'s birthday is tomorrow.`,
-      subtitle: "Tomorrow is their birthday",
-    });
   }
 
   const daysSinceHangout = getDaysSince(contact.lastHangout ?? undefined);
@@ -251,7 +240,7 @@ function generateCircle3Reminders(contact: Contact): Reminder[] {
       circleLevel: contact.circleLevel,
       type: "hangout-overdue",
       priority: 45,
-      title: `Plan a hangout with ${contact.name}`,
+      title: `When was the last time you hung out with ${contact.name}?`,
       subtitle:
         daysSinceHangout !== null
           ? `Last hangout was ${Math.floor(daysSinceHangout / 7)} weeks ago`
@@ -268,7 +257,7 @@ function generateCircle3Reminders(contact: Contact): Reminder[] {
       circleLevel: contact.circleLevel,
       type: "check-in-overdue",
       priority: 35,
-      title: `Reach out to ${contact.name}`,
+      title: `It's been a while — give ${contact.name} a call.`,
       subtitle: `Last contact: ${daysSinceContact} days ago`,
       actionType: "call",
     });
