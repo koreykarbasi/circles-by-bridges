@@ -15,7 +15,7 @@ interface ContactsContextValue {
   addContact: (data: Omit<Contact, "id" | "avatarColor" | "createdAt">) => Promise<Contact>;
   updateContact: (contact: Contact) => Promise<void>;
   deleteContact: (id: string) => Promise<void>;
-  markContacted: (id: string) => Promise<void>;
+  markContacted: (id: string, date?: Date) => Promise<void>;
   markHangout: (id: string) => Promise<void>;
   getCircleContacts: (level: 1 | 2 | 3) => Contact[];
   getOverdueContacts: () => Contact[];
@@ -90,12 +90,13 @@ export function ContactsProvider({ children }: { children: ReactNode }) {
     await fetchContacts();
   }, [fetchContacts]);
 
-  const markContactedFn = useCallback(async (id: string) => {
-    const now = new Date().toISOString();
+  const markContactedFn = useCallback(async (id: string, date?: Date) => {
+    const ts = (date ?? new Date()).toISOString();
     setContacts((prev) =>
-      prev.map((c) => (c.id === id ? { ...c, lastContacted: now } : c)),
+      prev.map((c) => (c.id === id ? { ...c, lastContacted: ts } : c)),
     );
-    apiRequest("POST", `/api/contacts/${id}/mark-contacted`).then(fetchContacts);
+    const body = date ? { contactedAt: ts } : undefined;
+    apiRequest("POST", `/api/contacts/${id}/mark-contacted`, body).then(fetchContacts);
   }, [fetchContacts]);
 
   const markHangoutFn = useCallback(async (id: string) => {

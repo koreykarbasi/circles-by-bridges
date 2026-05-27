@@ -564,9 +564,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (!existing || existing.userId !== req.session.userId) {
         return res.status(404).json({ message: "Contact not found" });
       }
-      const contact = await storage.updateContact(id, {
-        lastContacted: new Date().toISOString(),
-      });
+      let lastContacted = new Date().toISOString();
+      const { contactedAt } = req.body ?? {};
+      if (contactedAt && typeof contactedAt === "string") {
+        const parsed = new Date(contactedAt);
+        if (!isNaN(parsed.getTime()) && parsed <= new Date()) {
+          lastContacted = parsed.toISOString();
+        }
+      }
+      const contact = await storage.updateContact(id, { lastContacted });
       res.json(contact);
     } catch (err) {
       console.error("Error marking contact:", err);

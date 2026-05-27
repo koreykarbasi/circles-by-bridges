@@ -6,6 +6,7 @@ import Colors from "@/constants/colors";
 import { CIRCLE_CONFIG } from "@/lib/types";
 import * as Haptics from "expo-haptics";
 import type { Reminder } from "@/lib/reminders";
+import { QuickPickRow } from "./QuickPickRow";
 
 interface ReminderItemProps {
   reminder: Reminder;
@@ -13,6 +14,8 @@ interface ReminderItemProps {
   onYes?: () => void;
   onNo?: () => void;
   onPlanHangout?: () => void;
+  onQuickPick?: (date: Date) => void;
+  contactLastContacted?: string | null;
 }
 
 const TYPE_ICONS: Record<string, keyof typeof Ionicons.glyphMap> = {
@@ -33,12 +36,13 @@ function getPriorityColor(priority: number): string {
   return Colors.primaryLight;
 }
 
-export function ReminderItem({ reminder, onComplete, onYes, onNo, onPlanHangout }: ReminderItemProps) {
+export function ReminderItem({ reminder, onComplete, onYes, onNo, onPlanHangout, onQuickPick, contactLastContacted }: ReminderItemProps) {
   const circleColor = CIRCLE_CONFIG[reminder.circleLevel as 1 | 2 | 3]?.color ?? Colors.primary;
   const priorityColor = getPriorityColor(reminder.priority);
   const typeIcon = TYPE_ICONS[reminder.type] ?? "alert-circle-outline";
   const actionIcon = (reminder.actionType ? ACTION_ICONS[reminder.actionType] : undefined) ?? "chatbubble-outline";
   const isHangout6Month = reminder.type === "hangout-6month";
+  const isCheckInOverdue = reminder.type === "check-in-overdue";
 
   const isBirthday = reminder.type === "birthday";
   const opacity = useSharedValue(1);
@@ -76,6 +80,17 @@ export function ReminderItem({ reminder, onComplete, onYes, onNo, onPlanHangout 
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     if (onNo) onNo();
   }, [onNo]);
+
+  const handleQuickPick = useCallback((date: Date) => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    opacity.value = withTiming(0, { duration: 250, easing: Easing.out(Easing.cubic) }, () => {
+      height.value = withTiming(0, { duration: 200 });
+      marginBottom.value = withTiming(0, { duration: 200 }, () => {
+        if (onQuickPick) runOnJS(onQuickPick)(date);
+        else runOnJS(onComplete)();
+      });
+    });
+  }, [onQuickPick, onComplete]);
 
   return (
     <Animated.View style={[styles.container, animatedStyle]}>
@@ -146,6 +161,13 @@ export function ReminderItem({ reminder, onComplete, onYes, onNo, onPlanHangout 
           </View>
         )}
       </View>
+      {isCheckInOverdue && onQuickPick && (
+        <QuickPickRow
+          circleLevel={reminder.circleLevel as 1 | 2 | 3}
+          currentLastContacted={contactLastContacted}
+          onSelect={handleQuickPick}
+        />
+      )}
     </Animated.View>
   );
 }

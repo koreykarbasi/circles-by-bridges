@@ -290,6 +290,14 @@ export default function SuggestionsScreen() {
     [markContacted, markHangout],
   );
 
+  const handleReminderQuickPick = useCallback(
+    async (reminder: Reminder, date: Date) => {
+      setCompletedReminderIds((prev) => new Set(prev).add(reminder.id));
+      await markContacted(reminder.contactId, date);
+    },
+    [markContacted],
+  );
+
   const handleReminderYes = useCallback(
     (reminder: Reminder) => {
       markHangout(reminder.contactId);
@@ -446,6 +454,8 @@ export default function SuggestionsScreen() {
                   onYes={reminder.type === "hangout-6month" ? () => handleReminderYes(reminder) : undefined}
                   onNo={reminder.type === "hangout-6month" ? () => handleReminderNo(reminder) : undefined}
                   onPlanHangout={reminder.actionType === "hangout" ? () => handlePlanHangoutReminder(reminder) : undefined}
+                  onQuickPick={reminder.type === "check-in-overdue" ? (date) => handleReminderQuickPick(reminder, date) : undefined}
+                  contactLastContacted={contacts.find((c) => c.id === reminder.contactId)?.lastContacted}
                 />
               ))}
             </View>
