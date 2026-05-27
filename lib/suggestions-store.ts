@@ -3,6 +3,7 @@ import { loadSchedulerData, markSuggested as _markSuggested } from "./suggestion
 
 let _dismissedIds = new Set<string>();
 let _schedulerDates: Record<string, string> = {};
+let _promptCache = new Map<string, string>();
 const _listeners = new Set<() => void>();
 
 function notify() {
@@ -46,11 +47,6 @@ export function getSchedulerDates(): Record<string, string> {
   return _schedulerDates;
 }
 
-export async function refreshSchedulerDates(): Promise<void> {
-  _schedulerDates = await loadSchedulerData();
-  notify();
-}
-
 export async function markContactSuggested(contactId: string): Promise<void> {
   await _markSuggested(contactId);
   _schedulerDates = await loadSchedulerData();
@@ -70,4 +66,18 @@ export function useSchedulerDates(): Record<string, string> {
     return () => { alive = false; unsub(); };
   }, []);
   return dates;
+}
+
+// ─── Prompt Cache ─────────────────────────────────────────────────────────────
+
+export function getCachedPrompt(contactId: string): string | undefined {
+  return _promptCache.get(contactId);
+}
+
+export function setCachedPrompt(contactId: string, prompt: string): void {
+  _promptCache.set(contactId, prompt);
+}
+
+export function clearPromptCache(): void {
+  _promptCache = new Map();
 }

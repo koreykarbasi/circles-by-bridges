@@ -26,29 +26,45 @@ interface PushMessage {
   contactId?: string;
 }
 
-function buildMessages(
-  contact: {
-    id: string;
-    name: string;
-    circleLevel: number;
-    birthday?: string | null;
-    lastContacted?: string | null;
-    lastHangout?: string | null;
-  },
-): PushMessage[] {
+type ContactRow = {
+  id: string;
+  name: string;
+  circleLevel: number;
+  birthday?: string | null;
+  lastContacted?: string | null;
+  lastHangout?: string | null;
+};
+
+// Birthday day-of messages — delivered at midnight so users wake up with the reminder
+function buildBirthdayDayOfMessages(contact: ContactRow): PushMessage[] {
+  const messages: PushMessage[] = [];
+  if (getDaysUntilBirthday(contact.birthday) !== 0) return messages;
+
+  if (contact.circleLevel === 1 || contact.circleLevel === 2) {
+    messages.push({
+      title: `Happy birthday, ${contact.name}!`,
+      body: `Today is ${contact.name}'s birthday — reach out and wish them a happy birthday!`,
+      contactId: contact.id,
+    });
+  } else if (contact.circleLevel === 3) {
+    messages.push({
+      title: `${contact.name}'s birthday`,
+      body: `Today is ${contact.name}'s birthday.`,
+      contactId: contact.id,
+    });
+  }
+  return messages;
+}
+
+// Non-day-of reminder messages — delivered at 9am
+function buildReminderMessages(contact: ContactRow): PushMessage[] {
   const messages: PushMessage[] = [];
   const daysUntilBirthday = getDaysUntilBirthday(contact.birthday);
 
   if (contact.circleLevel === 1) {
-    // Birthday milestones: 30d, 14d, 7d, day-of
-    if (daysUntilBirthday !== null) {
-      if (daysUntilBirthday === 0) {
-        messages.push({
-          title: `Happy birthday, ${contact.name}!`,
-          body: `Today is ${contact.name}'s birthday — wish them a happy birthday!`,
-          contactId: contact.id,
-        });
-      } else if (daysUntilBirthday === 7) {
+    // Birthday advance milestones (day-of handled at midnight)
+    if (daysUntilBirthday !== null && daysUntilBirthday > 0) {
+      if (daysUntilBirthday === 7) {
         messages.push({
           title: `${contact.name}'s birthday is coming up`,
           body: `${contact.name}'s birthday is a week away — make sure you have everything sorted!`,
@@ -77,21 +93,13 @@ function buildMessages(
       messages.push({ title: `Check in with ${contact.name}`, body, contactId: contact.id });
     }
   } else if (contact.circleLevel === 2) {
-    // Birthday milestones: 7d and day-of
-    if (daysUntilBirthday !== null) {
-      if (daysUntilBirthday === 0) {
-        messages.push({
-          title: `Happy birthday, ${contact.name}!`,
-          body: `Today is ${contact.name}'s birthday — wish them a happy birthday!`,
-          contactId: contact.id,
-        });
-      } else if (daysUntilBirthday === 7) {
-        messages.push({
-          title: `${contact.name}'s birthday is coming up`,
-          body: `${contact.name}'s birthday is a week away — plan something special.`,
-          contactId: contact.id,
-        });
-      }
+    // Birthday advance milestone (day-of handled at midnight)
+    if (daysUntilBirthday !== null && daysUntilBirthday === 7) {
+      messages.push({
+        title: `${contact.name}'s birthday is coming up`,
+        body: `${contact.name}'s birthday is a week away — plan something special.`,
+        contactId: contact.id,
+      });
     }
     // Hangout overdue: > 3 weeks
     const daysSinceHangout = getDaysSince(contact.lastHangout);
@@ -101,16 +109,8 @@ function buildMessages(
         : `${Math.floor(daysSinceHangout / 7)} weeks since your last hangout`;
       messages.push({ title: `Plan a hangout with ${contact.name}`, body, contactId: contact.id });
     }
-  } else if (contact.circleLevel === 3) {
-    // Birthday: day-of only
-    if (daysUntilBirthday === 0) {
-      messages.push({
-        title: `${contact.name}'s birthday`,
-        body: `Today is ${contact.name}'s birthday.`,
-        contactId: contact.id,
-      });
-    }
   }
+  // Circle 3: no non-birthday reminders at 9am
 
   return messages;
 }
@@ -140,27 +140,35 @@ async function sendExpoPush(
   }
 }
 
-// ─── Per-user local-time check ────────────────────────────────────────────────
-// Returns true if it is currently between 9:00 and 9:59 in the given timezone.
-function isNineAmLocalNow(timezone: string): boolean {
+// ─── Per-user local-time checks ───────────────────────────────────────────────
+
+function getLocalHour(timezone: string): number {
   try {
     const formatter = new Intl.DateTimeFormat("en-US", {
       timeZone: timezone,
       hour: "numeric",
       hour12: false,
     });
-    const localHour = parseInt(formatter.format(new Date()), 10);
-    return localHour === 9;
+    return parseInt(formatter.format(new Date()), 10);
   } catch {
-    // Unknown timezone — fall back to UTC
-    return new Date().getUTCHours() === 9;
+    return new Date().getUTCHours();
   }
+}
+
+// Returns true if it is currently between 9:00 and 9:59 in the given timezone.
+function isNineAmLocalNow(timezone: string): boolean {
+  return getLocalHour(timezone) === 9;
+}
+
+// Returns true if it is currently between 0:00 and 0:59 in the given timezone.
+function isMidnightLocalNow(timezone: string): boolean {
+  return getLocalHour(timezone) === 0;
 }
 
 // ─── Daily reminder dispatch ──────────────────────────────────────────────────
 
 export async function sendDailyReminders() {
-  console.log("[push] Checking per-user 9am reminders…");
+  console.log("[push] Checking per-user reminders (midnight birthday + 9am)…");
   try {
     const usersWithTokens = await db
       .select({
@@ -176,7 +184,9 @@ export async function sendDailyReminders() {
       if (!user.pushToken) continue;
 
       const tz = user.notificationTimezone ?? "UTC";
-      if (!isNineAmLocalNow(tz)) continue;
+      const atMidnight = isMidnightLocalNow(tz);
+      const atNineAm = isNineAmLocalNow(tz);
+      if (!atMidnight && !atNineAm) continue;
 
       const userContacts = await db
         .select()
@@ -185,10 +195,16 @@ export async function sendDailyReminders() {
 
       const messages: PushMessage[] = [];
       for (const contact of userContacts) {
-        messages.push(...buildMessages(contact));
+        if (atMidnight) {
+          // Birthday day-of notifications fire at midnight
+          messages.push(...buildBirthdayDayOfMessages(contact));
+        } else {
+          // Advance birthday milestones + overdue check-ins/hangouts fire at 9am
+          messages.push(...buildReminderMessages(contact));
+        }
       }
 
-      // Cap at 3 notifications per user per day to avoid spam
+      // Cap at 3 notifications per user per delivery window to avoid spam
       for (const msg of messages.slice(0, 3)) {
         await sendExpoPush(
           user.pushToken,

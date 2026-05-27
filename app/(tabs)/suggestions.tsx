@@ -12,7 +12,7 @@ import { getSmartPrompt, getNextPrompt, getActionType, resetSeenPrompts, loadSyn
 import { getDaysSince, getDaysUntilBirthday, formatLastContacted, formatBirthdayCountdown, getContactUrgency } from "@/lib/helpers";
 import { generateReminders } from "@/lib/reminders";
 import { getDaysSinceLastSuggestedSync, scoreSuggestion, isInCooldown } from "@/lib/suggestion-scheduler";
-import { useDismissedSuggestions, dismissSuggestion, clearDismissedSuggestions, useSchedulerDates, markContactSuggested } from "@/lib/suggestions-store";
+import { useDismissedSuggestions, dismissSuggestion, clearDismissedSuggestions, useSchedulerDates, markContactSuggested, getCachedPrompt, setCachedPrompt, clearPromptCache } from "@/lib/suggestions-store";
 import type { Contact } from "@/lib/types";
 import type { Reminder } from "@/lib/reminders";
 import { router } from "expo-router";
@@ -150,7 +150,26 @@ export default function SuggestionsScreen() {
         const updated = { ...prev };
         for (const contact of rankedContacts) {
           if (!updated[contact.id]) {
-            updated[contact.id] = buildSuggestion(contact);
+            const cachedPromptText = getCachedPrompt(contact.id);
+            if (cachedPromptText) {
+              const urgency = getContactUrgency(contact.circleLevel as 1 | 2 | 3, contact.lastContacted ?? undefined);
+              const bday = getDaysUntilBirthday(contact.birthday ?? undefined);
+              const hasBirthdaySoon = bday !== null && bday <= 14;
+              let type = getActionType(contact.circleLevel as 1 | 2 | 3, cachedPromptText);
+              if (contact.circleLevel === 3 && type === "call") type = "text";
+              updated[contact.id] = {
+                contact,
+                prompt: cachedPromptText,
+                type,
+                urgency,
+                birthdayLabel: hasBirthdaySoon ? formatBirthdayCountdown(contact.birthday ?? undefined) : undefined,
+                lastContactedLabel: formatLastContacted(contact.lastContacted ?? undefined),
+              };
+            } else {
+              const suggestion = buildSuggestion(contact);
+              setCachedPrompt(contact.id, suggestion.prompt);
+              updated[contact.id] = suggestion;
+            }
           }
         }
         return updated;
@@ -197,6 +216,7 @@ export default function SuggestionsScreen() {
     const birthdayLabel = formatBirthdayCountdown(contact.birthday ?? undefined);
     const lastContactedLabel = formatLastContacted(contact.lastContacted ?? undefined);
 
+    setCachedPrompt(contactId, newPrompt);
     setCardPrompts((prev) => ({
       ...prev,
       [contactId]: {
@@ -302,6 +322,7 @@ export default function SuggestionsScreen() {
   const handleRefreshAll = useCallback(() => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     resetSeenPrompts();
+    clearPromptCache();
     setCardPrompts({});
     setRefreshKey((k) => k + 1);
     setShuffleJitter(() => {

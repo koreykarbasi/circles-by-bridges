@@ -16,7 +16,7 @@ interface ReminderItemProps {
 }
 
 const TYPE_ICONS: Record<string, keyof typeof Ionicons.glyphMap> = {
-  birthday: "gift-outline",
+  birthday: "balloon-outline",
   "hangout-overdue": "calendar-outline",
   "check-in-overdue": "time-outline",
   "hangout-6month": "help-circle-outline",

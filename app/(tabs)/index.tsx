@@ -15,8 +15,8 @@ import { formatLastContacted, getDaysSince, getDaysUntilBirthday } from "@/lib/h
 import { CIRCLE_CONFIG, HangoutPlan } from "@/lib/types";
 import { generateReminders, Reminder } from "@/lib/reminders";
 import { getSmartPrompt, getActionType, getNextPrompt, loadSyncedPrompts } from "@/lib/prompts";
-import { getDaysSinceLastSuggestedSync, scoreSuggestion, isInCooldown } from "@/lib/suggestion-scheduler";
-import { useDismissedSuggestions, dismissSuggestion, clearDismissedSuggestions, useSchedulerDates, markContactSuggested } from "@/lib/suggestions-store";
+import { scoreSuggestion } from "@/lib/suggestion-scheduler";
+import { useDismissedSuggestions, dismissSuggestion, clearDismissedSuggestions, getCachedPrompt, setCachedPrompt, clearPromptCache } from "@/lib/suggestions-store";
 import { getTextCopyMessage } from "@/components/SuggestionCard";
 import * as Clipboard from "expo-clipboard";
 import { router, useFocusEffect } from "expo-router";
@@ -29,7 +29,7 @@ const MAX_SUGGESTIONS = 3;
 function getReminderIcon(reminder: Reminder): keyof typeof Ionicons.glyphMap {
   switch (reminder.type) {
     case "birthday":
-      return "gift-outline";
+      return "balloon-outline";
     case "hangout-overdue":
       return "calendar-outline";
     case "hangout-6month":
@@ -79,7 +79,6 @@ export default function HomeScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [dismissedReminders, setDismissedReminders] = useState<Set<string>>(new Set());
   const dismissedSuggestions = useDismissedSuggestions();
-  const lastSuggestedDates = useSchedulerDates();
   const [suggestionPrompts, setSuggestionPrompts] = useState<Map<string, string>>(new Map());
   const [bellSheetOpen, setBellSheetOpen] = useState(false);
   const [copiedToast, setCopiedToast] = useState(false);
@@ -111,10 +110,13 @@ export default function HomeScreen() {
 
   const getSuggestionForContact = useCallback(
     (contact: typeof contacts[0]): Suggestion => {
-      const existing = suggestionPrompts.get(contact.id);
       const circleLevel = contact.circleLevel as 1 | 2 | 3;
       const daysSinceContact = getDaysSince(contact.lastContacted ?? undefined);
       const daysUntilBday = getDaysUntilBirthday(contact.birthday ?? undefined);
+
+      const shared = getCachedPrompt(contact.id);
+      const local = suggestionPrompts.get(contact.id);
+      const existing = shared || local;
 
       const prompt =
         existing ||
@@ -126,6 +128,7 @@ export default function HomeScreen() {
 
       if (!existing) {
         setSuggestionPrompts((prev) => new Map(prev).set(contact.id, prompt));
+        setCachedPrompt(contact.id, prompt);
       }
 
       let actionType = getActionType(circleLevel, prompt);
@@ -144,26 +147,22 @@ export default function HomeScreen() {
     [suggestionPrompts],
   );
 
-  const suggestionKeyRef = useRef<string>("");
-
   const suggestions = useMemo(() => {
     const reminderContactIds = new Set(visibleReminders.map((r) => r.contactId));
 
     const eligible = contacts.filter((c) => {
       if (dismissedSuggestions.has(c.id)) return false;
       if (reminderContactIds.has(c.id)) return false;
-      const daysSinceLastSug = getDaysSinceLastSuggestedSync(c.id, lastSuggestedDates);
-      return !isInCooldown(c.circleLevel as 1 | 2 | 3, daysSinceLastSug);
+      return true;
     });
 
     const ranked = eligible
       .map((c) => {
-        const daysSinceLastSug = getDaysSinceLastSuggestedSync(c.id, lastSuggestedDates);
         const daysSinceContact = getDaysSince(c.lastContacted ?? undefined);
         const daysUntilBday = getDaysUntilBirthday(c.birthday ?? undefined);
         return {
           contact: c,
-          score: scoreSuggestion(c.circleLevel as 1 | 2 | 3, daysSinceLastSug, daysSinceContact, daysUntilBday),
+          score: scoreSuggestion(c.circleLevel as 1 | 2 | 3, null, daysSinceContact, daysUntilBday),
         };
       })
       .sort((a, b) => b.score - a.score)
@@ -171,20 +170,13 @@ export default function HomeScreen() {
       .map((x) => x.contact);
 
     return ranked.map((c) => getSuggestionForContact(c));
-  }, [contacts, dismissedSuggestions, visibleReminders, getSuggestionForContact, lastSuggestedDates]);
-
-  useEffect(() => {
-    const key = suggestions.map((s) => s.contactId).join(",");
-    if (key !== "" && key !== suggestionKeyRef.current) {
-      suggestionKeyRef.current = key;
-      suggestions.forEach((s) => markContactSuggested(s.contactId));
-    }
-  }, [suggestions]);
+  }, [contacts, dismissedSuggestions, visibleReminders, getSuggestionForContact]);
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
     setDismissedReminders(new Set());
     clearDismissedSuggestions();
+    clearPromptCache();
     setSuggestionPrompts(new Map());
     await refreshContacts();
     setRefreshing(false);
@@ -256,6 +248,7 @@ export default function HomeScreen() {
         },
       );
       setSuggestionPrompts((prev) => new Map(prev).set(contact.id, newPrompt));
+      setCachedPrompt(contact.id, newPrompt);
     },
     [contacts],
   );
