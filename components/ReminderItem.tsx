@@ -83,11 +83,14 @@ export function ReminderItem({ reminder, onComplete, onYes, onNo, onPlanHangout,
 
   const handleQuickPick = useCallback((date: Date) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    const callback = () => {
+      if (onQuickPick) onQuickPick(date);
+      else onComplete();
+    };
     opacity.value = withTiming(0, { duration: 250, easing: Easing.out(Easing.cubic) }, () => {
       height.value = withTiming(0, { duration: 200 });
       marginBottom.value = withTiming(0, { duration: 200 }, () => {
-        if (onQuickPick) runOnJS(onQuickPick)(date);
-        else runOnJS(onComplete)();
+        runOnJS(callback)();
       });
     });
   }, [onQuickPick, onComplete]);

@@ -10,6 +10,7 @@ import { BellSheet, computeBellDotColor } from "@/components/BellSheet";
 import * as Haptics from "expo-haptics";
 import { CirclesVisualization } from "@/components/CirclesVisualization";
 import { ChecklistItem } from "@/components/ChecklistItem";
+import { ReminderItem } from "@/components/ReminderItem";
 import { EmptyState } from "@/components/EmptyState";
 import { formatLastContacted, getDaysSince, getDaysUntilBirthday } from "@/lib/helpers";
 import { CIRCLE_CONFIG, HangoutPlan } from "@/lib/types";
@@ -200,6 +201,14 @@ export default function HomeScreen() {
       await markContacted(reminder.contactId);
     },
     [markContacted, markHangout],
+  );
+
+  const handleReminderQuickPick = useCallback(
+    async (reminder: Reminder, date: Date) => {
+      setDismissedReminders((prev) => new Set(prev).add(reminder.id));
+      await markContacted(reminder.contactId, date);
+    },
+    [markContacted],
   );
 
   const handleReminderSnooze = useCallback((reminder: Reminder) => {
@@ -443,23 +452,33 @@ export default function HomeScreen() {
               </View>
             )}
 
-            {visibleReminders.map((reminder) => (
-              <ChecklistItem
-                key={reminder.id}
-                icon={getReminderIcon(reminder)}
-                iconLibrary={getReminderIconLibrary(reminder)}
-                iconColor={getReminderIconColor(reminder)}
-                title={reminder.title}
-                subtitle={reminder.subtitle}
-                priorityLevel={getPriorityLevel(reminder.priority)}
-                actionType={reminder.actionType}
-                showYesNo={reminder.type === "hangout-6month"}
-                onYes={() => handleHangout6MonthYes(reminder)}
-                onNo={() => handleHangout6MonthNo(reminder)}
-                onComplete={() => handleReminderComplete(reminder)}
-                onSnooze={reminder.type !== "hangout-6month" ? () => handleReminderSnooze(reminder) : undefined}
-              />
-            ))}
+            {visibleReminders.map((reminder) =>
+              reminder.type === "check-in-overdue" ? (
+                <ReminderItem
+                  key={reminder.id}
+                  reminder={reminder}
+                  onComplete={() => handleReminderComplete(reminder)}
+                  onQuickPick={(date) => handleReminderQuickPick(reminder, date)}
+                  contactLastContacted={contacts.find((c) => c.id === reminder.contactId)?.lastContacted}
+                />
+              ) : (
+                <ChecklistItem
+                  key={reminder.id}
+                  icon={getReminderIcon(reminder)}
+                  iconLibrary={getReminderIconLibrary(reminder)}
+                  iconColor={getReminderIconColor(reminder)}
+                  title={reminder.title}
+                  subtitle={reminder.subtitle}
+                  priorityLevel={getPriorityLevel(reminder.priority)}
+                  actionType={reminder.actionType}
+                  showYesNo={reminder.type === "hangout-6month"}
+                  onYes={() => handleHangout6MonthYes(reminder)}
+                  onNo={() => handleHangout6MonthNo(reminder)}
+                  onComplete={() => handleReminderComplete(reminder)}
+                  onSnooze={reminder.type !== "hangout-6month" ? () => handleReminderSnooze(reminder) : undefined}
+                />
+              )
+            )}
           </View>
 
           {hangoutWithNewVotes && (
