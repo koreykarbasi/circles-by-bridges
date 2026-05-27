@@ -48,19 +48,19 @@ function buildMessages(
           body: `Today is ${contact.name}'s birthday — wish them a happy birthday!`,
           contactId: contact.id,
         });
-      } else if (daysUntilBirthday <= 7) {
+      } else if (daysUntilBirthday === 7) {
         messages.push({
           title: `${contact.name}'s birthday is coming up`,
           body: `${contact.name}'s birthday is a week away — make sure you have everything sorted!`,
           contactId: contact.id,
         });
-      } else if (daysUntilBirthday <= 14) {
+      } else if (daysUntilBirthday === 14) {
         messages.push({
           title: `${contact.name}'s birthday in 2 weeks`,
           body: `${contact.name}'s birthday is 2 weeks away — is your gift and their birthday plans finalised?`,
           contactId: contact.id,
         });
-      } else if (daysUntilBirthday <= 30) {
+      } else if (daysUntilBirthday === 30) {
         messages.push({
           title: `${contact.name}'s birthday is a month away`,
           body: `${contact.name}'s birthday is coming up. Would you like to plan something special?`,
@@ -85,10 +85,10 @@ function buildMessages(
           body: `Today is ${contact.name}'s birthday — wish them a happy birthday!`,
           contactId: contact.id,
         });
-      } else if (daysUntilBirthday <= 7) {
+      } else if (daysUntilBirthday === 7) {
         messages.push({
           title: `${contact.name}'s birthday is coming up`,
-          body: `${contact.name}'s birthday is coming up in a week.`,
+          body: `${contact.name}'s birthday is a week away — plan something special.`,
           contactId: contact.id,
         });
       }

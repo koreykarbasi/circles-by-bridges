@@ -11,8 +11,8 @@ import { CIRCLE_CONFIG } from "@/lib/types";
 import { getSmartPrompt, getNextPrompt, getActionType, resetSeenPrompts, loadSyncedPrompts } from "@/lib/prompts";
 import { getDaysSince, getDaysUntilBirthday, formatLastContacted, formatBirthdayCountdown, getContactUrgency } from "@/lib/helpers";
 import { generateReminders } from "@/lib/reminders";
-import { loadSchedulerData, markSuggested, getDaysSinceLastSuggestedSync, scoreSuggestion, isInCooldown } from "@/lib/suggestion-scheduler";
-import { useDismissedSuggestions, dismissSuggestion, clearDismissedSuggestions } from "@/lib/suggestions-store";
+import { getDaysSinceLastSuggestedSync, scoreSuggestion, isInCooldown } from "@/lib/suggestion-scheduler";
+import { useDismissedSuggestions, dismissSuggestion, clearDismissedSuggestions, useSchedulerDates, markContactSuggested } from "@/lib/suggestions-store";
 import type { Contact } from "@/lib/types";
 import type { Reminder } from "@/lib/reminders";
 import { router } from "expo-router";
@@ -76,10 +76,10 @@ export default function SuggestionsScreen() {
   const [refreshKey, setRefreshKey] = useState(0);
   const [shuffleJitter, setShuffleJitter] = useState<Record<string, number>>({});
   const completedIds = useDismissedSuggestions();
+  const lastSuggestedDates = useSchedulerDates();
   const [completedReminderIds, setCompletedReminderIds] = useState<Set<string>>(new Set());
   const [cardPrompts, setCardPrompts] = useState<Record<string, GeneratedSuggestion>>({});
   const [remindersCollapsed, setRemindersCollapsed] = useState(false);
-  const [lastSuggestedDates, setLastSuggestedDates] = useState<Record<string, string>>({});
   const visitCount = useRef(0);
   const [copiedToast, setCopiedToast] = useState(false);
   const copiedToastAnim = useRef(new Animated.Value(0)).current;
@@ -87,7 +87,6 @@ export default function SuggestionsScreen() {
 
   useEffect(() => {
     loadSyncedPrompts();
-    loadSchedulerData().then(setLastSuggestedDates);
   }, []);
 
   useEffect(() => {
@@ -172,8 +171,7 @@ export default function SuggestionsScreen() {
     const key = shownIds.join(",");
     if (key !== "" && key !== suggestionKeyRef.current) {
       suggestionKeyRef.current = key;
-      shownIds.forEach((id) => markSuggested(id));
-      loadSchedulerData().then(setLastSuggestedDates);
+      shownIds.forEach((id) => markContactSuggested(id));
     }
   }, [suggestions]);
 
@@ -194,7 +192,8 @@ export default function SuggestionsScreen() {
       { isOverdue: urgency === "overdue", hasBirthdaySoon, labels: contact.labels },
     );
 
-    const type = getActionType(contact.circleLevel as 1 | 2 | 3, newPrompt);
+    let type = getActionType(contact.circleLevel as 1 | 2 | 3, newPrompt);
+    if (contact.circleLevel === 3 && type === "call") type = "text";
     const birthdayLabel = formatBirthdayCountdown(contact.birthday ?? undefined);
     const lastContactedLabel = formatLastContacted(contact.lastContacted ?? undefined);
 

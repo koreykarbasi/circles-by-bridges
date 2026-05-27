@@ -1,11 +1,20 @@
 import { useState, useEffect } from "react";
+import { loadSchedulerData, markSuggested as _markSuggested } from "./suggestion-scheduler";
 
 let _dismissedIds = new Set<string>();
+let _schedulerDates: Record<string, string> = {};
 const _listeners = new Set<() => void>();
 
 function notify() {
   _listeners.forEach((fn) => fn());
 }
+
+function subscribe(fn: () => void): () => void {
+  _listeners.add(fn);
+  return () => { _listeners.delete(fn); };
+}
+
+// ─── Dismissed IDs ────────────────────────────────────────────────────────────
 
 export function getDismissedIds(): ReadonlySet<string> {
   return _dismissedIds;
@@ -26,9 +35,39 @@ export function clearDismissedSuggestions(): void {
 export function useDismissedSuggestions(): ReadonlySet<string> {
   const [dismissed, setDismissed] = useState<ReadonlySet<string>>(getDismissedIds());
   useEffect(() => {
-    _listeners.add(sync);
-    return () => { _listeners.delete(sync); };
-    function sync() { setDismissed(getDismissedIds()); }
+    return subscribe(() => setDismissed(getDismissedIds()));
   }, []);
   return dismissed;
+}
+
+// ─── Scheduler Dates ─────────────────────────────────────────────────────────
+
+export function getSchedulerDates(): Record<string, string> {
+  return _schedulerDates;
+}
+
+export async function refreshSchedulerDates(): Promise<void> {
+  _schedulerDates = await loadSchedulerData();
+  notify();
+}
+
+export async function markContactSuggested(contactId: string): Promise<void> {
+  await _markSuggested(contactId);
+  _schedulerDates = await loadSchedulerData();
+  notify();
+}
+
+export function useSchedulerDates(): Record<string, string> {
+  const [dates, setDates] = useState<Record<string, string>>(_schedulerDates);
+  useEffect(() => {
+    let alive = true;
+    function sync() { if (alive) setDates({ ..._schedulerDates }); }
+    const unsub = subscribe(sync);
+    loadSchedulerData().then((d) => {
+      _schedulerDates = d;
+      if (alive) setDates({ ...d });
+    });
+    return () => { alive = false; unsub(); };
+  }, []);
+  return dates;
 }

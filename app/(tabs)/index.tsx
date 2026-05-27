@@ -15,8 +15,8 @@ import { formatLastContacted, getDaysSince, getDaysUntilBirthday } from "@/lib/h
 import { CIRCLE_CONFIG, HangoutPlan } from "@/lib/types";
 import { generateReminders, Reminder } from "@/lib/reminders";
 import { getSmartPrompt, getActionType, getNextPrompt, loadSyncedPrompts } from "@/lib/prompts";
-import { loadSchedulerData, markSuggested, getDaysSinceLastSuggestedSync, scoreSuggestion, isInCooldown } from "@/lib/suggestion-scheduler";
-import { useDismissedSuggestions, dismissSuggestion, clearDismissedSuggestions } from "@/lib/suggestions-store";
+import { getDaysSinceLastSuggestedSync, scoreSuggestion, isInCooldown } from "@/lib/suggestion-scheduler";
+import { useDismissedSuggestions, dismissSuggestion, clearDismissedSuggestions, useSchedulerDates, markContactSuggested } from "@/lib/suggestions-store";
 import { getTextCopyMessage } from "@/components/SuggestionCard";
 import * as Clipboard from "expo-clipboard";
 import { router, useFocusEffect } from "expo-router";
@@ -79,8 +79,8 @@ export default function HomeScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [dismissedReminders, setDismissedReminders] = useState<Set<string>>(new Set());
   const dismissedSuggestions = useDismissedSuggestions();
+  const lastSuggestedDates = useSchedulerDates();
   const [suggestionPrompts, setSuggestionPrompts] = useState<Map<string, string>>(new Map());
-  const [lastSuggestedDates, setLastSuggestedDates] = useState<Record<string, string>>({});
   const [bellSheetOpen, setBellSheetOpen] = useState(false);
   const [copiedToast, setCopiedToast] = useState(false);
   const copiedToastAnim = useRef(new Animated.Value(0)).current;
@@ -94,7 +94,6 @@ export default function HomeScreen() {
 
   useEffect(() => {
     loadSyncedPrompts();
-    loadSchedulerData().then(setLastSuggestedDates);
   }, []);
 
   useFocusEffect(
@@ -178,8 +177,7 @@ export default function HomeScreen() {
     const key = suggestions.map((s) => s.contactId).join(",");
     if (key !== "" && key !== suggestionKeyRef.current) {
       suggestionKeyRef.current = key;
-      suggestions.forEach((s) => markSuggested(s.contactId));
-      loadSchedulerData().then(setLastSuggestedDates);
+      suggestions.forEach((s) => markContactSuggested(s.contactId));
     }
   }, [suggestions]);
 

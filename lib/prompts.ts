@@ -358,7 +358,7 @@ function buildTaggedPrompts(
       hangoutPrompts = getSyncedList("circle2Hangout", CIRCLE_2_HANGOUT_PROMPTS);
       break;
     case 3:
-      callPrompts = getSyncedList("circle3Call", CIRCLE_3_CALL_PROMPTS);
+      callPrompts = [];
       textPrompts = getSyncedList("circle3Text", CIRCLE_3_TEXT_PROMPTS);
       hangoutPrompts = getSyncedList("circle3Hangout", CIRCLE_3_HANGOUT_PROMPTS);
       break;
