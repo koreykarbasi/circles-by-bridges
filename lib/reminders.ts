@@ -1,17 +1,28 @@
 import type { Contact } from "./types";
 import { getDaysSince, getDaysUntilBirthday } from "./helpers";
 
+export type ReminderType = "birthday" | "check-in-quickpick" | "hangout-quickpick";
+
 export interface Reminder {
   id: string;
   contactId: string;
   contactName: string;
   circleLevel: number;
-  type: "birthday" | "hangout-overdue" | "check-in-overdue" | "hangout-6month";
+  type: ReminderType;
   priority: number;
   title: string;
   subtitle: string;
   actionType?: "text" | "call" | "hangout";
 }
+
+export const CHECKIN_THRESHOLDS: Record<1 | 2 | 3, number> = { 1: 14, 2: 45, 3: 75 };
+export const HANGOUT_THRESHOLDS: Record<1 | 2 | 3, number> = { 1: 21, 2: 60, 3: 90 };
+export const ELEVATION_PUSH_DELAY_HOURS: Record<1 | 2 | 3, number> = { 1: 24, 2: 48, 3: 72 };
+export const ELEVATION_CLEANUP_DAYS: Record<1 | 2 | 3, { checkin: number; hangout: number }> = {
+  1: { checkin: 7, hangout: 10 },
+  2: { checkin: 22, hangout: 30 },
+  3: { checkin: 37, hangout: 45 },
+};
 
 function generateCircle1Reminders(contact: Contact): Reminder[] {
   const reminders: Reminder[] = [];
@@ -23,7 +34,7 @@ function generateCircle1Reminders(contact: Contact): Reminder[] {
         id: `birthday-0d-${contact.id}`,
         contactId: contact.id,
         contactName: contact.name,
-        circleLevel: contact.circleLevel,
+        circleLevel: 1,
         type: "birthday",
         priority: 200,
         title: `Today is ${contact.name}'s birthday — wish them a happy birthday!`,
@@ -34,7 +45,7 @@ function generateCircle1Reminders(contact: Contact): Reminder[] {
         id: `birthday-7d-${contact.id}`,
         contactId: contact.id,
         contactName: contact.name,
-        circleLevel: contact.circleLevel,
+        circleLevel: 1,
         type: "birthday",
         priority: 190,
         title: `${contact.name}'s birthday is a week away — make sure you have everything sorted!`,
@@ -45,7 +56,7 @@ function generateCircle1Reminders(contact: Contact): Reminder[] {
         id: `birthday-14d-${contact.id}`,
         contactId: contact.id,
         contactName: contact.name,
-        circleLevel: contact.circleLevel,
+        circleLevel: 1,
         type: "birthday",
         priority: 180,
         title: `${contact.name}'s birthday is 2 weeks away — is your gift and their birthday plans finalised?`,
@@ -56,7 +67,7 @@ function generateCircle1Reminders(contact: Contact): Reminder[] {
         id: `birthday-30d-${contact.id}`,
         contactId: contact.id,
         contactName: contact.name,
-        circleLevel: contact.circleLevel,
+        circleLevel: 1,
         type: "birthday",
         priority: 170,
         title: `${contact.name}'s birthday is a month away — would you like to plan a surprise party or plan their gift?`,
@@ -66,19 +77,37 @@ function generateCircle1Reminders(contact: Contact): Reminder[] {
   }
 
   const daysSinceContact = getDaysSince(contact.lastContacted ?? undefined);
-  if (daysSinceContact === null || daysSinceContact > 7) {
-    const severity = daysSinceContact === null ? 80 : Math.min(80, 30 + Math.floor((daysSinceContact - 7) * 3));
-    const daysText = daysSinceContact === null ? "never" : `${daysSinceContact} days ago`;
+  if (daysSinceContact === null || daysSinceContact > CHECKIN_THRESHOLDS[1]) {
+    const severity = daysSinceContact === null
+      ? 80
+      : Math.min(80, 30 + Math.floor((daysSinceContact - CHECKIN_THRESHOLDS[1]) * 3));
     reminders.push({
       id: `checkin-${contact.id}`,
       contactId: contact.id,
       contactName: contact.name,
-      circleLevel: contact.circleLevel,
-      type: "check-in-overdue",
+      circleLevel: 1,
+      type: "check-in-quickpick",
       priority: 100 + severity,
-      title: `Check in with ${contact.name}`,
-      subtitle: daysSinceContact === null ? "You haven't reached out yet" : `Last contact: ${daysText}`,
-      actionType: daysSinceContact !== null && daysSinceContact > 14 ? "call" : "text",
+      title: `When did you last speak to ${contact.name}?`,
+      subtitle: daysSinceContact === null
+        ? "You haven't reached out yet"
+        : `Last contact: ${daysSinceContact} days ago`,
+    });
+  }
+
+  const daysSinceHangout = getDaysSince(contact.lastHangout ?? undefined);
+  if (daysSinceHangout !== null && daysSinceHangout > HANGOUT_THRESHOLDS[1]) {
+    const weeksSince = Math.floor(daysSinceHangout / 7);
+    const severity = Math.min(60, Math.floor((daysSinceHangout - HANGOUT_THRESHOLDS[1]) * 2));
+    reminders.push({
+      id: `hangout-${contact.id}`,
+      contactId: contact.id,
+      contactName: contact.name,
+      circleLevel: 1,
+      type: "hangout-quickpick",
+      priority: 60 + severity,
+      title: `When was the last time you intentionally set up a hangout with ${contact.name}?`,
+      subtitle: `Last hangout: ${weeksSince} week${weeksSince !== 1 ? "s" : ""} ago`,
     });
   }
 
@@ -87,7 +116,6 @@ function generateCircle1Reminders(contact: Contact): Reminder[] {
 
 function generateCircle2Reminders(contact: Contact): Reminder[] {
   const reminders: Reminder[] = [];
-  const baseScore = 60;
 
   const daysUntil = getDaysUntilBirthday(contact.birthday ?? undefined);
   if (daysUntil !== null) {
@@ -96,7 +124,7 @@ function generateCircle2Reminders(contact: Contact): Reminder[] {
         id: `birthday-0d-${contact.id}`,
         contactId: contact.id,
         contactName: contact.name,
-        circleLevel: contact.circleLevel,
+        circleLevel: 2,
         type: "birthday",
         priority: 150,
         title: `Today is ${contact.name}'s birthday — wish them a happy birthday!`,
@@ -107,7 +135,7 @@ function generateCircle2Reminders(contact: Contact): Reminder[] {
         id: `birthday-7d-${contact.id}`,
         contactId: contact.id,
         contactName: contact.name,
-        circleLevel: contact.circleLevel,
+        circleLevel: 2,
         type: "birthday",
         priority: 140,
         title: `${contact.name}'s birthday is coming up in a week.`,
@@ -116,71 +144,38 @@ function generateCircle2Reminders(contact: Contact): Reminder[] {
     }
   }
 
-  const daysSinceHangout = getDaysSince(contact.lastHangout ?? undefined);
-  if (daysSinceHangout !== null) {
-    const weeksSince = Math.floor(daysSinceHangout / 7);
-    let hangoutBonus = 0;
-    let subtitle = "";
-
-    if (weeksSince >= 15) {
-      hangoutBonus = 95;
-      subtitle = `Last hangout was ${weeksSince} weeks ago`;
-    } else if (weeksSince >= 10) {
-      hangoutBonus = 85;
-      subtitle = `Last hangout was ${weeksSince} weeks ago`;
-    } else if (weeksSince >= 5) {
-      hangoutBonus = 70;
-      subtitle = `Last hangout was ${weeksSince} weeks ago`;
-    } else if (weeksSince >= 3) {
-      hangoutBonus = 50;
-      subtitle = `Last hangout was ${weeksSince} weeks ago`;
-    }
-
-    if (hangoutBonus > 0) {
-      reminders.push({
-        id: `hangout-${contact.id}`,
-        contactId: contact.id,
-        contactName: contact.name,
-        circleLevel: contact.circleLevel,
-        type: "hangout-overdue",
-        priority: baseScore + hangoutBonus,
-        title: `Plan a hangout with ${contact.name}`,
-        subtitle,
-        actionType: "hangout",
-      });
-    }
-  } else {
-    const daysSinceContact = getDaysSince(contact.lastContacted ?? undefined);
-    const isNewContact = daysSinceContact === null || daysSinceContact < 7;
-    if (!isNewContact) {
-      reminders.push({
-        id: `hangout-${contact.id}`,
-        contactId: contact.id,
-        contactName: contact.name,
-        circleLevel: contact.circleLevel,
-        type: "hangout-overdue",
-        priority: baseScore + 50,
-        title: `Plan a hangout with ${contact.name}`,
-        subtitle: "You haven't hung out yet",
-        actionType: "hangout",
-      });
-    }
-  }
-
   const daysSinceContact = getDaysSince(contact.lastContacted ?? undefined);
-  if (daysSinceContact === null || daysSinceContact > 30) {
-    const severity = daysSinceContact === null ? 60 : Math.min(80, 30 + Math.floor((daysSinceContact - 30) * 1.5));
-    const daysText = daysSinceContact === null ? "never" : `${daysSinceContact} days ago`;
+  if (daysSinceContact === null || daysSinceContact > CHECKIN_THRESHOLDS[2]) {
+    const severity = daysSinceContact === null
+      ? 60
+      : Math.min(60, 20 + Math.floor((daysSinceContact - CHECKIN_THRESHOLDS[2]) * 1.2));
     reminders.push({
       id: `checkin-${contact.id}`,
       contactId: contact.id,
       contactName: contact.name,
-      circleLevel: contact.circleLevel,
-      type: "check-in-overdue",
-      priority: baseScore + severity,
-      title: `Reach out to ${contact.name}`,
-      subtitle: daysSinceContact === null ? "You haven't reached out yet" : `Last contact: ${daysText}`,
-      actionType: daysSinceContact !== null && daysSinceContact > 60 ? "call" : "text",
+      circleLevel: 2,
+      type: "check-in-quickpick",
+      priority: 60 + severity,
+      title: `When did you last speak to ${contact.name}?`,
+      subtitle: daysSinceContact === null
+        ? "You haven't reached out yet"
+        : `Last contact: ${daysSinceContact} days ago`,
+    });
+  }
+
+  const daysSinceHangout = getDaysSince(contact.lastHangout ?? undefined);
+  if (daysSinceHangout !== null && daysSinceHangout > HANGOUT_THRESHOLDS[2]) {
+    const weeksSince = Math.floor(daysSinceHangout / 7);
+    const severity = Math.min(50, Math.floor((daysSinceHangout - HANGOUT_THRESHOLDS[2]) * 0.8));
+    reminders.push({
+      id: `hangout-${contact.id}`,
+      contactId: contact.id,
+      contactName: contact.name,
+      circleLevel: 2,
+      type: "hangout-quickpick",
+      priority: 50 + severity,
+      title: `When did you last hang out with ${contact.name}?`,
+      subtitle: `Last hangout: ${weeksSince} week${weeksSince !== 1 ? "s" : ""} ago`,
     });
   }
 
@@ -196,7 +191,7 @@ function generateCircle3Reminders(contact: Contact): Reminder[] {
       id: `birthday-0d-${contact.id}`,
       contactId: contact.id,
       contactName: contact.name,
-      circleLevel: contact.circleLevel,
+      circleLevel: 3,
       type: "birthday",
       priority: 70,
       title: `Today is ${contact.name}'s birthday.`,
@@ -204,40 +199,33 @@ function generateCircle3Reminders(contact: Contact): Reminder[] {
     });
   }
 
-  const daysSinceHangout = getDaysSince(contact.lastHangout ?? undefined);
   const daysSinceContact = getDaysSince(contact.lastContacted ?? undefined);
-  const hangoutOverdue =
-    daysSinceHangout !== null
-      ? daysSinceHangout > 60
-      : daysSinceContact !== null && daysSinceContact > 45;
-  if (hangoutOverdue) {
-    reminders.push({
-      id: `hangout-${contact.id}`,
-      contactId: contact.id,
-      contactName: contact.name,
-      circleLevel: contact.circleLevel,
-      type: "hangout-overdue",
-      priority: 45,
-      title: `When was the last time you hung out with ${contact.name}?`,
-      subtitle:
-        daysSinceHangout !== null
-          ? `Last hangout was ${Math.floor(daysSinceHangout / 7)} weeks ago`
-          : "You haven't hung out with them yet",
-      actionType: "hangout",
-    });
-  }
-
-  if (daysSinceContact !== null && daysSinceContact > 90) {
+  if (daysSinceContact !== null && daysSinceContact > CHECKIN_THRESHOLDS[3]) {
+    const severity = Math.min(30, Math.floor((daysSinceContact - CHECKIN_THRESHOLDS[3]) * 0.4));
     reminders.push({
       id: `checkin-${contact.id}`,
       contactId: contact.id,
       contactName: contact.name,
-      circleLevel: contact.circleLevel,
-      type: "check-in-overdue",
-      priority: 35,
-      title: `It's been a while — give ${contact.name} a call.`,
+      circleLevel: 3,
+      type: "check-in-quickpick",
+      priority: 30 + severity,
+      title: `When did you last speak to ${contact.name}?`,
       subtitle: `Last contact: ${daysSinceContact} days ago`,
-      actionType: "call",
+    });
+  }
+
+  const daysSinceHangout = getDaysSince(contact.lastHangout ?? undefined);
+  if (daysSinceHangout !== null && daysSinceHangout > HANGOUT_THRESHOLDS[3]) {
+    const weeksSince = Math.floor(daysSinceHangout / 7);
+    reminders.push({
+      id: `hangout-${contact.id}`,
+      contactId: contact.id,
+      contactName: contact.name,
+      circleLevel: 3,
+      type: "hangout-quickpick",
+      priority: 20,
+      title: `When did you last hang out with ${contact.name}?`,
+      subtitle: `Last hangout: ${weeksSince} week${weeksSince !== 1 ? "s" : ""} ago`,
     });
   }
 
@@ -262,6 +250,5 @@ export function generateReminders(contacts: Contact[]): Reminder[] {
   }
 
   reminders.sort((a, b) => b.priority - a.priority);
-
   return reminders;
 }

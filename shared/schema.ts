@@ -32,6 +32,8 @@ export const contacts = pgTable("contacts", {
   email: text("email"),
   avatarColor: text("avatar_color").notNull(),
   photoUri: text("photo_uri"),
+  lastContactedLabel: text("last_contacted_label"),
+  lastHangoutLabel: text("last_hangout_label"),
   createdAt: timestamp("created_at").defaultNow(),
 });
 

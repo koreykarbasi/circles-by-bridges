@@ -15,8 +15,8 @@ interface ContactsContextValue {
   addContact: (data: Omit<Contact, "id" | "avatarColor" | "createdAt">) => Promise<Contact>;
   updateContact: (contact: Contact) => Promise<void>;
   deleteContact: (id: string) => Promise<void>;
-  markContacted: (id: string, date?: Date) => Promise<void>;
-  markHangout: (id: string) => Promise<void>;
+  markContacted: (id: string, date?: Date, label?: string) => Promise<void>;
+  markHangout: (id: string, date?: Date, label?: string) => Promise<void>;
   getCircleContacts: (level: 1 | 2 | 3) => Contact[];
   getOverdueContacts: () => Contact[];
   getUpcomingBirthdays: () => Contact[];
@@ -90,21 +90,25 @@ export function ContactsProvider({ children }: { children: ReactNode }) {
     await fetchContacts();
   }, [fetchContacts]);
 
-  const markContactedFn = useCallback(async (id: string, date?: Date) => {
+  const markContactedFn = useCallback(async (id: string, date?: Date, label?: string) => {
     const ts = (date ?? new Date()).toISOString();
     setContacts((prev) =>
-      prev.map((c) => (c.id === id ? { ...c, lastContacted: ts } : c)),
+      prev.map((c) => (c.id === id ? { ...c, lastContacted: ts, lastContactedLabel: label ?? null } : c)),
     );
-    const body = date ? { contactedAt: ts } : undefined;
-    apiRequest("POST", `/api/contacts/${id}/mark-contacted`, body).then(fetchContacts);
+    const body: Record<string, string> = {};
+    if (date) body.contactedAt = ts;
+    if (label) body.label = label;
+    apiRequest("POST", `/api/contacts/${id}/mark-contacted`, Object.keys(body).length ? body : undefined).then(fetchContacts);
   }, [fetchContacts]);
 
-  const markHangoutFn = useCallback(async (id: string) => {
-    const now = new Date().toISOString();
+  const markHangoutFn = useCallback(async (id: string, date?: Date, label?: string) => {
+    const ts = (date ?? new Date()).toISOString();
     setContacts((prev) =>
-      prev.map((c) => (c.id === id ? { ...c, lastHangout: now } : c)),
+      prev.map((c) => (c.id === id ? { ...c, lastHangout: ts, lastHangoutLabel: label ?? null } : c)),
     );
-    apiRequest("POST", `/api/contacts/${id}/mark-hangout`).then(fetchContacts);
+    const body: Record<string, string> = { hangoutAt: ts };
+    if (label) body.label = label;
+    apiRequest("POST", `/api/contacts/${id}/mark-hangout`, body).then(fetchContacts);
   }, [fetchContacts]);
 
   const getCircleContacts = useCallback(

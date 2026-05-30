@@ -14,7 +14,8 @@ import { ReminderItem } from "@/components/ReminderItem";
 import { EmptyState } from "@/components/EmptyState";
 import { formatLastContacted, getDaysSince, getDaysUntilBirthday } from "@/lib/helpers";
 import { CIRCLE_CONFIG, HangoutPlan } from "@/lib/types";
-import { generateReminders, Reminder } from "@/lib/reminders";
+import { generateReminders, Reminder, CHECKIN_THRESHOLDS, HANGOUT_THRESHOLDS, ELEVATION_PUSH_DELAY_HOURS, ELEVATION_CLEANUP_DAYS } from "@/lib/reminders";
+import { setElevation, getElevations, getExpiredElevations, clearElevation, ELEVATION_SCORE_BONUS, invalidateElevationCache } from "@/lib/checkin-state";
 import { getSmartPrompt, getActionType, getNextPrompt, loadSyncedPrompts } from "@/lib/prompts";
 import { getDaysSinceLastSuggestedSync, scoreSuggestion, isInCooldown } from "@/lib/suggestion-scheduler";
 import { useDismissedSuggestions, dismissSuggestion, clearDismissedSuggestions, getCachedPrompt, setCachedPrompt, clearPromptCache, useSchedulerDates, markContactSuggested } from "@/lib/suggestions-store";
@@ -27,37 +28,18 @@ import { getViewedTimestamps, hasUnreadVotes } from "@/lib/hangout-notifications
 const MAX_REMINDERS = 5;
 const MAX_SUGGESTIONS = 3;
 
-function getReminderIcon(reminder: Reminder): string {
-  switch (reminder.type) {
-    case "birthday":
-      return "cake-variant-outline";
-    case "hangout-overdue":
-      return "calendar-outline";
-    case "hangout-6month":
-      return "help-circle-outline";
-    case "check-in-overdue":
-      return "time-outline";
+function getReminderIcon(_reminder: Reminder): string {
+  return "cake-variant-outline";
+}
+
+function getReminderIconLibrary(_reminder: Reminder): "material" | undefined {
+  return "material";
+}
+
+function getReminderIconColor(_reminder: Reminder): string {
+  switch (1) {
     default:
-      return "notifications-outline";
-  }
-}
-
-function getReminderIconLibrary(reminder: Reminder): "material" | undefined {
-  return reminder.type === "birthday" ? "material" : undefined;
-}
-
-function getReminderIconColor(reminder: Reminder): string {
-  switch (reminder.type) {
-    case "birthday":
       return Colors.accent;
-    case "hangout-overdue":
-      return Colors.warning;
-    case "hangout-6month":
-      return Colors.circle3;
-    case "check-in-overdue":
-      return Colors.warning;
-    default:
-      return Colors.textSecondary;
   }
 }
 
@@ -87,6 +69,7 @@ export default function HomeScreen() {
   const lastSuggestedDates = useSchedulerDates();
   const [suggestionPrompts, setSuggestionPrompts] = useState<Map<string, string>>(new Map());
   const [bellSheetOpen, setBellSheetOpen] = useState(false);
+  const [elevationMap, setElevationMap] = useState<Record<string, number>>({});
   const [copiedToast, setCopiedToast] = useState(false);
   const copiedToastAnim = useRef(new Animated.Value(0)).current;
   const copiedToastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -104,7 +87,31 @@ export default function HomeScreen() {
   useFocusEffect(
     useCallback(() => {
       getViewedTimestamps(user?.id ?? "").then(setHangoutViewedMap);
-    }, [user?.id]),
+      getElevations().then((elevations) => {
+        const map: Record<string, number> = {};
+        for (const e of elevations) map[e.contactId] = ELEVATION_SCORE_BONUS[e.circleLevel];
+        setElevationMap(map);
+      });
+      getExpiredElevations().then(async (expired) => {
+        for (const entry of expired) {
+          const daysAgo = Math.floor(Math.random() * 3) + 2;
+          const markDate = new Date(Date.now() - daysAgo * 24 * 3600 * 1000);
+          if (entry.type === "checkin") {
+            await markContacted(entry.contactId, markDate);
+          } else {
+            await markHangout(entry.contactId, markDate);
+          }
+          await clearElevation(entry.contactId, entry.type);
+        }
+        if (expired.length > 0) {
+          await invalidateElevationCache();
+          const fresh = await getElevations();
+          const map: Record<string, number> = {};
+          for (const e of fresh) map[e.contactId] = ELEVATION_SCORE_BONUS[e.circleLevel];
+          setElevationMap(map);
+        }
+      });
+    }, [user?.id, markContacted, markHangout]),
   );
 
   const allReminders = useMemo(() => generateReminders(contacts), [contacts]);
@@ -171,7 +178,7 @@ export default function HomeScreen() {
         const daysUntilBday = getDaysUntilBirthday(c.birthday ?? undefined);
         return {
           contact: c,
-          score: scoreSuggestion(c.circleLevel as 1 | 2 | 3, daysSinceLastSug, daysSinceContact, daysUntilBday),
+          score: scoreSuggestion(c.circleLevel as 1 | 2 | 3, daysSinceLastSug, daysSinceContact, daysUntilBday, elevationMap[c.id]),
         };
       })
       .sort((a, b) => b.score - a.score)
@@ -179,7 +186,7 @@ export default function HomeScreen() {
       .map((x) => x.contact);
 
     return ranked.map((c) => getSuggestionForContact(c));
-  }, [contacts, dismissedSuggestions, visibleReminders, getSuggestionForContact, lastSuggestedDates]);
+  }, [contacts, dismissedSuggestions, visibleReminders, getSuggestionForContact, lastSuggestedDates, elevationMap]);
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
@@ -195,44 +202,68 @@ export default function HomeScreen() {
     async (reminder: Reminder) => {
       setDismissedReminders((prev) => new Set(prev).add(reminder.id));
       if (reminder.type === "birthday") return;
-      if (reminder.type === "hangout-overdue" || reminder.type === "hangout-6month") {
+      if (reminder.type === "hangout-quickpick") {
         await markHangout(reminder.contactId);
+      } else {
+        await markContacted(reminder.contactId);
       }
-      await markContacted(reminder.contactId);
     },
     [markContacted, markHangout],
   );
 
   const handleReminderQuickPick = useCallback(
-    async (reminder: Reminder, date: Date) => {
+    async (reminder: Reminder, date: Date, label: string) => {
       setDismissedReminders((prev) => new Set(prev).add(reminder.id));
-      await markContacted(reminder.contactId, date);
+      const circleLevel = reminder.circleLevel as 1 | 2 | 3;
+
+      if (reminder.type === "check-in-quickpick") {
+        await markContacted(reminder.contactId, date, label);
+        const daysSince = Math.floor((Date.now() - date.getTime()) / (1000 * 60 * 60 * 24));
+        if (daysSince > CHECKIN_THRESHOLDS[circleLevel]) {
+          await setElevation({
+            contactId: reminder.contactId,
+            contactName: reminder.contactName,
+            circleLevel,
+            type: "checkin",
+            elevatedAt: new Date().toISOString(),
+            pushDue: new Date(Date.now() + ELEVATION_PUSH_DELAY_HOURS[circleLevel] * 3600 * 1000).toISOString(),
+            cleanupDue: new Date(Date.now() + ELEVATION_CLEANUP_DAYS[circleLevel].checkin * 24 * 3600 * 1000).toISOString(),
+          });
+          await invalidateElevationCache();
+          setElevationMap((prev) => ({ ...prev, [reminder.contactId]: ELEVATION_SCORE_BONUS[circleLevel] }));
+        }
+      } else if (reminder.type === "hangout-quickpick") {
+        await markHangout(reminder.contactId, date, label);
+        const daysSince = Math.floor((Date.now() - date.getTime()) / (1000 * 60 * 60 * 24));
+        if (daysSince > HANGOUT_THRESHOLDS[circleLevel]) {
+          await setElevation({
+            contactId: reminder.contactId,
+            contactName: reminder.contactName,
+            circleLevel,
+            type: "hangout",
+            elevatedAt: new Date().toISOString(),
+            pushDue: new Date(Date.now() + ELEVATION_PUSH_DELAY_HOURS[circleLevel] * 3600 * 1000).toISOString(),
+            cleanupDue: new Date(Date.now() + ELEVATION_CLEANUP_DAYS[circleLevel].hangout * 24 * 3600 * 1000).toISOString(),
+          });
+          await invalidateElevationCache();
+          setElevationMap((prev) => ({ ...prev, [reminder.contactId]: ELEVATION_SCORE_BONUS[circleLevel] }));
+        }
+      }
     },
-    [markContacted],
+    [markContacted, markHangout],
   );
 
   const handleReminderSnooze = useCallback((reminder: Reminder) => {
     setDismissedReminders((prev) => new Set(prev).add(reminder.id));
   }, []);
 
-  const handleHangout6MonthYes = useCallback(
-    async (reminder: Reminder) => {
-      setDismissedReminders((prev) => new Set(prev).add(reminder.id));
-      await markHangout(reminder.contactId);
-    },
-    [markHangout],
-  );
-
-  const handleHangout6MonthNo = useCallback(
-    (reminder: Reminder) => {
-      setDismissedReminders((prev) => new Set(prev).add(reminder.id));
-      router.push({
-        pathname: "/create-hangout",
-        params: { contactName: reminder.contactName },
-      });
-    },
-    [],
-  );
+  const handleHangoutCalendarPress = useCallback((reminder: Reminder) => {
+    setDismissedReminders((prev) => new Set(prev).add(reminder.id));
+    router.push({
+      pathname: "/create-hangout",
+      params: { contactName: reminder.contactName },
+    });
+  }, []);
 
   const handleSuggestionDone = useCallback(
     async (suggestion: Suggestion) => {
@@ -453,13 +484,13 @@ export default function HomeScreen() {
             )}
 
             {visibleReminders.map((reminder) =>
-              reminder.type === "check-in-overdue" ? (
+              (reminder.type === "check-in-quickpick" || reminder.type === "hangout-quickpick") ? (
                 <ReminderItem
                   key={reminder.id}
                   reminder={reminder}
                   onComplete={() => handleReminderComplete(reminder)}
-                  onQuickPick={(date) => handleReminderQuickPick(reminder, date)}
-                  contactLastContacted={contacts.find((c) => c.id === reminder.contactId)?.lastContacted}
+                  onQuickPick={(date, label) => handleReminderQuickPick(reminder, date, label)}
+                  onCalendarPress={reminder.type === "hangout-quickpick" ? () => handleHangoutCalendarPress(reminder) : undefined}
                 />
               ) : (
                 <ChecklistItem
@@ -471,11 +502,8 @@ export default function HomeScreen() {
                   subtitle={reminder.subtitle}
                   priorityLevel={getPriorityLevel(reminder.priority)}
                   actionType={reminder.actionType}
-                  showYesNo={reminder.type === "hangout-6month"}
-                  onYes={() => handleHangout6MonthYes(reminder)}
-                  onNo={() => handleHangout6MonthNo(reminder)}
                   onComplete={() => handleReminderComplete(reminder)}
-                  onSnooze={reminder.type !== "hangout-6month" ? () => handleReminderSnooze(reminder) : undefined}
+                  onSnooze={() => handleReminderSnooze(reminder)}
                 />
               )
             )}

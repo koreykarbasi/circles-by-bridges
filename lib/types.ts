@@ -7,6 +7,8 @@ export interface Contact {
   birthday?: string | null;
   lastContacted?: string | null;
   lastHangout?: string | null;
+  lastContactedLabel?: string | null;
+  lastHangoutLabel?: string | null;
   labels: string[];
   notes?: string | null;
   phone?: string | null;

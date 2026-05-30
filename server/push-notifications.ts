@@ -84,9 +84,9 @@ function buildReminderMessages(contact: ContactRow): PushMessage[] {
         });
       }
     }
-    // Check-in overdue: > 7 days
+    // Check-in overdue: > 14 days
     const daysSinceContact = getDaysSince(contact.lastContacted);
-    if (daysSinceContact === null || daysSinceContact > 7) {
+    if (daysSinceContact === null || daysSinceContact > 14) {
       const body = daysSinceContact === null
         ? "You haven't reached out yet"
         : `${daysSinceContact} days since you last connected`;
@@ -101,13 +101,16 @@ function buildReminderMessages(contact: ContactRow): PushMessage[] {
         contactId: contact.id,
       });
     }
-    // Hangout overdue: > 3 weeks
+    // Check-in overdue: > 45 days
+    const daysSinceContact = getDaysSince(contact.lastContacted);
+    if (daysSinceContact !== null && daysSinceContact > 45) {
+      messages.push({ title: `Check in with ${contact.name}`, body: `${daysSinceContact} days since you last connected`, contactId: contact.id });
+    }
+    // Hangout overdue: > 60 days
     const daysSinceHangout = getDaysSince(contact.lastHangout);
-    if (daysSinceHangout === null || daysSinceHangout > 21) {
-      const body = daysSinceHangout === null
-        ? "You haven't hung out yet"
-        : `${Math.floor(daysSinceHangout / 7)} weeks since your last hangout`;
-      messages.push({ title: `Plan a hangout with ${contact.name}`, body, contactId: contact.id });
+    if (daysSinceHangout !== null && daysSinceHangout > 60) {
+      const weeks = Math.floor(daysSinceHangout / 7);
+      messages.push({ title: `Plan a hangout with ${contact.name}`, body: `${weeks} weeks since your last hangout`, contactId: contact.id });
     }
   }
   // Circle 3: no non-birthday reminders at 9am

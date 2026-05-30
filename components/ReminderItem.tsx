@@ -11,23 +11,13 @@ import { QuickPickRow } from "./QuickPickRow";
 interface ReminderItemProps {
   reminder: Reminder;
   onComplete: () => void;
-  onYes?: () => void;
-  onNo?: () => void;
-  onPlanHangout?: () => void;
-  onQuickPick?: (date: Date) => void;
-  contactLastContacted?: string | null;
+  onQuickPick?: (date: Date, label: string) => void;
+  onCalendarPress?: () => void;
 }
 
 const TYPE_ICONS: Record<string, keyof typeof Ionicons.glyphMap> = {
-  "hangout-overdue": "calendar-outline",
-  "check-in-overdue": "time-outline",
-  "hangout-6month": "help-circle-outline",
-};
-
-const ACTION_ICONS: Record<string, keyof typeof Ionicons.glyphMap> = {
-  call: "call-outline",
-  text: "chatbubble-outline",
-  hangout: "people-outline",
+  "check-in-quickpick": "time-outline",
+  "hangout-quickpick": "calendar-outline",
 };
 
 function getPriorityColor(priority: number): string {
@@ -36,15 +26,14 @@ function getPriorityColor(priority: number): string {
   return Colors.primaryLight;
 }
 
-export function ReminderItem({ reminder, onComplete, onYes, onNo, onPlanHangout, onQuickPick, contactLastContacted }: ReminderItemProps) {
+export function ReminderItem({ reminder, onComplete, onQuickPick, onCalendarPress }: ReminderItemProps) {
   const circleColor = CIRCLE_CONFIG[reminder.circleLevel as 1 | 2 | 3]?.color ?? Colors.primary;
   const priorityColor = getPriorityColor(reminder.priority);
   const typeIcon = TYPE_ICONS[reminder.type] ?? "alert-circle-outline";
-  const actionIcon = (reminder.actionType ? ACTION_ICONS[reminder.actionType] : undefined) ?? "chatbubble-outline";
-  const isHangout6Month = reminder.type === "hangout-6month";
-  const isCheckInOverdue = reminder.type === "check-in-overdue";
-
   const isBirthday = reminder.type === "birthday";
+  const isQuickPick = (reminder.type === "check-in-quickpick" || reminder.type === "hangout-quickpick") && !!onQuickPick;
+  const quickPickVariant: "checkin" | "hangout" = reminder.type === "hangout-quickpick" ? "hangout" : "checkin";
+
   const opacity = useSharedValue(1);
   const height = useSharedValue<number | undefined>(undefined);
   const marginBottom = useSharedValue(8);
@@ -66,25 +55,10 @@ export function ReminderItem({ reminder, onComplete, onYes, onNo, onPlanHangout,
     });
   }, [onComplete]);
 
-  const handleYes = useCallback(() => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    opacity.value = withTiming(0, { duration: 250 }, () => {
-      height.value = withTiming(0, { duration: 200 });
-      marginBottom.value = withTiming(0, { duration: 200 }, () => {
-        if (onYes) runOnJS(onYes)();
-      });
-    });
-  }, [onYes]);
-
-  const handleNo = useCallback(() => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    if (onNo) onNo();
-  }, [onNo]);
-
-  const handleQuickPick = useCallback((date: Date) => {
+  const handleQuickPick = useCallback((date: Date, label: string) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     const callback = () => {
-      if (onQuickPick) onQuickPick(date);
+      if (onQuickPick) onQuickPick(date, label);
       else onComplete();
     };
     opacity.value = withTiming(0, { duration: 250, easing: Easing.out(Easing.cubic) }, () => {
@@ -112,63 +86,22 @@ export function ReminderItem({ reminder, onComplete, onYes, onNo, onPlanHangout,
             <Text style={styles.subtitle} numberOfLines={1}>{reminder.subtitle}</Text>
           </View>
         </View>
-        {isHangout6Month ? (
-          <View style={styles.yesNoActions}>
-            <Pressable
-              onPress={handleYes}
-              hitSlop={4}
-              style={({ pressed }) => [styles.yesBtn, pressed && { opacity: 0.7 }]}
-            >
-              <Ionicons name="checkmark" size={16} color={Colors.success} />
-            </Pressable>
-            <Pressable
-              onPress={handleNo}
-              hitSlop={4}
-              style={({ pressed }) => [styles.noBtn, pressed && { opacity: 0.7 }]}
-            >
-              <Ionicons name="close" size={16} color={Colors.danger} />
-            </Pressable>
-          </View>
-        ) : reminder.actionType === "hangout" && onPlanHangout ? (
-          <View style={styles.actions}>
-            <Pressable
-              onPress={() => {
-                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                onPlanHangout();
-              }}
-              hitSlop={4}
-              style={({ pressed }) => [styles.hangoutBtn, pressed && { opacity: 0.7 }]}
-            >
-              <Ionicons name="calendar-outline" size={15} color={Colors.primaryLight} />
-            </Pressable>
-            <Pressable
-              onPress={handleComplete}
-              hitSlop={4}
-              style={({ pressed }) => [styles.checkBtn, pressed && { opacity: 0.5 }]}
-            >
-              <Ionicons name="checkmark-circle" size={22} color={Colors.success} />
-            </Pressable>
-          </View>
-        ) : (
-          <View style={styles.actions}>
-            {reminder.type !== "birthday" && reminder.actionType && (
-              <Ionicons name={actionIcon} size={14} color={Colors.textTertiary} style={{ marginRight: 4 }} />
-            )}
-            <Pressable
-              onPress={handleComplete}
-              hitSlop={6}
-              style={({ pressed }) => [styles.checkBtn, pressed && { opacity: 0.5 }]}
-            >
-              <Ionicons name="checkmark-circle" size={22} color={Colors.success} />
-            </Pressable>
-          </View>
-        )}
+        <View style={styles.actions}>
+          <Pressable
+            onPress={handleComplete}
+            hitSlop={6}
+            style={({ pressed }) => [styles.checkBtn, pressed && { opacity: 0.5 }]}
+          >
+            <Ionicons name="checkmark-circle" size={22} color={Colors.success} />
+          </Pressable>
+        </View>
       </View>
-      {isCheckInOverdue && onQuickPick && (
+      {isQuickPick && (
         <QuickPickRow
           circleLevel={reminder.circleLevel as 1 | 2 | 3}
-          currentLastContacted={contactLastContacted}
+          variant={quickPickVariant}
           onSelect={handleQuickPick}
+          onCalendarPress={quickPickVariant === "hangout" ? onCalendarPress : undefined}
         />
       )}
     </Animated.View>
@@ -228,33 +161,7 @@ const styles = StyleSheet.create({
     marginLeft: 8,
     gap: 2,
   },
-  yesNoActions: {
-    flexDirection: "row",
-    alignItems: "center",
-    marginLeft: 8,
-    gap: 8,
-  },
   checkBtn: {
     padding: 4,
-  },
-  yesBtn: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: Colors.success + "18",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  noBtn: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: Colors.danger + "18",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  hangoutBtn: {
-    padding: 4,
-    marginRight: 2,
   },
 });

@@ -565,14 +565,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ message: "Contact not found" });
       }
       let lastContacted = new Date().toISOString();
-      const { contactedAt } = req.body ?? {};
+      const { contactedAt, label } = req.body ?? {};
       if (contactedAt && typeof contactedAt === "string") {
         const parsed = new Date(contactedAt);
         if (!isNaN(parsed.getTime()) && parsed <= new Date()) {
           lastContacted = parsed.toISOString();
         }
       }
-      const contact = await storage.updateContact(id, { lastContacted });
+      const updates: Record<string, string | null> = { lastContacted };
+      if (typeof label === "string" && label.length > 0) {
+        updates.lastContactedLabel = label;
+      } else {
+        updates.lastContactedLabel = null;
+      }
+      const contact = await storage.updateContact(id, updates);
       res.json(contact);
     } catch (err) {
       console.error("Error marking contact:", err);
@@ -587,9 +593,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (!existing || existing.userId !== req.session.userId) {
         return res.status(404).json({ message: "Contact not found" });
       }
-      const contact = await storage.updateContact(id, {
-        lastHangout: new Date().toISOString(),
-      });
+      let lastHangout = new Date().toISOString();
+      const { hangoutAt, label } = req.body ?? {};
+      if (hangoutAt && typeof hangoutAt === "string") {
+        const parsed = new Date(hangoutAt);
+        if (!isNaN(parsed.getTime()) && parsed <= new Date()) {
+          lastHangout = parsed.toISOString();
+        }
+      }
+      const updates: Record<string, string | null> = { lastHangout };
+      if (typeof label === "string" && label.length > 0) {
+        updates.lastHangoutLabel = label;
+      } else {
+        updates.lastHangoutLabel = null;
+      }
+      const contact = await storage.updateContact(id, updates);
       res.json(contact);
     } catch (err) {
       console.error("Error marking hangout:", err);

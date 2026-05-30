@@ -10,12 +10,13 @@ import { EmptyState } from "@/components/EmptyState";
 import { CIRCLE_CONFIG } from "@/lib/types";
 import { getSmartPrompt, getNextPrompt, getActionType, resetSeenPrompts, loadSyncedPrompts } from "@/lib/prompts";
 import { getDaysSince, getDaysUntilBirthday, formatLastContacted, formatBirthdayCountdown, getContactUrgency } from "@/lib/helpers";
-import { generateReminders } from "@/lib/reminders";
+import { generateReminders, CHECKIN_THRESHOLDS, HANGOUT_THRESHOLDS, ELEVATION_PUSH_DELAY_HOURS, ELEVATION_CLEANUP_DAYS } from "@/lib/reminders";
+import { setElevation, getElevations, getExpiredElevations, clearElevation, ELEVATION_SCORE_BONUS, invalidateElevationCache } from "@/lib/checkin-state";
 import { getDaysSinceLastSuggestedSync, scoreSuggestion, isInCooldown } from "@/lib/suggestion-scheduler";
 import { useDismissedSuggestions, dismissSuggestion, clearDismissedSuggestions, useSchedulerDates, markContactSuggested, getCachedPrompt, setCachedPrompt, clearPromptCache } from "@/lib/suggestions-store";
 import type { Contact } from "@/lib/types";
 import type { Reminder } from "@/lib/reminders";
-import { router } from "expo-router";
+import { router, useFocusEffect } from "expo-router";
 import * as Haptics from "expo-haptics";
 
 interface GeneratedSuggestion {
@@ -43,7 +44,7 @@ function buildSuggestion(contact: Contact): GeneratedSuggestion {
   );
 
   let type = getActionType(contact.circleLevel as 1 | 2 | 3, prompt);
-  if (contact.circleLevel === 3 && type === "call") type = "text";
+  if (contact.circleLevel === 3 && (type === "call" || type === "hangout")) type = "text";
 
   return {
     contact,
@@ -80,6 +81,7 @@ export default function SuggestionsScreen() {
   const [completedReminderIds, setCompletedReminderIds] = useState<Set<string>>(new Set());
   const [cardPrompts, setCardPrompts] = useState<Record<string, GeneratedSuggestion>>({});
   const [remindersCollapsed, setRemindersCollapsed] = useState(false);
+  const [elevationMap, setElevationMap] = useState<Record<string, number>>({});
   const visitCount = useRef(0);
   const [copiedToast, setCopiedToast] = useState(false);
   const copiedToastAnim = useRef(new Animated.Value(0)).current;
@@ -87,7 +89,41 @@ export default function SuggestionsScreen() {
 
   useEffect(() => {
     loadSyncedPrompts();
+    getElevations().then((elevations) => {
+      const map: Record<string, number> = {};
+      for (const e of elevations) map[e.contactId] = ELEVATION_SCORE_BONUS[e.circleLevel];
+      setElevationMap(map);
+    });
   }, []);
+
+  useFocusEffect(
+    useCallback(() => {
+      getElevations().then((elevations) => {
+        const map: Record<string, number> = {};
+        for (const e of elevations) map[e.contactId] = ELEVATION_SCORE_BONUS[e.circleLevel];
+        setElevationMap(map);
+      });
+      getExpiredElevations().then(async (expired) => {
+        for (const entry of expired) {
+          const daysAgo = Math.floor(Math.random() * 3) + 2;
+          const markDate = new Date(Date.now() - daysAgo * 24 * 3600 * 1000);
+          if (entry.type === "checkin") {
+            await markContacted(entry.contactId, markDate);
+          } else {
+            await markHangout(entry.contactId, markDate);
+          }
+          await clearElevation(entry.contactId, entry.type);
+        }
+        if (expired.length > 0) {
+          await invalidateElevationCache();
+          const fresh = await getElevations();
+          const map: Record<string, number> = {};
+          for (const e of fresh) map[e.contactId] = ELEVATION_SCORE_BONUS[e.circleLevel];
+          setElevationMap(map);
+        }
+      });
+    }, [markContacted, markHangout]),
+  );
 
   useEffect(() => {
     visitCount.current += 1;
@@ -130,13 +166,14 @@ export default function SuggestionsScreen() {
             daysSinceLastSug,
             daysSinceContact,
             daysUntilBday,
+            elevationMap[c.id],
           ) + (shuffleJitter[c.id] ?? 0),
         };
       })
       .sort((a, b) => b.score - a.score)
       .slice(0, 6)
       .map((x) => x.contact);
-  }, [contacts, filterCircle, lastSuggestedDates, shuffleJitter]);
+  }, [contacts, filterCircle, lastSuggestedDates, shuffleJitter, elevationMap]);
 
   useEffect(() => {
     const next: Record<string, number> = {};
@@ -282,50 +319,64 @@ export default function SuggestionsScreen() {
     async (reminder: Reminder) => {
       setCompletedReminderIds((prev) => new Set(prev).add(reminder.id));
       if (reminder.type === "birthday") return;
-      if (reminder.type === "hangout-overdue") {
+      if (reminder.type === "hangout-quickpick") {
         await markHangout(reminder.contactId);
+      } else {
+        await markContacted(reminder.contactId);
       }
-      await markContacted(reminder.contactId);
     },
     [markContacted, markHangout],
   );
 
   const handleReminderQuickPick = useCallback(
-    async (reminder: Reminder, date: Date) => {
+    async (reminder: Reminder, date: Date, label: string) => {
       setCompletedReminderIds((prev) => new Set(prev).add(reminder.id));
-      await markContacted(reminder.contactId, date);
+      const circleLevel = reminder.circleLevel as 1 | 2 | 3;
+
+      if (reminder.type === "check-in-quickpick") {
+        await markContacted(reminder.contactId, date, label);
+        const daysSince = Math.floor((Date.now() - date.getTime()) / (1000 * 60 * 60 * 24));
+        if (daysSince > CHECKIN_THRESHOLDS[circleLevel]) {
+          await setElevation({
+            contactId: reminder.contactId,
+            contactName: reminder.contactName,
+            circleLevel,
+            type: "checkin",
+            elevatedAt: new Date().toISOString(),
+            pushDue: new Date(Date.now() + ELEVATION_PUSH_DELAY_HOURS[circleLevel] * 3600 * 1000).toISOString(),
+            cleanupDue: new Date(Date.now() + ELEVATION_CLEANUP_DAYS[circleLevel].checkin * 24 * 3600 * 1000).toISOString(),
+          });
+          await invalidateElevationCache();
+          setElevationMap((prev) => ({ ...prev, [reminder.contactId]: ELEVATION_SCORE_BONUS[circleLevel] }));
+        }
+      } else if (reminder.type === "hangout-quickpick") {
+        await markHangout(reminder.contactId, date, label);
+        const daysSince = Math.floor((Date.now() - date.getTime()) / (1000 * 60 * 60 * 24));
+        if (daysSince > HANGOUT_THRESHOLDS[circleLevel]) {
+          await setElevation({
+            contactId: reminder.contactId,
+            contactName: reminder.contactName,
+            circleLevel,
+            type: "hangout",
+            elevatedAt: new Date().toISOString(),
+            pushDue: new Date(Date.now() + ELEVATION_PUSH_DELAY_HOURS[circleLevel] * 3600 * 1000).toISOString(),
+            cleanupDue: new Date(Date.now() + ELEVATION_CLEANUP_DAYS[circleLevel].hangout * 24 * 3600 * 1000).toISOString(),
+          });
+          await invalidateElevationCache();
+          setElevationMap((prev) => ({ ...prev, [reminder.contactId]: ELEVATION_SCORE_BONUS[circleLevel] }));
+        }
+      }
     },
-    [markContacted],
+    [markContacted, markHangout],
   );
 
-  const handleReminderYes = useCallback(
-    (reminder: Reminder) => {
-      markHangout(reminder.contactId);
-      setCompletedReminderIds((prev) => new Set(prev).add(reminder.id));
-    },
-    [markHangout],
-  );
-
-  const handleReminderNo = useCallback(
-    (reminder: Reminder) => {
-      setCompletedReminderIds((prev) => new Set(prev).add(reminder.id));
-      router.push({
-        pathname: "/create-hangout",
-        params: { contactName: reminder.contactName },
-      });
-    },
-    [],
-  );
-
-  const handlePlanHangoutReminder = useCallback(
-    (reminder: Reminder) => {
-      router.push({
-        pathname: "/create-hangout",
-        params: { contactName: reminder.contactName },
-      });
-    },
-    [],
-  );
+  const handleHangoutCalendarPress = useCallback((reminder: Reminder) => {
+    setCompletedReminderIds((prev) => new Set(prev).add(reminder.id));
+    router.push({
+      pathname: "/create-hangout",
+      params: { contactName: reminder.contactName },
+    });
+  }, []);
 
   const handleRefreshAll = useCallback(() => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
@@ -451,11 +502,12 @@ export default function SuggestionsScreen() {
                   key={reminder.id}
                   reminder={reminder}
                   onComplete={() => handleReminderComplete(reminder)}
-                  onYes={reminder.type === "hangout-6month" ? () => handleReminderYes(reminder) : undefined}
-                  onNo={reminder.type === "hangout-6month" ? () => handleReminderNo(reminder) : undefined}
-                  onPlanHangout={reminder.actionType === "hangout" ? () => handlePlanHangoutReminder(reminder) : undefined}
-                  onQuickPick={reminder.type === "check-in-overdue" ? (date) => handleReminderQuickPick(reminder, date) : undefined}
-                  contactLastContacted={contacts.find((c) => c.id === reminder.contactId)?.lastContacted}
+                  onQuickPick={
+                    (reminder.type === "check-in-quickpick" || reminder.type === "hangout-quickpick")
+                      ? (date, label) => handleReminderQuickPick(reminder, date, label)
+                      : undefined
+                  }
+                  onCalendarPress={reminder.type === "hangout-quickpick" ? () => handleHangoutCalendarPress(reminder) : undefined}
                 />
               ))}
             </View>

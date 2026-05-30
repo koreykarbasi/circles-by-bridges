@@ -1,0 +1,1 @@
+- [Supabase DB vs local PG](supabase-db-routing.md) — server/db.ts uses SUPABASE_URL first; migrations must target SUPABASE_URL, not just DATABASE_URL.

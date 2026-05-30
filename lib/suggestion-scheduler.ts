@@ -110,6 +110,7 @@ export function scoreSuggestion(
   daysSinceLastSuggested: number | null,
   daysSinceContact: number | null,
   daysUntilBirthday: number | null,
+  elevationBonus?: number,
 ): number {
   let score = 0;
 
@@ -134,6 +135,8 @@ export function scoreSuggestion(
   } else {
     score += 40;
   }
+
+  if (elevationBonus) score += elevationBonus;
 
   return score;
 }

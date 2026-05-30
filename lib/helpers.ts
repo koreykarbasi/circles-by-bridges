@@ -73,7 +73,7 @@ export function getContactUrgency(circleLevel: 1 | 2 | 3, lastContacted?: string
 
   if (circleLevel === 1) {
     if (days > 14) return "overdue";
-    if (days > 5) return "soon";
+    if (days > 7) return "soon";
     return "ok";
   }
   if (circleLevel === 2) {
@@ -81,7 +81,12 @@ export function getContactUrgency(circleLevel: 1 | 2 | 3, lastContacted?: string
     if (days > 21) return "soon";
     return "ok";
   }
-  if (days > 120) return "overdue";
-  if (days > 60) return "soon";
+  if (days > 75) return "overdue";
+  if (days > 45) return "soon";
   return "ok";
+}
+
+export function formatLastContactedLabel(label?: string | null, dateStr?: string | null): string {
+  if (label) return label;
+  return formatLastContacted(dateStr ?? undefined);
 }
