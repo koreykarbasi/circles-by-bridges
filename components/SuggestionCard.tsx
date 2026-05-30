@@ -1,5 +1,6 @@
 import React, { useCallback } from "react";
 import { View, Text, StyleSheet, Pressable, Platform } from "react-native";
+import { router } from "expo-router";
 import Animated, { useSharedValue, useAnimatedStyle, withTiming, withSequence, runOnJS, Easing } from "react-native-reanimated";
 import { Ionicons } from "@expo/vector-icons";
 import { Avatar } from "./Avatar";
@@ -8,6 +9,7 @@ import * as Haptics from "expo-haptics";
 import * as Clipboard from "expo-clipboard";
 
 interface SuggestionCardProps {
+  contactId: string;
   contactName: string;
   avatarColor: string;
   photoUri?: string | null;
@@ -172,6 +174,7 @@ export function getTextCopyMessage(
 }
 
 export function SuggestionCard({
+  contactId,
   contactName,
   avatarColor,
   photoUri,
@@ -266,7 +269,13 @@ export function SuggestionCard({
   return (
     <Animated.View style={[styles.container, animatedStyle]}>
       <View style={styles.header}>
-        <Avatar name={contactName} color={avatarColor} size={42} photoUri={photoUri} />
+        <Pressable
+          onPress={() => router.push({ pathname: "/edit-contact", params: { id: contactId } })}
+          style={({ pressed }) => [pressed && { opacity: 0.7 }]}
+          hitSlop={4}
+        >
+          <Avatar name={contactName} color={avatarColor} size={42} photoUri={photoUri} />
+        </Pressable>
         <View style={styles.headerInfo}>
           <Text style={styles.name} numberOfLines={1}>{contactName}</Text>
           <View style={styles.metaRow}>

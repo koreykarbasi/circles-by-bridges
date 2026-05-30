@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo } from "react";
-import { View, Text, StyleSheet, Dimensions } from "react-native";
+import { View, Text, StyleSheet, Dimensions, Pressable } from "react-native";
+import { router } from "expo-router";
 import Animated, {
   useSharedValue,
   useAnimatedStyle,
@@ -56,12 +57,18 @@ function OrbitingAvatar({
 
   return (
     <Animated.View style={animatedStyle}>
-      <Avatar
-        name={contact.name}
-        color={contact.avatarColor}
-        size={avatarSize}
-        photoUri={contact.photoUri}
-      />
+      <Pressable
+        onPress={() => router.push({ pathname: "/edit-contact", params: { id: contact.id } })}
+        style={({ pressed }) => [pressed && { opacity: 0.7 }]}
+        hitSlop={6}
+      >
+        <Avatar
+          name={contact.name}
+          color={contact.avatarColor}
+          size={avatarSize}
+          photoUri={contact.photoUri}
+        />
+      </Pressable>
     </Animated.View>
   );
 }

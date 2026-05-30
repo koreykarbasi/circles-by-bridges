@@ -92,14 +92,25 @@ export function ContactsProvider({ children }: { children: ReactNode }) {
 
   const markContactedFn = useCallback(async (id: string, date?: Date, label?: string) => {
     const ts = (date ?? new Date()).toISOString();
+    const previous = contacts.find((c) => c.id === id);
     setContacts((prev) =>
       prev.map((c) => (c.id === id ? { ...c, lastContacted: ts, lastContactedLabel: label ?? null } : c)),
     );
     const body: Record<string, string> = {};
     if (date) body.contactedAt = ts;
     if (label) body.label = label;
-    apiRequest("POST", `/api/contacts/${id}/mark-contacted`, Object.keys(body).length ? body : undefined).then(fetchContacts);
-  }, [fetchContacts]);
+    try {
+      await apiRequest("POST", `/api/contacts/${id}/mark-contacted`, Object.keys(body).length ? body : undefined);
+      fetchContacts();
+    } catch (err) {
+      if (previous) {
+        setContacts((prev) =>
+          prev.map((c) => (c.id === id ? { ...c, lastContacted: previous.lastContacted ?? null, lastContactedLabel: previous.lastContactedLabel ?? null } : c)),
+        );
+      }
+      throw err;
+    }
+  }, [contacts, fetchContacts]);
 
   const markHangoutFn = useCallback(async (id: string, date?: Date, label?: string) => {
     const ts = (date ?? new Date()).toISOString();

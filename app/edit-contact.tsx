@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from "react";
+import React, { useState, useRef, useEffect, useCallback } from "react";
 import {
   View,
   Text,
@@ -64,6 +64,8 @@ export default function EditContactScreen() {
   const [saving, setSaving] = useState(false);
   const [showBirthdayPicker, setShowBirthdayPicker] = useState(focusBirthday === "true");
   const [showMoreDetails, setShowMoreDetails] = useState(!!(contact?.phone || contact?.email));
+  const [quickContactSaved, setQuickContactSaved] = useState<string | null>(null);
+  const quickContactTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const scrollRef = useRef<ScrollView>(null);
 
@@ -195,6 +197,37 @@ export default function EditContactScreen() {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     markContacted(contact.id);
   };
+
+  const QUICK_CONTACT_CHIPS: Record<1 | 2 | 3, Array<{ label: string; daysAgo: number }>> = {
+    1: [
+      { label: "Today", daysAgo: 0 },
+      { label: "This week", daysAgo: 4 },
+      { label: "This month", daysAgo: 14 },
+    ],
+    2: [
+      { label: "This week", daysAgo: 4 },
+      { label: "This month", daysAgo: 14 },
+      { label: "A few months ago", daysAgo: 60 },
+    ],
+    3: [
+      { label: "This month", daysAgo: 14 },
+      { label: "A few months ago", daysAgo: 60 },
+      { label: "Earlier this year", daysAgo: 120 },
+    ],
+  };
+
+  const handleQuickContact = useCallback(async (label: string, daysAgo: number) => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    const date = new Date(Date.now() - daysAgo * 24 * 60 * 60 * 1000);
+    try {
+      await markContacted(contact.id, date, label);
+      if (quickContactTimer.current) clearTimeout(quickContactTimer.current);
+      setQuickContactSaved(label);
+      quickContactTimer.current = setTimeout(() => setQuickContactSaved(null), 1800);
+    } catch {
+      Alert.alert("Could not save", "Failed to update last contacted. Please try again.");
+    }
+  }, [contact.id, markContacted]);
 
   const webTopInset = Platform.OS === "web" ? 67 : 0;
 
@@ -373,6 +406,33 @@ export default function EditContactScreen() {
                   </Text>
                   <Text style={[styles.circleOptionCount, isActive && { color: cfg.color }]}>
                     {isFull ? "Full" : `${count}/${cfg.max}`}
+                  </Text>
+                </Pressable>
+              );
+            })}
+          </View>
+        </View>
+
+        <View style={styles.inputGroup}>
+          <Text style={styles.label}>Last contacted</Text>
+          <View style={styles.quickContactRow}>
+            {QUICK_CONTACT_CHIPS[circleLevel].map(({ label, daysAgo }) => {
+              const isSaved = quickContactSaved === label;
+              return (
+                <Pressable
+                  key={label}
+                  onPress={() => handleQuickContact(label, daysAgo)}
+                  style={({ pressed }) => [
+                    styles.quickChip,
+                    isSaved && styles.quickChipSaved,
+                    pressed && { opacity: 0.7 },
+                  ]}
+                >
+                  {isSaved ? (
+                    <Ionicons name="checkmark" size={14} color={Colors.success} />
+                  ) : null}
+                  <Text style={[styles.quickChipText, isSaved && styles.quickChipTextSaved]}>
+                    {label}
                   </Text>
                 </Pressable>
               );
@@ -894,6 +954,36 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontFamily: "Nunito_600SemiBold",
     color: Colors.danger,
+  },
+  quickContactRow: {
+    flexDirection: "row" as const,
+    gap: 8,
+  },
+  quickChip: {
+    flex: 1,
+    flexDirection: "row" as const,
+    alignItems: "center" as const,
+    justifyContent: "center" as const,
+    gap: 4,
+    paddingVertical: 10,
+    paddingHorizontal: 8,
+    borderRadius: 12,
+    backgroundColor: Colors.surface,
+    borderWidth: 1.5,
+    borderColor: Colors.borderLight,
+  },
+  quickChipSaved: {
+    backgroundColor: Colors.success + "15",
+    borderColor: Colors.success + "50",
+  },
+  quickChipText: {
+    fontSize: 12,
+    fontFamily: "Nunito_600SemiBold",
+    color: Colors.textSecondary,
+    textAlign: "center" as const,
+  },
+  quickChipTextSaved: {
+    color: Colors.success,
   },
   errorText: {
     fontSize: 16,

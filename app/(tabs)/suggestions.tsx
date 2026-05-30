@@ -548,6 +548,7 @@ export default function SuggestionsScreen() {
           return (
             <SuggestionCard
               key={s.contact.id + "-" + refreshKey}
+              contactId={s.contact.id}
               contactName={s.contact.name}
               avatarColor={s.contact.avatarColor}
               photoUri={s.contact.photoUri}
