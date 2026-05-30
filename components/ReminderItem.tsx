@@ -18,6 +18,7 @@ interface ReminderItemProps {
 const TYPE_ICONS: Record<string, keyof typeof Ionicons.glyphMap> = {
   "check-in-quickpick": "time-outline",
   "hangout-quickpick": "calendar-outline",
+  "custom-reminder": "star-outline",
 };
 
 function getPriorityColor(priority: number): string {

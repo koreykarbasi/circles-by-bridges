@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { pgTable, text, varchar, integer, timestamp, boolean, uniqueIndex } from "drizzle-orm/pg-core";
+import { pgTable, text, varchar, integer, timestamp, boolean, uniqueIndex, jsonb } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
@@ -34,6 +34,7 @@ export const contacts = pgTable("contacts", {
   photoUri: text("photo_uri"),
   lastContactedLabel: text("last_contacted_label"),
   lastHangoutLabel: text("last_hangout_label"),
+  customReminders: jsonb("custom_reminders").default([]),
   createdAt: timestamp("created_at").defaultNow(),
 });
 

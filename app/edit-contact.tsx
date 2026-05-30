@@ -17,6 +17,7 @@ import * as ImagePicker from "expo-image-picker";
 import Colors from "@/constants/colors";
 import { useContacts } from "@/lib/contacts-context";
 import { CIRCLE_CONFIG } from "@/lib/types";
+import type { CustomReminder } from "@/lib/types";
 import { AVAILABLE_INTERESTS } from "@/lib/prompts";
 import { formatLastContacted } from "@/lib/helpers";
 import { Avatar } from "@/components/Avatar";
@@ -43,6 +44,10 @@ function formatBirthdayDisplay(birthday: string): string {
   return `${MONTH_NAMES[m]} ${d}`;
 }
 
+function formatCustomReminderDate(date: string): string {
+  return formatBirthdayDisplay(date);
+}
+
 export default function EditContactScreen() {
   const insets = useSafeAreaInsets();
   const { id, focusBirthday } = useLocalSearchParams<{ id: string; focusBirthday?: string }>();
@@ -66,6 +71,12 @@ export default function EditContactScreen() {
   const [showMoreDetails, setShowMoreDetails] = useState(!!(contact?.phone || contact?.email));
   const [quickContactSaved, setQuickContactSaved] = useState<string | null>(null);
   const quickContactTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [customReminders, setCustomReminders] = useState<CustomReminder[]>(
+    (contact?.customReminders ?? []).filter((r) => r && r.label && r.date)
+  );
+  const [showAddReminder, setShowAddReminder] = useState(false);
+  const [newReminderLabel, setNewReminderLabel] = useState("");
+  const [newReminderDate, setNewReminderDate] = useState("03/23");
 
   const scrollRef = useRef<ScrollView>(null);
 
@@ -170,6 +181,7 @@ export default function EditContactScreen() {
       phone: phone.trim() || undefined,
       email: email.trim() || undefined,
       photoUri,
+      customReminders,
     });
 
     router.back();
@@ -543,6 +555,93 @@ export default function EditContactScreen() {
               <Ionicons name="add" size={20} color={!customLabelInput.trim() ? Colors.textTertiary : Colors.accent} />
             </Pressable>
           </View>
+        </View>
+
+        <View style={styles.inputGroup}>
+          <Text style={styles.label}>Custom Reminders</Text>
+          {customReminders.map((cr, idx) => (
+            <View key={`${cr.label}-${idx}`} style={styles.customReminderChip}>
+              <Ionicons name="star-outline" size={14} color={Colors.primary} />
+              <Text style={styles.customReminderChipText} numberOfLines={1}>
+                {cr.label}
+              </Text>
+              <Text style={styles.customReminderChipDate}>
+                {formatCustomReminderDate(cr.date)}
+              </Text>
+              <Pressable
+                onPress={() => {
+                  Haptics.selectionAsync();
+                  setCustomReminders((prev) => prev.filter((_, i) => i !== idx));
+                }}
+                hitSlop={8}
+                style={({ pressed }) => [pressed && { opacity: 0.5 }]}
+              >
+                <Ionicons name="close-circle" size={16} color={Colors.textTertiary} />
+              </Pressable>
+            </View>
+          ))}
+
+          {!showAddReminder ? (
+            <Pressable
+              onPress={() => {
+                Haptics.selectionAsync();
+                setShowAddReminder(true);
+                setNewReminderLabel("");
+                setNewReminderDate("03/23");
+              }}
+              style={({ pressed }) => [styles.addReminderBtn, pressed && { opacity: 0.7 }]}
+            >
+              <Ionicons name="add-circle-outline" size={18} color={Colors.primary} />
+              <Text style={styles.addReminderBtnText}>Add reminder</Text>
+            </Pressable>
+          ) : (
+            <View style={styles.addReminderForm}>
+              <TextInput
+                style={[styles.input, styles.reminderLabelInput]}
+                placeholder="Name (e.g. Wedding anniversary)"
+                placeholderTextColor={Colors.textTertiary}
+                value={newReminderLabel}
+                onChangeText={setNewReminderLabel}
+                autoFocus
+                returnKeyType="done"
+              />
+              <Text style={styles.reminderDateLabel}>Date (month and day)</Text>
+              <DateWheelPicker
+                value={newReminderDate}
+                onChange={setNewReminderDate}
+                mode="birthday"
+              />
+              <View style={styles.addReminderActions}>
+                <Pressable
+                  onPress={() => {
+                    Haptics.selectionAsync();
+                    setShowAddReminder(false);
+                    setNewReminderLabel("");
+                  }}
+                  style={({ pressed }) => [styles.addReminderCancel, pressed && { opacity: 0.7 }]}
+                >
+                  <Text style={styles.addReminderCancelText}>Cancel</Text>
+                </Pressable>
+                <Pressable
+                  onPress={() => {
+                    const trimmed = newReminderLabel.trim();
+                    if (!trimmed) {
+                      Alert.alert("Name required", "Please enter a name for this reminder.");
+                      return;
+                    }
+                    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+                    setCustomReminders((prev) => [...prev, { label: trimmed, date: newReminderDate }]);
+                    setShowAddReminder(false);
+                    setNewReminderLabel("");
+                    setNewReminderDate("03/23");
+                  }}
+                  style={({ pressed }) => [styles.addReminderSave, pressed && { opacity: 0.7 }]}
+                >
+                  <Text style={styles.addReminderSaveText}>Save</Text>
+                </Pressable>
+              </View>
+            </View>
+          )}
         </View>
 
         <View style={styles.inputGroup}>
@@ -997,5 +1096,89 @@ const styles = StyleSheet.create({
     color: Colors.primary,
     textAlign: "center",
     marginTop: 12,
+  },
+  customReminderChip: {
+    flexDirection: "row" as const,
+    alignItems: "center" as const,
+    gap: 8,
+    backgroundColor: Colors.primary + "10",
+    borderRadius: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    marginBottom: 8,
+    borderWidth: 1,
+    borderColor: Colors.primary + "25",
+  },
+  customReminderChipText: {
+    flex: 1,
+    fontSize: 14,
+    fontFamily: "Nunito_600SemiBold",
+    color: Colors.text,
+  },
+  customReminderChipDate: {
+    fontSize: 13,
+    fontFamily: "Nunito_400Regular",
+    color: Colors.textSecondary,
+  },
+  addReminderBtn: {
+    flexDirection: "row" as const,
+    alignItems: "center" as const,
+    gap: 8,
+    paddingVertical: 12,
+    paddingHorizontal: 4,
+  },
+  addReminderBtnText: {
+    fontSize: 14,
+    fontFamily: "Nunito_600SemiBold",
+    color: Colors.primary,
+  },
+  addReminderForm: {
+    backgroundColor: Colors.surface,
+    borderRadius: 14,
+    padding: 14,
+    borderWidth: 1,
+    borderColor: Colors.borderLight,
+    gap: 10,
+  },
+  reminderLabelInput: {
+    marginBottom: 0,
+  },
+  reminderDateLabel: {
+    fontSize: 13,
+    fontFamily: "Nunito_600SemiBold",
+    color: Colors.textSecondary,
+    marginBottom: 4,
+    marginTop: 2,
+  },
+  addReminderActions: {
+    flexDirection: "row" as const,
+    gap: 10,
+    marginTop: 4,
+  },
+  addReminderCancel: {
+    flex: 1,
+    paddingVertical: 11,
+    borderRadius: 10,
+    backgroundColor: Colors.surface,
+    borderWidth: 1,
+    borderColor: Colors.borderLight,
+    alignItems: "center" as const,
+  },
+  addReminderCancelText: {
+    fontSize: 14,
+    fontFamily: "Nunito_600SemiBold",
+    color: Colors.textSecondary,
+  },
+  addReminderSave: {
+    flex: 1,
+    paddingVertical: 11,
+    borderRadius: 10,
+    backgroundColor: Colors.primary,
+    alignItems: "center" as const,
+  },
+  addReminderSaveText: {
+    fontSize: 14,
+    fontFamily: "Nunito_700Bold",
+    color: "#fff",
   },
 });

@@ -318,7 +318,7 @@ export default function SuggestionsScreen() {
   const handleReminderComplete = useCallback(
     async (reminder: Reminder) => {
       setCompletedReminderIds((prev) => new Set(prev).add(reminder.id));
-      if (reminder.type === "birthday") return;
+      if (reminder.type === "birthday" || reminder.type === "custom-reminder") return;
       if (reminder.type === "hangout-quickpick") {
         await markHangout(reminder.contactId);
       } else {

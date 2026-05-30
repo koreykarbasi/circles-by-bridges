@@ -81,6 +81,7 @@ export function ContactsProvider({ children }: { children: ReactNode }) {
       email: contact.email,
       avatarColor: contact.avatarColor,
       photoUri: contact.photoUri,
+      customReminders: contact.customReminders ?? [],
     });
     await fetchContacts();
   }, [fetchContacts]);

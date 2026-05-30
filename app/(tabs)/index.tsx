@@ -28,19 +28,19 @@ import { getViewedTimestamps, hasUnreadVotes } from "@/lib/hangout-notifications
 const MAX_REMINDERS = 5;
 const MAX_SUGGESTIONS = 3;
 
-function getReminderIcon(_reminder: Reminder): string {
+function getReminderIcon(reminder: Reminder): string {
+  if (reminder.type === "custom-reminder") return "star-outline";
   return "cake-variant-outline";
 }
 
-function getReminderIconLibrary(_reminder: Reminder): "material" | undefined {
+function getReminderIconLibrary(reminder: Reminder): "material" | undefined {
+  if (reminder.type === "custom-reminder") return undefined;
   return "material";
 }
 
-function getReminderIconColor(_reminder: Reminder): string {
-  switch (1) {
-    default:
-      return Colors.accent;
-  }
+function getReminderIconColor(reminder: Reminder): string {
+  if (reminder.type === "custom-reminder") return Colors.primary;
+  return Colors.accent;
 }
 
 function getPriorityLevel(priority: number): "high" | "medium" | "low" {
@@ -219,7 +219,7 @@ export default function HomeScreen() {
   const handleReminderComplete = useCallback(
     async (reminder: Reminder) => {
       setDismissedReminders((prev) => new Set(prev).add(reminder.id));
-      if (reminder.type === "birthday") return;
+      if (reminder.type === "birthday" || reminder.type === "custom-reminder") return;
       if (reminder.type === "hangout-quickpick") {
         await markHangout(reminder.contactId);
       } else {

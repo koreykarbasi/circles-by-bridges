@@ -1,3 +1,8 @@
+export interface CustomReminder {
+  label: string;
+  date: string;
+}
+
 export interface Contact {
   id: string;
   userId?: string | null;
@@ -16,6 +21,7 @@ export interface Contact {
   avatarColor: string;
   photoUri?: string | null;
   createdAt?: string | null;
+  customReminders?: CustomReminder[] | null;
 }
 
 export interface AuthUser {

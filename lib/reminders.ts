@@ -1,7 +1,7 @@
 import type { Contact } from "./types";
 import { getDaysSince, getDaysUntilBirthday, formatLastContacted } from "./helpers";
 
-export type ReminderType = "birthday" | "check-in-quickpick" | "hangout-quickpick";
+export type ReminderType = "birthday" | "check-in-quickpick" | "hangout-quickpick" | "custom-reminder";
 
 export interface Reminder {
   id: string;
@@ -23,6 +23,119 @@ export const ELEVATION_CLEANUP_DAYS: Record<1 | 2 | 3, { checkin: number; hangou
   2: { checkin: 22, hangout: 30 },
   3: { checkin: 37, hangout: 45 },
 };
+
+// Priority baselines for custom reminders per circle (equivalent to birthday priorities)
+const CUSTOM_REMINDER_PRIORITIES: Record<1 | 2 | 3, { today: number; week: number; twoWeek: number; month: number }> = {
+  1: { today: 200, week: 190, twoWeek: 180, month: 170 },
+  2: { today: 150, week: 140, twoWeek: 140, month: 140 },
+  3: { today: 70, week: 70, twoWeek: 70, month: 70 },
+};
+
+function generateCustomReminders(contact: Contact, circleLevel: 1 | 2 | 3): Reminder[] {
+  const reminders: Reminder[] = [];
+  const customReminders = contact.customReminders ?? [];
+  const priorities = CUSTOM_REMINDER_PRIORITIES[circleLevel];
+
+  for (const cr of customReminders) {
+    if (!cr.label || !cr.date) continue;
+    const daysUntil = getDaysUntilBirthday(cr.date);
+    if (daysUntil === null) continue;
+
+    const safeLabel = cr.label.trim();
+    const idBase = `custom-${contact.id}-${safeLabel.replace(/\s+/g, "-").toLowerCase()}`;
+
+    // Circle 1: advance notice at 30d/14d/7d/day-of
+    // Circle 2: advance notice at 7d/day-of
+    // Circle 3: day-of only
+    if (circleLevel === 1) {
+      if (daysUntil <= 1) {
+        reminders.push({
+          id: `${idBase}-0d`,
+          contactId: contact.id,
+          contactName: contact.name,
+          circleLevel,
+          type: "custom-reminder",
+          priority: priorities.today,
+          title: `Today is ${contact.name}'s ${safeLabel}`,
+          subtitle: "Today",
+        });
+      } else if (daysUntil <= 7) {
+        reminders.push({
+          id: `${idBase}-7d`,
+          contactId: contact.id,
+          contactName: contact.name,
+          circleLevel,
+          type: "custom-reminder",
+          priority: priorities.week,
+          title: `${contact.name}'s ${safeLabel} is in ${daysUntil} days`,
+          subtitle: `Coming up in ${daysUntil} days`,
+        });
+      } else if (daysUntil <= 14) {
+        reminders.push({
+          id: `${idBase}-14d`,
+          contactId: contact.id,
+          contactName: contact.name,
+          circleLevel,
+          type: "custom-reminder",
+          priority: priorities.twoWeek,
+          title: `${contact.name}'s ${safeLabel} is 2 weeks away`,
+          subtitle: `In ${daysUntil} days`,
+        });
+      } else if (daysUntil <= 30) {
+        reminders.push({
+          id: `${idBase}-30d`,
+          contactId: contact.id,
+          contactName: contact.name,
+          circleLevel,
+          type: "custom-reminder",
+          priority: priorities.month,
+          title: `${contact.name}'s ${safeLabel} is coming up`,
+          subtitle: `In ${Math.floor(daysUntil / 7)} weeks`,
+        });
+      }
+    } else if (circleLevel === 2) {
+      if (daysUntil <= 1) {
+        reminders.push({
+          id: `${idBase}-0d`,
+          contactId: contact.id,
+          contactName: contact.name,
+          circleLevel,
+          type: "custom-reminder",
+          priority: priorities.today,
+          title: `Today is ${contact.name}'s ${safeLabel}`,
+          subtitle: "Today",
+        });
+      } else if (daysUntil <= 7) {
+        reminders.push({
+          id: `${idBase}-7d`,
+          contactId: contact.id,
+          contactName: contact.name,
+          circleLevel,
+          type: "custom-reminder",
+          priority: priorities.week,
+          title: `${contact.name}'s ${safeLabel} is coming up in a week`,
+          subtitle: `In ${daysUntil} days`,
+        });
+      }
+    } else {
+      // Circle 3: day-of only
+      if (daysUntil <= 1) {
+        reminders.push({
+          id: `${idBase}-0d`,
+          contactId: contact.id,
+          contactName: contact.name,
+          circleLevel,
+          type: "custom-reminder",
+          priority: priorities.today,
+          title: `Today is ${contact.name}'s ${safeLabel}`,
+          subtitle: "Today",
+        });
+      }
+    }
+  }
+
+  return reminders;
+}
 
 function generateCircle1Reminders(contact: Contact): Reminder[] {
   const reminders: Reminder[] = [];
@@ -75,6 +188,8 @@ function generateCircle1Reminders(contact: Contact): Reminder[] {
       });
     }
   }
+
+  reminders.push(...generateCustomReminders(contact, 1));
 
   const daysSinceContact = getDaysSince(contact.lastContacted ?? undefined);
   if (daysSinceContact === null || daysSinceContact > CHECKIN_THRESHOLDS[1]) {
@@ -143,6 +258,8 @@ function generateCircle2Reminders(contact: Contact): Reminder[] {
     }
   }
 
+  reminders.push(...generateCustomReminders(contact, 2));
+
   const daysSinceContact = getDaysSince(contact.lastContacted ?? undefined);
   if (daysSinceContact === null || daysSinceContact > CHECKIN_THRESHOLDS[2]) {
     const severity = daysSinceContact === null
@@ -196,6 +313,8 @@ function generateCircle3Reminders(contact: Contact): Reminder[] {
       subtitle: "Today is their birthday",
     });
   }
+
+  reminders.push(...generateCustomReminders(contact, 3));
 
   const daysSinceContact = getDaysSince(contact.lastContacted ?? undefined);
   if (daysSinceContact !== null && daysSinceContact > CHECKIN_THRESHOLDS[3]) {
