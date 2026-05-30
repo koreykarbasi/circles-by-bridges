@@ -88,7 +88,7 @@ export function ContactCard({ contact, onPress, onMarkContacted, onPlanHangout, 
             ]}
           />
           <Text style={styles.lastContacted}>
-            {formatLastContacted(contact.lastContacted ?? undefined)}
+            {contact.lastContactedLabel ?? formatLastContacted(contact.lastContacted ?? undefined)}
           </Text>
           {contact.interests.length > 0 && (
             <Text style={styles.interests} numberOfLines={1}>

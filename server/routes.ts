@@ -505,6 +505,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
           now.setDate(now.getDate() - daysBack);
           return now.toISOString();
         })(),
+        lastHangout: (() => {
+          if (safe.lastHangout) return safe.lastHangout;
+          const now = new Date();
+          const daysBack =
+            level === 1 ? Math.floor(Math.random() * 19) :
+            level === 2 ? Math.floor(Math.random() * 51) :
+            Math.floor(Math.random() * 81);
+          now.setDate(now.getDate() - daysBack);
+          return now.toISOString();
+        })(),
       });
       res.status(201).json(contact);
     } catch (err) {
