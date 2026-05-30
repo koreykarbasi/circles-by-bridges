@@ -69,8 +69,6 @@ export default function EditContactScreen() {
   const [saving, setSaving] = useState(false);
   const [showBirthdayPicker, setShowBirthdayPicker] = useState(focusBirthday === "true");
   const [showMoreDetails, setShowMoreDetails] = useState(!!(contact?.phone || contact?.email));
-  const [quickContactSaved, setQuickContactSaved] = useState<string | null>(null);
-  const quickContactTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [customReminders, setCustomReminders] = useState<CustomReminder[]>(
     (contact?.customReminders ?? []).filter((r) => r && r.label && r.date)
   );
@@ -205,37 +203,18 @@ export default function EditContactScreen() {
     );
   };
 
-  const handleMarkContacted = () => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    markContacted(contact.id);
-  };
-
-  const QUICK_CONTACT_CHIPS: Record<1 | 2 | 3, Array<{ label: string; daysAgo: number }>> = {
-    1: [
-      { label: "Today", daysAgo: 0 },
-      { label: "This week", daysAgo: 4 },
-      { label: "This month", daysAgo: 14 },
-    ],
-    2: [
-      { label: "This week", daysAgo: 4 },
-      { label: "This month", daysAgo: 14 },
-      { label: "A few months ago", daysAgo: 60 },
-    ],
-    3: [
-      { label: "This month", daysAgo: 14 },
-      { label: "A few months ago", daysAgo: 60 },
-      { label: "Earlier this year", daysAgo: 120 },
-    ],
-  };
+  const QUICK_CONTACT_CHIPS: Array<{ label: string; daysAgo: number }> = [
+    { label: "Today", daysAgo: 0 },
+    { label: "This week", daysAgo: 4 },
+    { label: "This month", daysAgo: 14 },
+    { label: "Earlier this year", daysAgo: 120 },
+  ];
 
   const handleQuickContact = useCallback(async (label: string, daysAgo: number) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     const date = new Date(Date.now() - daysAgo * 24 * 60 * 60 * 1000);
     try {
       await markContacted(contact.id, date, label);
-      if (quickContactTimer.current) clearTimeout(quickContactTimer.current);
-      setQuickContactSaved(label);
-      quickContactTimer.current = setTimeout(() => setQuickContactSaved(null), 1800);
     } catch {
       Alert.alert("Could not save", "Failed to update last contacted. Please try again.");
     }
@@ -285,16 +264,33 @@ export default function EditContactScreen() {
         </View>
 
         <View style={styles.contactMeta}>
-          <Text style={styles.lastContactLabel}>
-            Last contacted: {formatLastContacted(contact.lastContacted ?? undefined)}
-          </Text>
-          <Pressable
-            onPress={handleMarkContacted}
-            style={({ pressed }) => [styles.markContactedBtn, pressed && { opacity: 0.7 }]}
-          >
-            <Ionicons name="checkmark-circle-outline" size={18} color={Colors.primary} />
-            <Text style={styles.markContactedText}>Mark as contacted</Text>
-          </Pressable>
+          <View style={styles.contactMetaHeader}>
+            <Text style={styles.lastContactLabel}>Last contacted</Text>
+            <Text style={styles.lastContactValue}>
+              {contact.lastContactedLabel ?? formatLastContacted(contact.lastContacted ?? undefined)}
+            </Text>
+          </View>
+          <View style={styles.quickContactRow}>
+            {QUICK_CONTACT_CHIPS.map(({ label, daysAgo }) => {
+              const currentLabel = contact.lastContactedLabel ?? formatLastContacted(contact.lastContacted ?? undefined);
+              const isSelected = currentLabel === label;
+              return (
+                <Pressable
+                  key={label}
+                  onPress={() => handleQuickContact(label, daysAgo)}
+                  style={({ pressed }) => [
+                    styles.quickChip,
+                    isSelected && styles.quickChipSelected,
+                    pressed && { opacity: 0.7 },
+                  ]}
+                >
+                  <Text style={[styles.quickChipText, isSelected && styles.quickChipTextSelected]}>
+                    {label}
+                  </Text>
+                </Pressable>
+              );
+            })}
+          </View>
         </View>
 
         <View style={styles.inputGroup}>
@@ -418,33 +414,6 @@ export default function EditContactScreen() {
                   </Text>
                   <Text style={[styles.circleOptionCount, isActive && { color: cfg.color }]}>
                     {isFull ? "Full" : `${count}/${cfg.max}`}
-                  </Text>
-                </Pressable>
-              );
-            })}
-          </View>
-        </View>
-
-        <View style={styles.inputGroup}>
-          <Text style={styles.label}>Last contacted</Text>
-          <View style={styles.quickContactRow}>
-            {QUICK_CONTACT_CHIPS[circleLevel].map(({ label, daysAgo }) => {
-              const isSaved = quickContactSaved === label;
-              return (
-                <Pressable
-                  key={label}
-                  onPress={() => handleQuickContact(label, daysAgo)}
-                  style={({ pressed }) => [
-                    styles.quickChip,
-                    isSaved && styles.quickChipSaved,
-                    pressed && { opacity: 0.7 },
-                  ]}
-                >
-                  {isSaved ? (
-                    <Ionicons name="checkmark" size={14} color={Colors.success} />
-                  ) : null}
-                  <Text style={[styles.quickChipText, isSaved && styles.quickChipTextSaved]}>
-                    {label}
                   </Text>
                 </Pressable>
               );
@@ -752,32 +721,31 @@ const styles = StyleSheet.create({
     paddingTop: 16,
   },
   contactMeta: {
-    backgroundColor: Colors.surfaceElevated,
+    backgroundColor: Colors.primary + "0D",
     borderRadius: 14,
-    padding: 14,
+    paddingHorizontal: 14,
+    paddingTop: 12,
+    paddingBottom: 14,
     marginBottom: 24,
+    borderWidth: 1,
+    borderColor: Colors.primary + "20",
+  },
+  contactMetaHeader: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
+    marginBottom: 10,
   },
   lastContactLabel: {
-    fontSize: 13,
-    fontFamily: "Nunito_400Regular",
-    color: Colors.textSecondary,
-    flex: 1,
-  },
-  markContactedBtn: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 4,
-    paddingVertical: 6,
-    paddingHorizontal: 10,
-    borderRadius: 8,
-    backgroundColor: Colors.primary + "12",
-  },
-  markContactedText: {
     fontSize: 12,
     fontFamily: "Nunito_600SemiBold",
+    color: Colors.textSecondary,
+    textTransform: "uppercase",
+    letterSpacing: 0.5,
+  },
+  lastContactValue: {
+    fontSize: 13,
+    fontFamily: "Nunito_700Bold",
     color: Colors.primary,
   },
   inputGroup: {
@@ -1056,33 +1024,31 @@ const styles = StyleSheet.create({
   },
   quickContactRow: {
     flexDirection: "row" as const,
-    gap: 8,
+    gap: 6,
   },
   quickChip: {
     flex: 1,
-    flexDirection: "row" as const,
     alignItems: "center" as const,
     justifyContent: "center" as const,
-    gap: 4,
-    paddingVertical: 10,
-    paddingHorizontal: 8,
-    borderRadius: 12,
-    backgroundColor: Colors.surface,
+    paddingVertical: 9,
+    paddingHorizontal: 4,
+    borderRadius: 10,
+    backgroundColor: Colors.primary + "08",
     borderWidth: 1.5,
-    borderColor: Colors.borderLight,
+    borderColor: Colors.primary + "18",
   },
-  quickChipSaved: {
-    backgroundColor: Colors.success + "15",
-    borderColor: Colors.success + "50",
+  quickChipSelected: {
+    backgroundColor: Colors.primary + "20",
+    borderColor: Colors.primary + "60",
   },
   quickChipText: {
-    fontSize: 12,
+    fontSize: 11,
     fontFamily: "Nunito_600SemiBold",
     color: Colors.textSecondary,
     textAlign: "center" as const,
   },
-  quickChipTextSaved: {
-    color: Colors.success,
+  quickChipTextSelected: {
+    color: Colors.primary,
   },
   errorText: {
     fontSize: 16,
