@@ -70,6 +70,7 @@ export default function HomeScreen() {
   const [suggestionPrompts, setSuggestionPrompts] = useState<Map<string, string>>(new Map());
   const [bellSheetOpen, setBellSheetOpen] = useState(false);
   const [elevationMap, setElevationMap] = useState<Record<string, number>>({});
+  const [elevatedContactTypes, setElevatedContactTypes] = useState<Set<string>>(new Set());
   const [copiedToast, setCopiedToast] = useState(false);
   const copiedToastAnim = useRef(new Animated.Value(0)).current;
   const copiedToastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -89,8 +90,13 @@ export default function HomeScreen() {
       getViewedTimestamps(user?.id ?? "").then(setHangoutViewedMap);
       getElevations().then((elevations) => {
         const map: Record<string, number> = {};
-        for (const e of elevations) map[e.contactId] = ELEVATION_SCORE_BONUS[e.circleLevel];
+        const suppressed = new Set<string>();
+        for (const e of elevations) {
+          map[e.contactId] = ELEVATION_SCORE_BONUS[e.circleLevel];
+          suppressed.add(`${e.contactId}:${e.type}`);
+        }
         setElevationMap(map);
+        setElevatedContactTypes(suppressed);
       });
       getExpiredElevations().then(async (expired) => {
         for (const entry of expired) {
@@ -107,8 +113,13 @@ export default function HomeScreen() {
           await invalidateElevationCache();
           const fresh = await getElevations();
           const map: Record<string, number> = {};
-          for (const e of fresh) map[e.contactId] = ELEVATION_SCORE_BONUS[e.circleLevel];
+          const suppressed = new Set<string>();
+          for (const e of fresh) {
+            map[e.contactId] = ELEVATION_SCORE_BONUS[e.circleLevel];
+            suppressed.add(`${e.contactId}:${e.type}`);
+          }
           setElevationMap(map);
+          setElevatedContactTypes(suppressed);
         }
       });
     }, [user?.id, markContacted, markHangout]),
@@ -117,8 +128,15 @@ export default function HomeScreen() {
   const allReminders = useMemo(() => generateReminders(contacts), [contacts]);
 
   const visibleReminders = useMemo(
-    () => allReminders.filter((r) => !dismissedReminders.has(r.id)).slice(0, MAX_REMINDERS),
-    [allReminders, dismissedReminders],
+    () => allReminders
+      .filter((r) => {
+        if (dismissedReminders.has(r.id)) return false;
+        if (r.type === "check-in-quickpick" && elevatedContactTypes.has(`${r.contactId}:checkin`)) return false;
+        if (r.type === "hangout-quickpick" && elevatedContactTypes.has(`${r.contactId}:hangout`)) return false;
+        return true;
+      })
+      .slice(0, MAX_REMINDERS),
+    [allReminders, dismissedReminders, elevatedContactTypes],
   );
 
   const getSuggestionForContact = useCallback(
@@ -231,6 +249,7 @@ export default function HomeScreen() {
           });
           await invalidateElevationCache();
           setElevationMap((prev) => ({ ...prev, [reminder.contactId]: ELEVATION_SCORE_BONUS[circleLevel] }));
+          setElevatedContactTypes((prev) => new Set(prev).add(`${reminder.contactId}:checkin`));
         }
       } else if (reminder.type === "hangout-quickpick") {
         await markHangout(reminder.contactId, date, label);
@@ -247,6 +266,7 @@ export default function HomeScreen() {
           });
           await invalidateElevationCache();
           setElevationMap((prev) => ({ ...prev, [reminder.contactId]: ELEVATION_SCORE_BONUS[circleLevel] }));
+          setElevatedContactTypes((prev) => new Set(prev).add(`${reminder.contactId}:hangout`));
         }
       }
     },
