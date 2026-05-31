@@ -1,5 +1,5 @@
 import React, { useState, useCallback, useMemo, useEffect, useRef } from "react";
-import { View, Text, StyleSheet, ScrollView, Platform, RefreshControl, Pressable, Image, Animated } from "react-native";
+import { View, Text, StyleSheet, ScrollView, Platform, RefreshControl, Pressable, Image, Animated, Linking } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import Colors from "@/constants/colors";
@@ -12,6 +12,7 @@ import { CirclesVisualization } from "@/components/CirclesVisualization";
 import { ChecklistItem } from "@/components/ChecklistItem";
 import { ReminderItem } from "@/components/ReminderItem";
 import { EmptyState } from "@/components/EmptyState";
+import { NoPhoneSheet } from "@/components/NoPhoneSheet";
 import { formatLastContacted, getDaysSince, getDaysUntilBirthday } from "@/lib/helpers";
 import { CIRCLE_CONFIG, HangoutPlan } from "@/lib/types";
 import { generateReminders, Reminder, CHECKIN_THRESHOLDS, HANGOUT_THRESHOLDS, ELEVATION_PUSH_DELAY_HOURS, ELEVATION_CLEANUP_DAYS } from "@/lib/reminders";
@@ -54,6 +55,7 @@ interface Suggestion {
   contactName: string;
   avatarColor: string;
   photoUri?: string | null;
+  phone?: string | null;
   circleLevel: 1 | 2 | 3;
   prompt: string;
   actionType: "call" | "text" | "hangout";
@@ -62,7 +64,7 @@ interface Suggestion {
 export default function HomeScreen() {
   const insets = useSafeAreaInsets();
   const { user } = useAuth();
-  const { contacts, markContacted, markHangout, refreshContacts } = useContacts();
+  const { contacts, markContacted, markHangout, refreshContacts, savePhoneNumber } = useContacts();
   const [refreshing, setRefreshing] = useState(false);
   const [dismissedReminders, setDismissedReminders] = useState<Set<string>>(new Set());
   const dismissedSuggestions = useDismissedSuggestions();
@@ -74,6 +76,7 @@ export default function HomeScreen() {
   const [copiedToast, setCopiedToast] = useState(false);
   const copiedToastAnim = useRef(new Animated.Value(0)).current;
   const copiedToastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [phoneSheet, setPhoneSheet] = useState<{ suggestion: Suggestion; mode: "sms" | "call" } | null>(null);
 
   const { data: hangouts } = useQuery<HangoutPlan[]>({
     queryKey: ["/api/hangouts"],
@@ -170,6 +173,7 @@ export default function HomeScreen() {
         contactName: contact.name,
         avatarColor: contact.avatarColor,
         photoUri: contact.photoUri,
+        phone: contact.phone,
         circleLevel,
         prompt,
         actionType,
@@ -378,6 +382,82 @@ export default function HomeScreen() {
       });
     },
     [markContacted],
+  );
+
+  const openSmsForSuggestion = useCallback(
+    async (suggestion: Suggestion, phone: string) => {
+      const contact = contacts.find((c) => c.id === suggestion.contactId);
+      const daysSinceContact = getDaysSince(contact?.lastContacted ?? undefined);
+      const daysUntilBday = getDaysUntilBirthday(contact?.birthday ?? undefined);
+      const hasBirthdaySoon = daysUntilBday !== null && daysUntilBday <= 30;
+      const message = getTextCopyMessage(suggestion.contactName, {
+        prompt: suggestion.prompt,
+        interests: contact?.interests ?? [],
+        labels: contact?.labels ?? [],
+        daysSinceContact,
+        hasBirthdaySoon,
+        circleLevel: suggestion.circleLevel,
+      });
+      if (Platform.OS === "web") {
+        try { await navigator.clipboard.writeText(message); } catch {}
+      } else {
+        const encoded = encodeURIComponent(message);
+        const url = Platform.OS === "ios" ? `sms:${phone}&body=${encoded}` : `sms:${phone}?body=${encoded}`;
+        try { await Linking.openURL(url); } catch {}
+      }
+      showCopiedToast();
+      dismissSuggestion(suggestion.contactId);
+      markContactSuggested(suggestion.contactId).catch(() => {});
+      await markContacted(suggestion.contactId);
+    },
+    [contacts, markContacted, showCopiedToast],
+  );
+
+  const handleSuggestionSms = useCallback(
+    async (suggestion: Suggestion) => {
+      if (Platform.OS === "web") {
+        await openSmsForSuggestion(suggestion, "");
+      } else if (suggestion.phone) {
+        await openSmsForSuggestion(suggestion, suggestion.phone);
+      } else {
+        setPhoneSheet({ suggestion, mode: "sms" });
+      }
+    },
+    [openSmsForSuggestion],
+  );
+
+  const handleSuggestionCall = useCallback(
+    async (suggestion: Suggestion) => {
+      if (suggestion.phone) {
+        try { await Linking.openURL(`tel:${suggestion.phone}`); } catch {}
+        dismissSuggestion(suggestion.contactId);
+        markContactSuggested(suggestion.contactId).catch(() => {});
+        await markContacted(suggestion.contactId);
+      } else {
+        setPhoneSheet({ suggestion, mode: "call" });
+      }
+    },
+    [markContacted],
+  );
+
+  const handlePhoneSheetConfirm = useCallback(
+    async (phone: string, shouldSave: boolean, extra?: { birthday?: string; photoUri?: string }) => {
+      if (!phoneSheet) return;
+      const { suggestion, mode } = phoneSheet;
+      setPhoneSheet(null);
+      if (shouldSave) {
+        savePhoneNumber(suggestion.contactId, phone, extra).catch(() => {});
+      }
+      if (mode === "sms") {
+        await openSmsForSuggestion(suggestion, phone);
+      } else {
+        try { await Linking.openURL(`tel:${phone}`); } catch {}
+        dismissSuggestion(suggestion.contactId);
+        markContactSuggested(suggestion.contactId).catch(() => {});
+        await markContacted(suggestion.contactId);
+      }
+    },
+    [phoneSheet, openSmsForSuggestion, markContacted, savePhoneNumber],
   );
 
   const profileCompletion = useMemo(() => computeProfileCompletion(contacts), [contacts]);
@@ -589,11 +669,29 @@ export default function HomeScreen() {
                     )}
                     {suggestion.actionType === "text" && (
                       <Pressable
+                        onPress={() => handleSuggestionSms(suggestion)}
+                        hitSlop={8}
+                        style={({ pressed }) => [styles.suggestionActionBtn, pressed && { opacity: 0.5 }]}
+                      >
+                        <Ionicons name="chatbubble-ellipses-outline" size={18} color={Colors.primaryLight} />
+                      </Pressable>
+                    )}
+                    {suggestion.actionType === "text" && (
+                      <Pressable
                         onPress={() => handleSuggestionCopyText(suggestion)}
                         hitSlop={8}
                         style={({ pressed }) => [styles.suggestionActionBtn, pressed && { opacity: 0.5 }]}
                       >
                         <Ionicons name="copy-outline" size={18} color={Colors.primaryLight} />
+                      </Pressable>
+                    )}
+                    {suggestion.actionType === "call" && (
+                      <Pressable
+                        onPress={() => handleSuggestionCall(suggestion)}
+                        hitSlop={8}
+                        style={({ pressed }) => [styles.suggestionActionBtn, pressed && { opacity: 0.5 }]}
+                      >
+                        <Ionicons name="call-outline" size={18} color={Colors.primaryLight} />
                       </Pressable>
                     )}
                     {suggestion.actionType === "hangout" && (
@@ -627,6 +725,14 @@ export default function HomeScreen() {
         isComplete={profileCompletion.isComplete}
       />
     </ScrollView>
+
+    <NoPhoneSheet
+      visible={!!phoneSheet}
+      contactName={phoneSheet?.suggestion.contactName ?? ""}
+      mode={phoneSheet?.mode ?? "sms"}
+      onConfirm={handlePhoneSheetConfirm}
+      onDismiss={() => setPhoneSheet(null)}
+    />
 
     {copiedToast && (
       <Animated.View

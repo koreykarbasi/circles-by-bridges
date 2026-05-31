@@ -72,7 +72,7 @@ function deriveHangoutTitle(contactName: string, prompt: string): string {
 
 export default function SuggestionsScreen() {
   const insets = useSafeAreaInsets();
-  const { contacts, markContacted, markHangout } = useContacts();
+  const { contacts, markContacted, markHangout, savePhoneNumber } = useContacts();
   const [filterCircle, setFilterCircle] = useState<1 | 2 | 3 | null>(null);
   const [refreshKey, setRefreshKey] = useState(0);
   const [shuffleJitter, setShuffleJitter] = useState<Record<string, number>>({});
@@ -552,6 +552,7 @@ export default function SuggestionsScreen() {
               contactName={s.contact.name}
               avatarColor={s.contact.avatarColor}
               photoUri={s.contact.photoUri}
+              phone={s.contact.phone}
               prompt={s.prompt}
               type={s.type}
               circleLevel={s.contact.circleLevel as 1 | 2 | 3}
@@ -567,6 +568,7 @@ export default function SuggestionsScreen() {
               onCopyText={s.type === "text" ? () => handleCopyText(s.contact.id) : undefined}
               onCopied={s.type === "text" ? showCopiedToast : undefined}
               onPlanHangout={s.type === "hangout" ? () => handlePlanHangout(s) : undefined}
+              onSaveContactData={(data) => savePhoneNumber(s.contact.id, data.phone, { birthday: data.birthday, photoUri: data.photoUri })}
             />
           );
         })

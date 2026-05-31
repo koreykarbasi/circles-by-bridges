@@ -1,5 +1,5 @@
-import React, { useCallback } from "react";
-import { View, Text, StyleSheet, Pressable, Platform } from "react-native";
+import React, { useCallback, useState, useMemo } from "react";
+import { View, Text, StyleSheet, Pressable, Platform, Linking } from "react-native";
 import { router } from "expo-router";
 import Animated, { useSharedValue, useAnimatedStyle, withTiming, withSequence, runOnJS, Easing } from "react-native-reanimated";
 import { Ionicons } from "@expo/vector-icons";
@@ -7,12 +7,14 @@ import { Avatar } from "./Avatar";
 import Colors from "@/constants/colors";
 import * as Haptics from "expo-haptics";
 import * as Clipboard from "expo-clipboard";
+import { NoPhoneSheet, type ExtraContactData } from "./NoPhoneSheet";
 
 interface SuggestionCardProps {
   contactId: string;
   contactName: string;
   avatarColor: string;
   photoUri?: string | null;
+  phone?: string | null;
   prompt: string;
   type: "call" | "text" | "hangout";
   circleLevel: 1 | 2 | 3;
@@ -28,6 +30,7 @@ interface SuggestionCardProps {
   onCopyText?: () => void;
   onCopied?: () => void;
   onPlanHangout?: () => void;
+  onSaveContactData?: (data: { phone: string; birthday?: string; photoUri?: string }) => void;
 }
 
 const TYPE_CONFIG = {
@@ -68,14 +71,12 @@ function pick<T>(arr: T[]): T {
 function reasonFromPrompt(prompt: string, interests: string[], labels: string[]): string {
   const lower = prompt.toLowerCase();
 
-  // Interest match from prompt text
   for (const interest of interests) {
     if (lower.includes(interest.toLowerCase())) {
       return `— was curious how the ${interest.toLowerCase()} has been going.`;
     }
   }
 
-  // Prompt-derived reasons — ordered from most specific to least
   if (lower.includes("memory") || lower.includes("remember") || lower.includes("reminiscing") || lower.includes("shared memory")) {
     return "— I was just reminiscing about one of our memories.";
   }
@@ -116,7 +117,6 @@ function reasonFromPrompt(prompt: string, interests: string[], labels: string[])
     return "— curious how your training has been going lately.";
   }
 
-  // Label-based fallback
   if (labels.length > 0) {
     const label = labels[0].toLowerCase();
     if (label.includes("childhood") || label.includes("college")) {
@@ -133,12 +133,10 @@ function reasonFromPrompt(prompt: string, interests: string[], labels: string[])
     }
   }
 
-  // Interests fallback
   if (interests.length > 0) {
     return `— was curious how the ${interests[0].toLowerCase()} has been going.`;
   }
 
-  // Last resort: always has a specific reason, never generic
   return "— I just wanted to reach out and check in with you.";
 }
 
@@ -173,11 +171,20 @@ export function getTextCopyMessage(
   return `${opener} ${reasonFromPrompt(prompt, interests, labels)}`;
 }
 
+function buildSmsUrl(phone: string, message: string): string {
+  const encoded = encodeURIComponent(message);
+  if (Platform.OS === "ios") {
+    return `sms:${phone}&body=${encoded}`;
+  }
+  return `sms:${phone}?body=${encoded}`;
+}
+
 export function SuggestionCard({
   contactId,
   contactName,
   avatarColor,
   photoUri,
+  phone,
   prompt,
   type,
   circleLevel,
@@ -193,10 +200,19 @@ export function SuggestionCard({
   onCopyText,
   onCopied,
   onPlanHangout,
+  onSaveContactData,
 }: SuggestionCardProps) {
   const circleColor = circleLevel === 1 ? Colors.circle1 : circleLevel === 2 ? Colors.circle2 : Colors.circle3;
   const typeConfig = TYPE_CONFIG[type];
   const urgencyConfig = URGENCY_CONFIG[urgency];
+
+  const generatedTextMessage = useMemo(
+    () => getTextCopyMessage(contactName, { prompt, interests, labels, daysSinceContact, hasBirthdaySoon, circleLevel }),
+    [contactName, prompt, interests, labels, daysSinceContact, hasBirthdaySoon, circleLevel],
+  );
+
+  const [phoneSheetVisible, setPhoneSheetVisible] = useState(false);
+  const [phoneSheetMode, setPhoneSheetMode] = useState<"sms" | "call">("sms");
 
   const opacity = useSharedValue(1);
   const translateX = useSharedValue(0);
@@ -215,7 +231,6 @@ export function SuggestionCard({
   const refreshStyle = useAnimatedStyle(() => ({
     transform: [{ scale: refreshScale.value }],
   }));
-
 
   const handleDone = useCallback(() => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
@@ -244,104 +259,183 @@ export function SuggestionCard({
 
   const handleCopyText = useCallback(async () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    const message = getTextCopyMessage(contactName, {
-      prompt,
-      interests,
-      labels,
-      daysSinceContact,
-      hasBirthdaySoon,
-      circleLevel,
-    });
     if (Platform.OS === "web") {
-      try { await navigator.clipboard.writeText(message); } catch {}
+      try { await navigator.clipboard.writeText(generatedTextMessage); } catch {}
     } else {
-      try { await Clipboard.setStringAsync(message); } catch {}
+      try { await Clipboard.setStringAsync(generatedTextMessage); } catch {}
     }
     onCopyText?.();
     onCopied?.();
-  }, [contactName, prompt, interests, labels, daysSinceContact, hasBirthdaySoon, circleLevel, onCopyText, onCopied]);
+  }, [generatedTextMessage, onCopyText, onCopied]);
 
   const handlePlanHangout = useCallback(() => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     onPlanHangout?.();
   }, [onPlanHangout]);
 
+  const openSms = useCallback(async (phoneNumber: string) => {
+    if (Platform.OS === "web") {
+      try { await navigator.clipboard.writeText(generatedTextMessage); } catch {}
+      onCopyText?.();
+      onCopied?.();
+      return;
+    }
+    const url = buildSmsUrl(phoneNumber, generatedTextMessage);
+    try {
+      await Linking.openURL(url);
+    } catch {}
+    onCopyText?.();
+    onCopied?.();
+  }, [generatedTextMessage, onCopyText, onCopied]);
+
+  const openDialer = useCallback(async (phoneNumber: string) => {
+    try {
+      await Linking.openURL(`tel:${phoneNumber}`);
+    } catch {}
+    handleDone();
+  }, [handleDone]);
+
+  const handleMessagePress = useCallback(() => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    if (Platform.OS === "web") {
+      openSms("");
+    } else if (phone) {
+      openSms(phone);
+    } else {
+      setPhoneSheetMode("sms");
+      setPhoneSheetVisible(true);
+    }
+  }, [phone, openSms]);
+
+  const handleCallPress = useCallback(() => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    if (phone) {
+      openDialer(phone);
+    } else {
+      setPhoneSheetMode("call");
+      setPhoneSheetVisible(true);
+    }
+  }, [phone, openDialer]);
+
+  const handlePhoneSheetConfirm = useCallback(async (resolvedPhone: string, shouldSave: boolean, extra?: ExtraContactData) => {
+    setPhoneSheetVisible(false);
+    if (shouldSave && onSaveContactData) {
+      onSaveContactData({ phone: resolvedPhone, birthday: extra?.birthday, photoUri: extra?.photoUri });
+    }
+    if (phoneSheetMode === "sms") {
+      await openSms(resolvedPhone);
+    } else {
+      await openDialer(resolvedPhone);
+    }
+  }, [phoneSheetMode, openSms, openDialer, onSaveContactData]);
+
   return (
-    <Animated.View style={[styles.container, animatedStyle]}>
-      <View style={styles.header}>
-        <Pressable
-          onPress={() => router.push({ pathname: "/edit-contact", params: { id: contactId } })}
-          style={({ pressed }) => [pressed && { opacity: 0.7 }]}
-          hitSlop={4}
-        >
-          <Avatar name={contactName} color={avatarColor} size={42} photoUri={photoUri} />
-        </Pressable>
-        <View style={styles.headerInfo}>
-          <Text style={styles.name} numberOfLines={1}>{contactName}</Text>
-          <View style={styles.metaRow}>
-            <View style={[styles.typeBadge, { backgroundColor: circleColor + "15" }]}>
-              <Ionicons name={typeConfig.icon} size={11} color={circleColor} />
-              <Text style={[styles.typeText, { color: circleColor }]}>{typeConfig.label}</Text>
+    <>
+      <Animated.View style={[styles.container, animatedStyle]}>
+        <View style={styles.header}>
+          <Pressable
+            onPress={() => router.push({ pathname: "/edit-contact", params: { id: contactId } })}
+            style={({ pressed }) => [pressed && { opacity: 0.7 }]}
+            hitSlop={4}
+          >
+            <Avatar name={contactName} color={avatarColor} size={42} photoUri={photoUri} />
+          </Pressable>
+          <View style={styles.headerInfo}>
+            <Text style={styles.name} numberOfLines={1}>{contactName}</Text>
+            <View style={styles.metaRow}>
+              <View style={[styles.typeBadge, { backgroundColor: circleColor + "15" }]}>
+                <Ionicons name={typeConfig.icon} size={11} color={circleColor} />
+                <Text style={[styles.typeText, { color: circleColor }]}>{typeConfig.label}</Text>
+              </View>
+              {urgency !== "ok" && (
+                <View style={[styles.urgencyDot, { backgroundColor: urgencyConfig.color }]} />
+              )}
+              {lastContactedLabel && (
+                <Text style={styles.metaText} numberOfLines={1}>{lastContactedLabel}</Text>
+              )}
             </View>
-            {urgency !== "ok" && (
-              <View style={[styles.urgencyDot, { backgroundColor: urgencyConfig.color }]} />
-            )}
-            {lastContactedLabel && (
-              <Text style={styles.metaText} numberOfLines={1}>{lastContactedLabel}</Text>
-            )}
           </View>
         </View>
-      </View>
 
-      {birthdayLabel ? (
-        <View style={styles.birthdayBanner}>
-          <Ionicons name="gift-outline" size={14} color={Colors.warning} />
-          <Text style={styles.birthdayText}>Birthday {birthdayLabel}</Text>
+        {birthdayLabel ? (
+          <View style={styles.birthdayBanner}>
+            <Ionicons name="gift-outline" size={14} color={Colors.warning} />
+            <Text style={styles.birthdayText}>Birthday {birthdayLabel}</Text>
+          </View>
+        ) : null}
+
+        <Text style={styles.prompt}>{prompt}</Text>
+
+        <View style={styles.actions}>
+          <Animated.View style={refreshStyle}>
+            <Pressable
+              onPress={handleRefresh}
+              style={({ pressed }) => [styles.iconButton, pressed && { opacity: 0.5 }]}
+            >
+              <Ionicons name="shuffle-outline" size={20} color={Colors.textSecondary} />
+            </Pressable>
+          </Animated.View>
+
+          {type === "text" && (
+            <>
+              <Pressable
+                testID="suggestion-sms-btn"
+                onPress={handleMessagePress}
+                style={({ pressed }) => [styles.iconButton, pressed && { opacity: 0.5 }]}
+              >
+                <Ionicons name="chatbubble-ellipses-outline" size={20} color={Colors.primaryLight} />
+              </Pressable>
+              {onCopyText && (
+                <Pressable
+                  testID="suggestion-copy-btn"
+                  onPress={handleCopyText}
+                  style={({ pressed }) => [styles.iconButton, pressed && { opacity: 0.5 }]}
+                >
+                  <Ionicons name="copy-outline" size={20} color={Colors.primaryLight} />
+                </Pressable>
+              )}
+            </>
+          )}
+
+          {type === "call" && (
+            <Pressable
+              testID="suggestion-call-btn"
+              onPress={handleCallPress}
+              style={({ pressed }) => [styles.iconButton, pressed && { opacity: 0.5 }]}
+            >
+              <Ionicons name="call-outline" size={20} color={Colors.primaryLight} />
+            </Pressable>
+          )}
+
+          {type === "hangout" && onPlanHangout && (
+            <Pressable
+              onPress={handlePlanHangout}
+              style={({ pressed }) => [styles.iconButton, pressed && { opacity: 0.5 }]}
+            >
+              <Ionicons name="calendar-outline" size={20} color={Colors.primaryLight} />
+            </Pressable>
+          )}
+
+          <View style={{ flex: 1 }} />
+
+          <Pressable
+            onPress={handleDone}
+            style={({ pressed }) => [styles.primaryButton, pressed && { opacity: 0.8 }]}
+          >
+            <Ionicons name="checkmark" size={18} color="#fff" />
+            <Text style={styles.primaryButtonText}>Done</Text>
+          </Pressable>
         </View>
-      ) : null}
+      </Animated.View>
 
-      <Text style={styles.prompt}>{prompt}</Text>
-
-      <View style={styles.actions}>
-        <Animated.View style={refreshStyle}>
-          <Pressable
-            onPress={handleRefresh}
-            style={({ pressed }) => [styles.iconButton, pressed && { opacity: 0.5 }]}
-          >
-            <Ionicons name="shuffle-outline" size={20} color={Colors.textSecondary} />
-          </Pressable>
-        </Animated.View>
-
-        {type === "text" && onCopyText && (
-          <Pressable
-            testID="suggestion-copy-btn"
-            onPress={handleCopyText}
-            style={({ pressed }) => [styles.iconButton, pressed && { opacity: 0.5 }]}
-          >
-            <Ionicons name="copy-outline" size={20} color={Colors.primaryLight} />
-          </Pressable>
-        )}
-
-        {type === "hangout" && onPlanHangout && (
-          <Pressable
-            onPress={handlePlanHangout}
-            style={({ pressed }) => [styles.iconButton, pressed && { opacity: 0.5 }]}
-          >
-            <Ionicons name="calendar-outline" size={20} color={Colors.primaryLight} />
-          </Pressable>
-        )}
-
-        <View style={{ flex: 1 }} />
-
-        <Pressable
-          onPress={handleDone}
-          style={({ pressed }) => [styles.primaryButton, pressed && { opacity: 0.8 }]}
-        >
-          <Ionicons name="checkmark" size={18} color="#fff" />
-          <Text style={styles.primaryButtonText}>Done</Text>
-        </Pressable>
-      </View>
-    </Animated.View>
+      <NoPhoneSheet
+        visible={phoneSheetVisible}
+        contactName={contactName}
+        mode={phoneSheetMode}
+        onConfirm={handlePhoneSheetConfirm}
+        onDismiss={() => setPhoneSheetVisible(false)}
+      />
+    </>
   );
 }
 

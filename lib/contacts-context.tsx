@@ -17,6 +17,7 @@ interface ContactsContextValue {
   deleteContact: (id: string) => Promise<void>;
   markContacted: (id: string, date?: Date, label?: string) => Promise<void>;
   markHangout: (id: string, date?: Date, label?: string) => Promise<void>;
+  savePhoneNumber: (id: string, phone: string, extra?: { birthday?: string; photoUri?: string }) => Promise<void>;
   getCircleContacts: (level: 1 | 2 | 3) => Contact[];
   getOverdueContacts: () => Contact[];
   getUpcomingBirthdays: () => Contact[];
@@ -113,6 +114,30 @@ export function ContactsProvider({ children }: { children: ReactNode }) {
     }
   }, [contacts, fetchContacts]);
 
+  const savePhoneNumberFn = useCallback(async (id: string, phone: string, extra?: { birthday?: string; photoUri?: string }) => {
+    const existing = contacts.find((c) => c.id === id);
+    const previous = existing ? { phone: existing.phone, birthday: existing.birthday, photoUri: existing.photoUri } : null;
+    const updates: Record<string, string | undefined> = { phone };
+    if (extra?.birthday && !existing?.birthday) updates.birthday = extra.birthday;
+    if (extra?.photoUri && !existing?.photoUri) updates.photoUri = extra.photoUri;
+    setContacts((prev) =>
+      prev.map((c) => (c.id === id ? { ...c, ...updates } : c)),
+    );
+    try {
+      await apiRequest("PUT", `/api/contacts/${id}`, updates);
+      fetchContacts();
+    } catch (err) {
+      setContacts((prev) =>
+        prev.map((c) =>
+          c.id === id
+            ? { ...c, phone: previous?.phone ?? null, birthday: previous?.birthday ?? null, photoUri: previous?.photoUri ?? null }
+            : c,
+        ),
+      );
+      throw err;
+    }
+  }, [contacts, fetchContacts]);
+
   const markHangoutFn = useCallback(async (id: string, date?: Date, label?: string) => {
     const ts = (date ?? new Date()).toISOString();
     setContacts((prev) =>
@@ -180,11 +205,12 @@ export function ContactsProvider({ children }: { children: ReactNode }) {
       deleteContact: deleteContactFn,
       markContacted: markContactedFn,
       markHangout: markHangoutFn,
+      savePhoneNumber: savePhoneNumberFn,
       getCircleContacts,
       getOverdueContacts,
       getUpcomingBirthdays,
     }),
-    [contacts, isLoading, fetchContacts, addContactFn, updateContactFn, deleteContactFn, markContactedFn, markHangoutFn, getCircleContacts, getOverdueContacts, getUpcomingBirthdays],
+    [contacts, isLoading, fetchContacts, addContactFn, updateContactFn, deleteContactFn, markContactedFn, markHangoutFn, savePhoneNumberFn, getCircleContacts, getOverdueContacts, getUpcomingBirthdays],
   );
 
   return <ContactsContext.Provider value={value}>{children}</ContactsContext.Provider>;
