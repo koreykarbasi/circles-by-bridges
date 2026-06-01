@@ -115,7 +115,7 @@ export function scoreSuggestion(
   let score = 0;
 
   if (circleLevel === 2) score += 2000;
-  else if (circleLevel === 1) score += 1200;
+  else if (circleLevel === 1) score += 1400;
   else score += 1000;
 
   if (daysSinceLastSuggested === null) {

@@ -12,6 +12,7 @@ import { getSmartPrompt, getNextPrompt, getActionType, resetSeenPrompts, loadSyn
 import { getDaysSince, getDaysUntilBirthday, formatLastContacted, formatBirthdayCountdown, getContactUrgency } from "@/lib/helpers";
 import { generateReminders, CHECKIN_THRESHOLDS, HANGOUT_THRESHOLDS, ELEVATION_PUSH_DELAY_HOURS, ELEVATION_CLEANUP_DAYS } from "@/lib/reminders";
 import { setElevation, getElevations, getExpiredElevations, clearElevation, ELEVATION_SCORE_BONUS, invalidateElevationCache } from "@/lib/checkin-state";
+import { snoozeContact, getSnoozedContacts, SNOOZE_DAYS } from "@/lib/reminder-snooze";
 import { getDaysSinceLastSuggestedSync, scoreSuggestion, isInCooldown } from "@/lib/suggestion-scheduler";
 import { useDismissedSuggestions, dismissSuggestion, clearDismissedSuggestions, useSchedulerDates, markContactSuggested, getCachedPrompt, setCachedPrompt, clearPromptCache } from "@/lib/suggestions-store";
 import type { Contact } from "@/lib/types";
@@ -82,6 +83,9 @@ export default function SuggestionsScreen() {
   const [cardPrompts, setCardPrompts] = useState<Record<string, GeneratedSuggestion>>({});
   const [remindersCollapsed, setRemindersCollapsed] = useState(false);
   const [elevationMap, setElevationMap] = useState<Record<string, number>>({});
+  const [elevatedContactTypes, setElevatedContactTypes] = useState<Set<string>>(new Set());
+  const [snoozedContacts, setSnoozedContacts] = useState<Set<string>>(new Set());
+  const [sessionSkippedIds, setSessionSkippedIds] = useState<Set<string>>(new Set());
   const visitCount = useRef(0);
   const [copiedToast, setCopiedToast] = useState(false);
   const copiedToastAnim = useRef(new Animated.Value(0)).current;
@@ -89,40 +93,63 @@ export default function SuggestionsScreen() {
 
   useEffect(() => {
     loadSyncedPrompts();
+    getSnoozedContacts().then(setSnoozedContacts);
+    const now = Date.now();
     getElevations().then((elevations) => {
       const map: Record<string, number> = {};
-      for (const e of elevations) map[e.contactId] = ELEVATION_SCORE_BONUS[e.circleLevel];
+      const suppressed = new Set<string>();
+      for (const e of elevations) {
+        suppressed.add(`${e.contactId}:${e.type}`);
+        if (new Date(e.pushDue).getTime() <= now) {
+          map[e.contactId] = ELEVATION_SCORE_BONUS[e.circleLevel];
+        }
+      }
       setElevationMap(map);
+      setElevatedContactTypes(suppressed);
     });
   }, []);
 
   useFocusEffect(
     useCallback(() => {
+      getSnoozedContacts().then(setSnoozedContacts);
+      setSessionSkippedIds(new Set());
+      const now = Date.now();
       getElevations().then((elevations) => {
         const map: Record<string, number> = {};
-        for (const e of elevations) map[e.contactId] = ELEVATION_SCORE_BONUS[e.circleLevel];
+        const suppressed = new Set<string>();
+        for (const e of elevations) {
+          suppressed.add(`${e.contactId}:${e.type}`);
+          if (new Date(e.pushDue).getTime() <= now) {
+            map[e.contactId] = ELEVATION_SCORE_BONUS[e.circleLevel];
+          }
+        }
         setElevationMap(map);
+        setElevatedContactTypes(suppressed);
       });
       getExpiredElevations().then(async (expired) => {
         for (const entry of expired) {
-          const daysAgo = Math.floor(Math.random() * 3) + 2;
-          const markDate = new Date(Date.now() - daysAgo * 24 * 3600 * 1000);
-          if (entry.type === "checkin") {
-            await markContacted(entry.contactId, markDate);
-          } else {
-            await markHangout(entry.contactId, markDate);
-          }
+          await markContactSuggested(entry.contactId);
+          await snoozeContact(entry.contactId, SNOOZE_DAYS[entry.circleLevel as 1 | 2 | 3]);
           await clearElevation(entry.contactId, entry.type);
         }
         if (expired.length > 0) {
           await invalidateElevationCache();
           const fresh = await getElevations();
+          const freshNow = Date.now();
           const map: Record<string, number> = {};
-          for (const e of fresh) map[e.contactId] = ELEVATION_SCORE_BONUS[e.circleLevel];
+          const suppressed = new Set<string>();
+          for (const e of fresh) {
+            suppressed.add(`${e.contactId}:${e.type}`);
+            if (new Date(e.pushDue).getTime() <= freshNow) {
+              map[e.contactId] = ELEVATION_SCORE_BONUS[e.circleLevel];
+            }
+          }
           setElevationMap(map);
+          setElevatedContactTypes(suppressed);
+          getSnoozedContacts().then(setSnoozedContacts);
         }
       });
-    }, [markContacted, markHangout]),
+    }, []),
   );
 
   useEffect(() => {
@@ -137,22 +164,31 @@ export default function SuggestionsScreen() {
     const filtered = filterCircle
       ? allReminders.filter((r) => r.circleLevel === filterCircle)
       : allReminders;
-    return filtered.filter((r) => !completedReminderIds.has(r.id));
-  }, [contacts, filterCircle, completedReminderIds]);
+    return filtered.filter((r) => {
+      if (completedReminderIds.has(r.id)) return false;
+      if (r.type === "check-in-quickpick" && elevatedContactTypes.has(`${r.contactId}:checkin`)) return false;
+      if (r.type === "hangout-quickpick" && elevatedContactTypes.has(`${r.contactId}:hangout`)) return false;
+      if ((r.type === "check-in-quickpick" || r.type === "hangout-quickpick") && snoozedContacts.has(r.contactId)) return false;
+      return true;
+    });
+  }, [contacts, filterCircle, completedReminderIds, elevatedContactTypes, snoozedContacts]);
 
   const rankedContacts = useMemo(() => {
     const filtered = filterCircle
       ? contacts.filter((c) => c.circleLevel === filterCircle)
       : contacts;
 
+    const isElevated = (c: typeof contacts[0]) => !!elevationMap[c.id];
+    const isSessionSkipped = (c: typeof contacts[0]) => sessionSkippedIds.has(c.id) && !isElevated(c);
     const inCooldown = (c: typeof contacts[0]) => {
+      if (isElevated(c)) return false;
       const daysSinceLastSug = getDaysSinceLastSuggestedSync(c.id, lastSuggestedDates);
       return isInCooldown(c.circleLevel as 1 | 2 | 3, daysSinceLastSug);
     };
 
-    const eligible = filtered.filter((c) => !inCooldown(c));
-    const cooledDown = filtered.filter((c) => inCooldown(c));
-    const pool = eligible.length >= 1 ? eligible : [...eligible, ...cooledDown];
+    const base = filtered.filter((c) => !isSessionSkipped(c));
+    const eligible = base.filter((c) => !inCooldown(c));
+    const pool = eligible.length >= 1 ? eligible : base;
 
     return [...pool]
       .map((c) => {
@@ -167,13 +203,13 @@ export default function SuggestionsScreen() {
             daysSinceContact,
             daysUntilBday,
             elevationMap[c.id],
-          ) + (shuffleJitter[c.id] ?? 0),
+          ),
         };
       })
       .sort((a, b) => b.score - a.score)
       .slice(0, 6)
       .map((x) => x.contact);
-  }, [contacts, filterCircle, lastSuggestedDates, shuffleJitter, elevationMap]);
+  }, [contacts, filterCircle, lastSuggestedDates, elevationMap, sessionSkippedIds]);
 
   useEffect(() => {
     const next: Record<string, number> = {};
@@ -347,7 +383,7 @@ export default function SuggestionsScreen() {
             cleanupDue: new Date(Date.now() + ELEVATION_CLEANUP_DAYS[circleLevel].checkin * 24 * 3600 * 1000).toISOString(),
           });
           await invalidateElevationCache();
-          setElevationMap((prev) => ({ ...prev, [reminder.contactId]: ELEVATION_SCORE_BONUS[circleLevel] }));
+          setElevatedContactTypes((prev) => new Set(prev).add(`${reminder.contactId}:checkin`));
         }
       } else if (reminder.type === "hangout-quickpick") {
         await markHangout(reminder.contactId, date, label);
@@ -363,7 +399,7 @@ export default function SuggestionsScreen() {
             cleanupDue: new Date(Date.now() + ELEVATION_CLEANUP_DAYS[circleLevel].hangout * 24 * 3600 * 1000).toISOString(),
           });
           await invalidateElevationCache();
-          setElevationMap((prev) => ({ ...prev, [reminder.contactId]: ELEVATION_SCORE_BONUS[circleLevel] }));
+          setElevatedContactTypes((prev) => new Set(prev).add(`${reminder.contactId}:hangout`));
         }
       }
     },
@@ -378,17 +414,30 @@ export default function SuggestionsScreen() {
     });
   }, []);
 
+  const handleShuffle = useCallback(() => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    const nonElevatedIds = suggestions
+      .filter((s) => !elevationMap[s.contact.id])
+      .map((s) => s.contact.id);
+    if (nonElevatedIds.length === 0) return;
+    setSessionSkippedIds((prev) => new Set([...prev, ...nonElevatedIds]));
+    setCardPrompts((prev) => {
+      const next = { ...prev };
+      nonElevatedIds.forEach((id) => delete next[id]);
+      return next;
+    });
+    resetSeenPrompts();
+    setRefreshKey((k) => k + 1);
+  }, [suggestions, elevationMap]);
+
   const handleRefreshAll = useCallback(() => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     resetSeenPrompts();
     clearPromptCache();
     setCardPrompts({});
+    setSessionSkippedIds(new Set());
+    setShuffleJitter({});
     setRefreshKey((k) => k + 1);
-    setShuffleJitter(() => {
-      const next: Record<string, number> = {};
-      for (const contact of contacts) next[contact.id] = Math.random() * 0.01;
-      return next;
-    });
     clearDismissedSuggestions();
     setCompletedReminderIds(new Set());
   }, []);
@@ -518,7 +567,7 @@ export default function SuggestionsScreen() {
       <View style={styles.suggestionsSectionHeader}>
         <Text style={styles.suggestionsSectionTitle}>Suggestions</Text>
         <Pressable
-          onPress={handleRefreshAll}
+          onPress={handleShuffle}
           hitSlop={8}
           style={({ pressed }) => [styles.sectionShuffleBtn, pressed && { opacity: 0.5 }]}
         >

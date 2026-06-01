@@ -19,9 +19,9 @@ export const CHECKIN_THRESHOLDS: Record<1 | 2 | 3, number> = { 1: 14, 2: 45, 3: 
 export const HANGOUT_THRESHOLDS: Record<1 | 2 | 3, number> = { 1: 21, 2: 60, 3: 90 };
 export const ELEVATION_PUSH_DELAY_HOURS: Record<1 | 2 | 3, number> = { 1: 24, 2: 48, 3: 72 };
 export const ELEVATION_CLEANUP_DAYS: Record<1 | 2 | 3, { checkin: number; hangout: number }> = {
-  1: { checkin: 7, hangout: 10 },
-  2: { checkin: 22, hangout: 30 },
-  3: { checkin: 37, hangout: 45 },
+  1: { checkin: 6, hangout: 6 },
+  2: { checkin: 7, hangout: 7 },
+  3: { checkin: 8, hangout: 8 },
 };
 
 // Priority baselines for custom reminders per circle (equivalent to birthday priorities)

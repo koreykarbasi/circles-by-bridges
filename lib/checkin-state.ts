@@ -123,4 +123,4 @@ export async function invalidateElevationCache(): Promise<void> {
   _cache = null;
 }
 
-export const ELEVATION_SCORE_BONUS: Record<1 | 2 | 3, number> = { 1: 3000, 2: 1500, 3: 500 };
+export const ELEVATION_SCORE_BONUS: Record<1 | 2 | 3, number> = { 1: 3000, 2: 1500, 3: 1001 };

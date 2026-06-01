@@ -5,6 +5,7 @@ import { Platform } from "react-native";
 import { apiRequest, getApiUrl } from "./query-client";
 import { fetch as expoFetch } from "expo/fetch";
 import { useAuth } from "./auth-context";
+import { clearElevation, invalidateElevationCache } from "./checkin-state";
 
 const fetchFn = Platform.OS === "web" ? globalThis.fetch : expoFetch;
 
@@ -103,6 +104,8 @@ export function ContactsProvider({ children }: { children: ReactNode }) {
     if (label) body.label = label;
     try {
       await apiRequest("POST", `/api/contacts/${id}/mark-contacted`, Object.keys(body).length ? body : undefined);
+      clearElevation(id, "checkin").catch(() => {});
+      invalidateElevationCache().catch(() => {});
       fetchContacts();
     } catch (err) {
       if (previous) {
@@ -145,7 +148,10 @@ export function ContactsProvider({ children }: { children: ReactNode }) {
     );
     const body: Record<string, string> = { hangoutAt: ts };
     if (label) body.label = label;
-    apiRequest("POST", `/api/contacts/${id}/mark-hangout`, body).then(fetchContacts);
+    apiRequest("POST", `/api/contacts/${id}/mark-hangout`, body)
+      .then(() => clearElevation(id, "hangout").catch(() => {}))
+      .then(() => invalidateElevationCache().catch(() => {}))
+      .then(fetchContacts);
   }, [fetchContacts]);
 
   const getCircleContacts = useCallback(

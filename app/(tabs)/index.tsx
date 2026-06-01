@@ -17,6 +17,7 @@ import { formatLastContacted, getDaysSince, getDaysUntilBirthday } from "@/lib/h
 import { CIRCLE_CONFIG, HangoutPlan } from "@/lib/types";
 import { generateReminders, Reminder, CHECKIN_THRESHOLDS, HANGOUT_THRESHOLDS, ELEVATION_PUSH_DELAY_HOURS, ELEVATION_CLEANUP_DAYS } from "@/lib/reminders";
 import { setElevation, getElevations, getExpiredElevations, clearElevation, ELEVATION_SCORE_BONUS, invalidateElevationCache } from "@/lib/checkin-state";
+import { snoozeContact, getSnoozedContacts, SNOOZE_DAYS } from "@/lib/reminder-snooze";
 import { getSmartPrompt, getActionType, getNextPrompt, loadSyncedPrompts } from "@/lib/prompts";
 import { getDaysSinceLastSuggestedSync, scoreSuggestion, isInCooldown } from "@/lib/suggestion-scheduler";
 import { useDismissedSuggestions, dismissSuggestion, clearDismissedSuggestions, getCachedPrompt, setCachedPrompt, clearPromptCache, useSchedulerDates, markContactSuggested } from "@/lib/suggestions-store";
@@ -73,6 +74,7 @@ export default function HomeScreen() {
   const [bellSheetOpen, setBellSheetOpen] = useState(false);
   const [elevationMap, setElevationMap] = useState<Record<string, number>>({});
   const [elevatedContactTypes, setElevatedContactTypes] = useState<Set<string>>(new Set());
+  const [snoozedContacts, setSnoozedContacts] = useState<Set<string>>(new Set());
   const [copiedToast, setCopiedToast] = useState(false);
   const copiedToastAnim = useRef(new Animated.Value(0)).current;
   const copiedToastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -91,44 +93,53 @@ export default function HomeScreen() {
   useFocusEffect(
     useCallback(() => {
       getViewedTimestamps(user?.id ?? "").then(setHangoutViewedMap);
+      getSnoozedContacts().then(setSnoozedContacts);
+      const now = Date.now();
       getElevations().then((elevations) => {
         const map: Record<string, number> = {};
         const suppressed = new Set<string>();
         for (const e of elevations) {
-          map[e.contactId] = ELEVATION_SCORE_BONUS[e.circleLevel];
           suppressed.add(`${e.contactId}:${e.type}`);
+          if (new Date(e.pushDue).getTime() <= now) {
+            map[e.contactId] = ELEVATION_SCORE_BONUS[e.circleLevel];
+          }
         }
         setElevationMap(map);
         setElevatedContactTypes(suppressed);
       });
       getExpiredElevations().then(async (expired) => {
         for (const entry of expired) {
-          const daysAgo = Math.floor(Math.random() * 3) + 2;
-          const markDate = new Date(Date.now() - daysAgo * 24 * 3600 * 1000);
-          if (entry.type === "checkin") {
-            await markContacted(entry.contactId, markDate);
-          } else {
-            await markHangout(entry.contactId, markDate);
-          }
+          await markContactSuggested(entry.contactId);
+          await snoozeContact(entry.contactId, SNOOZE_DAYS[entry.circleLevel as 1 | 2 | 3]);
           await clearElevation(entry.contactId, entry.type);
         }
         if (expired.length > 0) {
           await invalidateElevationCache();
           const fresh = await getElevations();
+          const freshNow = Date.now();
           const map: Record<string, number> = {};
           const suppressed = new Set<string>();
           for (const e of fresh) {
-            map[e.contactId] = ELEVATION_SCORE_BONUS[e.circleLevel];
             suppressed.add(`${e.contactId}:${e.type}`);
+            if (new Date(e.pushDue).getTime() <= freshNow) {
+              map[e.contactId] = ELEVATION_SCORE_BONUS[e.circleLevel];
+            }
           }
           setElevationMap(map);
           setElevatedContactTypes(suppressed);
+          getSnoozedContacts().then(setSnoozedContacts);
         }
       });
-    }, [user?.id, markContacted, markHangout]),
+    }, [user?.id]),
   );
 
-  const allReminders = useMemo(() => generateReminders(contacts), [contacts]);
+  const allReminders = useMemo(() => {
+    const all = generateReminders(contacts);
+    return all.filter((r) => {
+      if ((r.type === "check-in-quickpick" || r.type === "hangout-quickpick") && snoozedContacts.has(r.contactId)) return false;
+      return true;
+    });
+  }, [contacts, snoozedContacts]);
 
   const visibleReminders = useMemo(
     () => allReminders
@@ -186,14 +197,19 @@ export default function HomeScreen() {
     const reminderContactIds = new Set(visibleReminders.map((r) => r.contactId));
 
     const eligible = contacts.filter((c) => {
-      if (dismissedSuggestions.has(c.id)) return false;
       if (reminderContactIds.has(c.id)) return false;
+      if (elevationMap[c.id]) return true;
+      if (dismissedSuggestions.has(c.id)) return false;
       const daysSinceLastSug = getDaysSinceLastSuggestedSync(c.id, lastSuggestedDates);
       if (isInCooldown(c.circleLevel as 1 | 2 | 3, daysSinceLastSug)) return false;
       return true;
     });
 
-    const ranked = eligible
+    const pool = eligible.length > 0
+      ? eligible
+      : contacts.filter((c) => !reminderContactIds.has(c.id));
+
+    const ranked = pool
       .map((c) => {
         const daysSinceLastSug = getDaysSinceLastSuggestedSync(c.id, lastSuggestedDates);
         const daysSinceContact = getDaysSince(c.lastContacted ?? undefined);
@@ -252,7 +268,6 @@ export default function HomeScreen() {
             cleanupDue: new Date(Date.now() + ELEVATION_CLEANUP_DAYS[circleLevel].checkin * 24 * 3600 * 1000).toISOString(),
           });
           await invalidateElevationCache();
-          setElevationMap((prev) => ({ ...prev, [reminder.contactId]: ELEVATION_SCORE_BONUS[circleLevel] }));
           setElevatedContactTypes((prev) => new Set(prev).add(`${reminder.contactId}:checkin`));
         }
       } else if (reminder.type === "hangout-quickpick") {
@@ -269,7 +284,6 @@ export default function HomeScreen() {
             cleanupDue: new Date(Date.now() + ELEVATION_CLEANUP_DAYS[circleLevel].hangout * 24 * 3600 * 1000).toISOString(),
           });
           await invalidateElevationCache();
-          setElevationMap((prev) => ({ ...prev, [reminder.contactId]: ELEVATION_SCORE_BONUS[circleLevel] }));
           setElevatedContactTypes((prev) => new Set(prev).add(`${reminder.contactId}:hangout`));
         }
       }
@@ -630,12 +644,6 @@ export default function HomeScreen() {
               <Text style={styles.sectionTitle}>Suggestions</Text>
               <View style={{ flex: 1 }} />
             </View>
-
-            {suggestions.length === 0 && (
-              <View style={styles.allGoodContainer}>
-                <Text style={styles.allGoodText}>No suggestions right now. Check back later!</Text>
-              </View>
-            )}
 
             {suggestions.map((suggestion) => {
               const circleColor =
