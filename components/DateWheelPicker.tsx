@@ -24,6 +24,8 @@ const MONTHS_SHORT = [
   "Jul", "Aug", "Sep", "Oct", "Nov", "Dec",
 ];
 
+const DAY_NAMES = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
+
 const HOURS = ["1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12"];
 const AMPM = ["AM", "PM"];
 
@@ -322,6 +324,10 @@ export function DateWheelPicker({ value, onChange, mode = "birthday" }: DateWhee
     [monthIdx, clampedDayIdx, yearIdx, hourIdx, emitChange],
   );
 
+  const dayOfWeekName = mode === "datetime"
+    ? DAY_NAMES[new Date(currentYear, monthIdx, clampedDayIdx + 1).getDay()]
+    : null;
+
   if (Platform.OS === "web") {
     const selectStyle = {
       background: "transparent",
@@ -334,6 +340,11 @@ export function DateWheelPicker({ value, onChange, mode = "birthday" }: DateWhee
     };
     return (
       <View>
+        {dayOfWeekName && (
+          <View style={styles.dayOfWeekRow}>
+            <Text style={styles.dayOfWeekText}>{dayOfWeekName}</Text>
+          </View>
+        )}
         <View style={styles.webContainer}>
           <View style={[styles.webSelect, { flex: 2 }]}>
             <Text style={styles.webSelectLabel}>Month</Text>
@@ -398,7 +409,7 @@ export function DateWheelPicker({ value, onChange, mode = "birthday" }: DateWhee
 
   const monthDisplayItems = mode === "datetime" ? MONTHS_SHORT : MONTHS;
 
-  return (
+  const wheelPicker = (
     <View style={styles.container}>
       <WheelColumn
         items={monthDisplayItems}
@@ -453,6 +464,17 @@ export function DateWheelPicker({ value, onChange, mode = "birthday" }: DateWhee
           />
         </>
       )}
+    </View>
+  );
+
+  if (!dayOfWeekName) return wheelPicker;
+
+  return (
+    <View>
+      <View style={styles.dayOfWeekRow}>
+        <Text style={styles.dayOfWeekText}>{dayOfWeekName}</Text>
+      </View>
+      {wheelPicker}
     </View>
   );
 }
@@ -519,5 +541,16 @@ const styles = StyleSheet.create({
     fontFamily: "Nunito_600SemiBold",
     color: Colors.textTertiary,
     marginBottom: 3,
+  },
+  dayOfWeekRow: {
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: 6,
+  },
+  dayOfWeekText: {
+    fontSize: 12,
+    fontFamily: "Nunito_600SemiBold",
+    color: Colors.primary,
+    letterSpacing: 0.3,
   },
 });

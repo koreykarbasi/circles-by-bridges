@@ -190,7 +190,9 @@ export default function HangoutDetailScreen() {
 
   const handleCopyLink = useCallback(async () => {
     if (!plan) return;
-    const ok = await copyToClipboard(getVoteUrl());
+    const url = getVoteUrl();
+    const msg = `Hey, it's been a while — let's hang out! Rank the dates that work best for you: ${url}`;
+    const ok = await copyToClipboard(msg);
     if (ok) {
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
       setLinkCopied(true);
