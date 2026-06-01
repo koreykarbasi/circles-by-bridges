@@ -617,7 +617,7 @@ export default function SuggestionsScreen() {
               onCopyText={s.type === "text" ? () => handleCopyText(s.contact.id) : undefined}
               onCopied={s.type === "text" ? showCopiedToast : undefined}
               onPlanHangout={s.type === "hangout" ? () => handlePlanHangout(s) : undefined}
-              onSaveContactData={(data) => savePhoneNumber(s.contact.id, data.phone, { birthday: data.birthday, photoUri: data.photoUri })}
+              onSaveContactData={(data) => savePhoneNumber(s.contact.id, data.phone, { birthday: data.birthday, photoUri: data.photoUri }).catch(() => {})}
             />
           );
         })

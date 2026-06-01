@@ -415,7 +415,8 @@ export default function HomeScreen() {
       if (Platform.OS === "web") {
         try { await navigator.clipboard.writeText(message); } catch {}
       } else {
-        const url = Platform.OS === "ios" ? `sms:${phone}&body=${message}` : `sms:${phone}?body=${encodeURIComponent(message)}`;
+        const encoded = encodeURIComponent(message);
+        const url = Platform.OS === "ios" ? `sms:${phone}&body=${encoded}` : `sms:${phone}?body=${encoded}`;
         try { await Linking.openURL(url); } catch {}
       }
       showCopiedToast();

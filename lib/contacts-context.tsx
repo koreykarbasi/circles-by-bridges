@@ -119,21 +119,35 @@ export function ContactsProvider({ children }: { children: ReactNode }) {
 
   const savePhoneNumberFn = useCallback(async (id: string, phone: string, extra?: { birthday?: string; photoUri?: string }) => {
     const existing = contacts.find((c) => c.id === id);
-    const previous = existing ? { phone: existing.phone, birthday: existing.birthday, photoUri: existing.photoUri } : null;
-    const updates: Record<string, string | undefined> = { phone };
-    if (extra?.birthday && !existing?.birthday) updates.birthday = extra.birthday;
-    if (extra?.photoUri && !existing?.photoUri) updates.photoUri = extra.photoUri;
+    if (!existing) return;
+    const previous = { phone: existing.phone, birthday: existing.birthday, photoUri: existing.photoUri };
+    const newBirthday = extra?.birthday && !existing.birthday ? extra.birthday : existing.birthday;
+    const newPhotoUri = extra?.photoUri && !existing.photoUri ? extra.photoUri : existing.photoUri;
     setContacts((prev) =>
-      prev.map((c) => (c.id === id ? { ...c, ...updates } : c)),
+      prev.map((c) => (c.id === id ? { ...c, phone, birthday: newBirthday ?? null, photoUri: newPhotoUri ?? null } : c)),
     );
     try {
-      await apiRequest("PUT", `/api/contacts/${id}`, updates);
+      await apiRequest("PUT", `/api/contacts/${id}`, {
+        name: existing.name,
+        circleLevel: existing.circleLevel,
+        interests: existing.interests,
+        labels: existing.labels,
+        birthday: newBirthday,
+        lastContacted: existing.lastContacted,
+        lastHangout: existing.lastHangout,
+        notes: existing.notes,
+        phone,
+        email: existing.email,
+        avatarColor: existing.avatarColor,
+        photoUri: newPhotoUri,
+        customReminders: existing.customReminders ?? [],
+      });
       fetchContacts();
     } catch (err) {
       setContacts((prev) =>
         prev.map((c) =>
           c.id === id
-            ? { ...c, phone: previous?.phone ?? null, birthday: previous?.birthday ?? null, photoUri: previous?.photoUri ?? null }
+            ? { ...c, phone: previous.phone ?? null, birthday: previous.birthday ?? null, photoUri: previous.photoUri ?? null }
             : c,
         ),
       );

@@ -30,7 +30,7 @@ interface SuggestionCardProps {
   onCopyText?: () => void;
   onCopied?: () => void;
   onPlanHangout?: () => void;
-  onSaveContactData?: (data: { phone: string; birthday?: string; photoUri?: string }) => void;
+  onSaveContactData?: (data: { phone: string; birthday?: string; photoUri?: string }) => Promise<void> | void;
 }
 
 const TYPE_CONFIG = {
@@ -45,25 +45,6 @@ const URGENCY_CONFIG = {
   ok: { color: Colors.success, label: "On track" },
 };
 
-const OPENERS = [
-  "Hey {name}, I was just thinking about you",
-  "Hey {name}, you crossed my mind today",
-  "Hey {name}, randomly thought of you",
-  "Hey {name}, you've been on my mind",
-];
-
-const BIRTHDAY_REASONS = [
-  "— your birthday is coming up and I didn't want to miss it. Hope you have an amazing day!",
-  "— just wanted to wish you an early happy birthday! Hope it's a great one.",
-  "— had to reach out before your birthday. Hope you have the best one!",
-];
-
-const OVERDUE_REASONS = [
-  "— it's been a while and I've been meaning to reach out.",
-  "— it's been too long. Would love to catch up soon.",
-  "— feels like ages. How have you been?",
-];
-
 function pick<T>(arr: T[]): T {
   return arr[Math.floor(Math.random() * arr.length)];
 }
@@ -73,71 +54,74 @@ function reasonFromPrompt(prompt: string, interests: string[], labels: string[])
 
   for (const interest of interests) {
     if (lower.includes(interest.toLowerCase())) {
-      return `— was curious how the ${interest.toLowerCase()} has been going.`;
+      return `How's the ${interest.toLowerCase()} been going? Would love to hear what's new with you.`;
     }
   }
 
   if (lower.includes("memory") || lower.includes("remember") || lower.includes("reminiscing") || lower.includes("shared memory")) {
-    return "— I was just reminiscing about one of our memories.";
+    return pick([
+      "I was just thinking about some of our memories together. How have you been?",
+      "I was just reminiscing about old times. We need to catch up soon!",
+    ]);
   }
   if (lower.includes("appreciat") || lower.includes("admire") || lower.includes("grateful") || lower.includes("thankful")) {
-    return "— I was thinking about how much I appreciate having you in my life.";
+    return "I've been thinking about how much I value our friendship. Hope everything's going well on your end!";
   }
   if (lower.includes("laugh") || lower.includes("funny") || lower.includes("joke")) {
-    return "— something made me laugh and it reminded me of you.";
+    return "Something happened recently that made me laugh and instantly reminded me of you. How have you been?";
   }
-  if (lower.includes("support") || lower.includes("there for") || lower.includes("helped you grow") || lower.includes("challenge")) {
-    return "— thinking about how much you've supported me lately.";
+  if (lower.includes("support") || lower.includes("there for") || lower.includes("helped") || lower.includes("challenge")) {
+    return "I've been thinking about you lately. Hope things are going great — how have you been?";
   }
   if (lower.includes("vulnerable") || lower.includes("honest") || lower.includes("open up")) {
-    return "— there's something I've been meaning to share with you.";
+    return "There's something I've been meaning to share with you. Can we catch up soon?";
   }
   if (lower.includes("voice") || lower.includes("hear your voice") || lower.includes("voice note")) {
-    return "— I just wanted to hear how things are going.";
+    return "I'd love to hear how things are going for you. What's new?";
   }
   if (lower.includes("plan") || lower.includes("hang") || lower.includes("get together") || lower.includes("spontaneous")) {
-    return "— we should make time to get together soon.";
+    return "We should really make plans to hang out soon. What does your schedule look like?";
   }
   if (lower.includes("birthday")) {
-    return "— your birthday is on my mind and I wanted to reach out.";
+    return "Your birthday is on my mind and I didn't want to let it slip by. Hope you have the best day!";
   }
   if (lower.includes("trip") || lower.includes("travel") || lower.includes("adventure")) {
-    return "— been thinking about your travels lately.";
+    return "I've been thinking about your travels lately. How have the adventures been going?";
   }
-  if (lower.includes("work") || lower.includes("career") || lower.includes("job")) {
-    return "— I wanted to check in and see how work's been treating you.";
+  if (lower.includes("work") || lower.includes("career") || lower.includes("job") || lower.includes("project")) {
+    return "How's work been going for you lately? Would love to hear what you've been up to.";
   }
   if (lower.includes("recipe") || lower.includes("cook") || lower.includes("food")) {
-    return "— I tried a new recipe and thought of you.";
+    return "I tried a new recipe recently and it made me think of you. How have you been?";
   }
   if (lower.includes("read") || lower.includes("book")) {
-    return "— I read something recently that made me think of you.";
+    return "I read something recently that made me think of you. How have you been?";
   }
-  if (lower.includes("training") || lower.includes("workout") || lower.includes("hike") || lower.includes("run")) {
-    return "— curious how your training has been going lately.";
+  if (lower.includes("training") || lower.includes("workout") || lower.includes("hike") || lower.includes("run") || lower.includes("gym")) {
+    return "How's the training been going? Would love to hear how things are.";
+  }
+  if (lower.includes("music") || lower.includes("concert") || lower.includes("show")) {
+    return "Heard something recently that made me think of you. How have you been?";
   }
 
   if (labels.length > 0) {
     const label = labels[0].toLowerCase();
     if (label.includes("childhood") || label.includes("college")) {
-      return "— I was just thinking about our history together.";
+      return "I was just thinking about our history together. How have you been?";
     }
     if (label.includes("work")) {
-      return "— I wanted to check in and see how things are going at work.";
-    }
-    if (label.includes("travel")) {
-      return "— been thinking about our last trip.";
+      return "How are things going at work? Would love to catch up!";
     }
     if (label.includes("family")) {
-      return "— wanted to check in and see how the family is doing.";
+      return "How's the family doing? Would love to hear from you.";
     }
   }
 
   if (interests.length > 0) {
-    return `— was curious how the ${interests[0].toLowerCase()} has been going.`;
+    return `How's the ${interests[0].toLowerCase()} been going lately?`;
   }
 
-  return "— I just wanted to reach out and check in with you.";
+  return "How have you been? Would love to catch up soon.";
 }
 
 export function getTextCopyMessage(
@@ -151,7 +135,7 @@ export function getTextCopyMessage(
     circleLevel?: 1 | 2 | 3;
   },
 ): string {
-  const opener = pick(OPENERS).replace("{name}", contactName);
+  const firstName = contactName.split(" ")[0];
   const {
     prompt = "",
     interests = [],
@@ -161,21 +145,37 @@ export function getTextCopyMessage(
   } = options ?? {};
 
   if (hasBirthdaySoon) {
-    return `${opener} ${pick(BIRTHDAY_REASONS)}`;
+    return pick([
+      `Hey ${firstName}! Your birthday is coming up and I didn't want to miss it. Hope you have the most amazing day!`,
+      `Hey ${firstName}! Just wanted to wish you an early happy birthday. Hope it's a great one!`,
+      `Hey ${firstName}! Thinking of you with your birthday around the corner. Have an incredible day!`,
+    ]);
   }
 
   if (daysSinceContact !== null && daysSinceContact !== undefined && daysSinceContact > 45) {
-    return `${opener} ${pick(OVERDUE_REASONS)}`;
+    return pick([
+      `Hey ${firstName}! It's been way too long. I've been meaning to reach out — how have you been?`,
+      `Hey ${firstName}! Randomly thought of you. Feels like ages — how are things going?`,
+      `Hey ${firstName}! It's been a while. Would love to catch up. How have you been?`,
+    ]);
   }
 
-  return `${opener} ${reasonFromPrompt(prompt, interests, labels)}`;
+  const opener = pick([
+    `Hey ${firstName}! Thinking of you.`,
+    `Hey ${firstName}! You've been on my mind.`,
+    `Hey ${firstName}! Randomly thought of you today.`,
+    `Hey ${firstName}! You crossed my mind.`,
+  ]);
+  const reason = reasonFromPrompt(prompt, interests, labels);
+  return `${opener} ${reason}`;
 }
 
 function buildSmsUrl(phone: string, message: string): string {
+  const encoded = encodeURIComponent(message);
   if (Platform.OS === "ios") {
-    return `sms:${phone}&body=${message}`;
+    return `sms:${phone}&body=${encoded}`;
   }
-  return `sms:${phone}?body=${encodeURIComponent(message)}`;
+  return `sms:${phone}?body=${encoded}`;
 }
 
 export function SuggestionCard({
@@ -319,7 +319,9 @@ export function SuggestionCard({
   const handlePhoneSheetConfirm = useCallback(async (resolvedPhone: string, shouldSave: boolean, extra?: ExtraContactData) => {
     setPhoneSheetVisible(false);
     if (shouldSave && onSaveContactData) {
-      onSaveContactData({ phone: resolvedPhone, birthday: extra?.birthday, photoUri: extra?.photoUri });
+      try {
+        await onSaveContactData({ phone: resolvedPhone, birthday: extra?.birthday, photoUri: extra?.photoUri });
+      } catch {}
     }
     if (phoneSheetMode === "sms") {
       await openSms(resolvedPhone);
