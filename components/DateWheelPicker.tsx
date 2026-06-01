@@ -24,7 +24,7 @@ const MONTHS_SHORT = [
   "Jul", "Aug", "Sep", "Oct", "Nov", "Dec",
 ];
 
-const DAY_NAMES = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
+const DAY_NAMES_SHORT = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
 const HOURS = ["1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12"];
 const AMPM = ["AM", "PM"];
@@ -324,8 +324,9 @@ export function DateWheelPicker({ value, onChange, mode = "birthday" }: DateWhee
     [monthIdx, clampedDayIdx, yearIdx, hourIdx, emitChange],
   );
 
-  const dayOfWeekName = mode === "datetime"
-    ? DAY_NAMES[new Date(currentYear, monthIdx, clampedDayIdx + 1).getDay()]
+  const showDayOfWeek = mode === "datetime" || mode === "deadline";
+  const dayOfWeekShort = showDayOfWeek
+    ? DAY_NAMES_SHORT[new Date(currentYear, monthIdx, clampedDayIdx + 1).getDay()]
     : null;
 
   if (Platform.OS === "web") {
@@ -339,77 +340,76 @@ export function DateWheelPicker({ value, onChange, mode = "birthday" }: DateWhee
       width: "100%",
     };
     return (
-      <View>
-        {dayOfWeekName && (
-          <View style={styles.dayOfWeekRow}>
-            <Text style={styles.dayOfWeekText}>{dayOfWeekName}</Text>
+      <View style={styles.webContainer}>
+        <View style={[styles.webSelect, { flex: 2 }]}>
+          <Text style={styles.webSelectLabel}>Month</Text>
+          <select
+            value={monthIdx}
+            onChange={(e) => handleMonthChange(Number(e.target.value))}
+            style={selectStyle}
+          >
+            {MONTHS.map((m, i) => <option key={m} value={i}>{m}</option>)}
+          </select>
+        </View>
+        <View style={styles.webSelect}>
+          <Text style={styles.webSelectLabel}>Day</Text>
+          <select
+            value={clampedDayIdx}
+            onChange={(e) => handleDayChange(Number(e.target.value))}
+            style={selectStyle}
+          >
+            {days.map((d, i) => <option key={d} value={i}>{d}</option>)}
+          </select>
+        </View>
+        {(mode === "deadline" || mode === "datetime") && (
+          <View style={styles.webSelect}>
+            <Text style={styles.webSelectLabel}>Year</Text>
+            <select
+              value={yearIdx}
+              onChange={(e) => handleYearChange(Number(e.target.value))}
+              style={selectStyle}
+            >
+              {ALL_YEARS.map((y, i) => <option key={y} value={i}>{y}</option>)}
+            </select>
           </View>
         )}
-        <View style={styles.webContainer}>
-          <View style={[styles.webSelect, { flex: 2 }]}>
-            <Text style={styles.webSelectLabel}>Month</Text>
-            <select
-              value={monthIdx}
-              onChange={(e) => handleMonthChange(Number(e.target.value))}
-              style={selectStyle}
-            >
-              {MONTHS.map((m, i) => <option key={m} value={i}>{m}</option>)}
-            </select>
-          </View>
-          <View style={styles.webSelect}>
-            <Text style={styles.webSelectLabel}>Day</Text>
-            <select
-              value={clampedDayIdx}
-              onChange={(e) => handleDayChange(Number(e.target.value))}
-              style={selectStyle}
-            >
-              {days.map((d, i) => <option key={d} value={i}>{d}</option>)}
-            </select>
-          </View>
-          {(mode === "deadline" || mode === "datetime") && (
+        {mode === "datetime" && (
+          <>
             <View style={styles.webSelect}>
-              <Text style={styles.webSelectLabel}>Year</Text>
+              <Text style={styles.webSelectLabel}>Hour</Text>
               <select
-                value={yearIdx}
-                onChange={(e) => handleYearChange(Number(e.target.value))}
+                value={hourIdx}
+                onChange={(e) => handleHourChange(Number(e.target.value))}
                 style={selectStyle}
               >
-                {ALL_YEARS.map((y, i) => <option key={y} value={i}>{y}</option>)}
+                {HOURS.map((h, i) => <option key={h} value={i}>{h}</option>)}
               </select>
             </View>
-          )}
-          {mode === "datetime" && (
-            <>
-              <View style={styles.webSelect}>
-                <Text style={styles.webSelectLabel}>Hour</Text>
-                <select
-                  value={hourIdx}
-                  onChange={(e) => handleHourChange(Number(e.target.value))}
-                  style={selectStyle}
-                >
-                  {HOURS.map((h, i) => <option key={h} value={i}>{h}</option>)}
-                </select>
-              </View>
-              <View style={styles.webSelect}>
-                <Text style={styles.webSelectLabel}> </Text>
-                <select
-                  value={ampmIdx}
-                  onChange={(e) => handleAmpmChange(Number(e.target.value))}
-                  style={selectStyle}
-                >
-                  {AMPM.map((a, i) => <option key={a} value={i}>{a}</option>)}
-                </select>
-              </View>
-            </>
-          )}
-        </View>
+            <View style={styles.webSelect}>
+              <Text style={styles.webSelectLabel}> </Text>
+              <select
+                value={ampmIdx}
+                onChange={(e) => handleAmpmChange(Number(e.target.value))}
+                style={selectStyle}
+              >
+                {AMPM.map((a, i) => <option key={a} value={i}>{a}</option>)}
+              </select>
+            </View>
+          </>
+        )}
+        {dayOfWeekShort && (
+          <View style={[styles.webSelect, { justifyContent: "center", alignItems: "center" }]}>
+            <Text style={styles.webSelectLabel}>Day</Text>
+            <Text style={styles.webDayOfWeek}>{dayOfWeekShort}</Text>
+          </View>
+        )}
       </View>
     );
   }
 
   const monthDisplayItems = mode === "datetime" ? MONTHS_SHORT : MONTHS;
 
-  const wheelPicker = (
+  return (
     <View style={styles.container}>
       <WheelColumn
         items={monthDisplayItems}
@@ -464,17 +464,14 @@ export function DateWheelPicker({ value, onChange, mode = "birthday" }: DateWhee
           />
         </>
       )}
-    </View>
-  );
-
-  if (!dayOfWeekName) return wheelPicker;
-
-  return (
-    <View>
-      <View style={styles.dayOfWeekRow}>
-        <Text style={styles.dayOfWeekText}>{dayOfWeekName}</Text>
-      </View>
-      {wheelPicker}
+      {dayOfWeekShort && (
+        <>
+          <View style={styles.separator} />
+          <View style={styles.dayOfWeekCell}>
+            <Text style={styles.dayOfWeekText}>{dayOfWeekShort}</Text>
+          </View>
+        </>
+      )}
     </View>
   );
 }
@@ -523,6 +520,18 @@ const styles = StyleSheet.create({
     fontFamily: "Nunito_800ExtraBold",
     color: Colors.text,
   },
+  dayOfWeekCell: {
+    flex: 1,
+    height: PICKER_HEIGHT,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  dayOfWeekText: {
+    fontSize: 14,
+    fontFamily: "Nunito_700Bold",
+    color: Colors.primary,
+    letterSpacing: 0.5,
+  },
   webContainer: {
     flexDirection: "row",
     gap: 6,
@@ -542,15 +551,9 @@ const styles = StyleSheet.create({
     color: Colors.textTertiary,
     marginBottom: 3,
   },
-  dayOfWeekRow: {
-    alignItems: "center",
-    justifyContent: "center",
-    marginBottom: 6,
-  },
-  dayOfWeekText: {
-    fontSize: 12,
-    fontFamily: "Nunito_600SemiBold",
+  webDayOfWeek: {
+    fontSize: 14,
+    fontFamily: "Nunito_700Bold",
     color: Colors.primary,
-    letterSpacing: 0.3,
   },
 });
