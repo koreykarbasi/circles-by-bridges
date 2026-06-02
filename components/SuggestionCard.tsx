@@ -171,11 +171,10 @@ export function getTextCopyMessage(
 }
 
 function buildSmsUrl(phone: string, message: string): string {
-  const encoded = encodeURIComponent(message);
   if (Platform.OS === "ios") {
-    return `sms:${phone}&body=${encoded}`;
+    return `sms:${phone}&body=${message}`;
   }
-  return `sms:${phone}?body=${encoded}`;
+  return `sms:${phone}?body=${encodeURIComponent(message)}`;
 }
 
 export function SuggestionCard({
