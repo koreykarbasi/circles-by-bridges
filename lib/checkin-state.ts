@@ -51,16 +51,16 @@ async function persist(): Promise<void> {
   }
 }
 
-async function tryScheduleNotification(contactName: string, pushDue: string): Promise<string | undefined> {
+async function tryScheduleNotification(contactName: string, pushDue: string, type: ElevationType): Promise<string | undefined> {
   try {
     const triggerDate = new Date(pushDue);
     if (triggerDate <= new Date()) return undefined;
+    const title = `Reach out to ${contactName}`;
+    const body = type === "hangout"
+      ? `It's been a while since you hung out with ${contactName} — a good time to plan something.`
+      : `It's been a while since you connected with ${contactName} — a good time to send a text or give them a call.`;
     const id = await Notifications.scheduleNotificationAsync({
-      content: {
-        title: "Don't forget to reach out",
-        body: `It's a good time to connect with ${contactName}`,
-        sound: true,
-      },
+      content: { title, body, sound: true },
       trigger: {
         type: Notifications.SchedulableTriggerInputTypes.DATE,
         date: triggerDate,
@@ -86,7 +86,7 @@ export async function setElevation(entry: Omit<ElevationEntry, "scheduledNotifId
   if (existing?.scheduledNotifId) {
     await tryCancelNotification(existing.scheduledNotifId);
   }
-  const scheduledNotifId = await tryScheduleNotification(entry.contactName, entry.pushDue);
+  const scheduledNotifId = await tryScheduleNotification(entry.contactName, entry.pushDue, entry.type);
   store[key] = { ...entry, scheduledNotifId };
   await persist();
 }

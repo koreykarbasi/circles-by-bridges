@@ -378,7 +378,6 @@ export default function HomeScreen() {
         try { await Clipboard.setStringAsync(message); } catch {}
       }
       showCopiedToast();
-      dismissSuggestion(suggestion.contactId);
       markContactSuggested(suggestion.contactId).catch(() => {});
       await markContacted(suggestion.contactId);
     },
@@ -388,7 +387,6 @@ export default function HomeScreen() {
   const handleSuggestionHangout = useCallback(
     async (suggestion: Suggestion) => {
       await markContacted(suggestion.contactId);
-      dismissSuggestion(suggestion.contactId);
       markContactSuggested(suggestion.contactId).catch(() => {});
       router.push({
         pathname: "/create-hangout",
@@ -419,7 +417,6 @@ export default function HomeScreen() {
         try { await Linking.openURL(url); } catch {}
       }
       showCopiedToast();
-      dismissSuggestion(suggestion.contactId);
       markContactSuggested(suggestion.contactId).catch(() => {});
       await markContacted(suggestion.contactId);
     },
@@ -443,7 +440,6 @@ export default function HomeScreen() {
     async (suggestion: Suggestion) => {
       if (suggestion.phone) {
         try { await Linking.openURL(`tel:${suggestion.phone}`); } catch {}
-        dismissSuggestion(suggestion.contactId);
         markContactSuggested(suggestion.contactId).catch(() => {});
         await markContacted(suggestion.contactId);
       } else {
@@ -465,7 +461,6 @@ export default function HomeScreen() {
         await openSmsForSuggestion(suggestion, phone);
       } else {
         try { await Linking.openURL(`tel:${phone}`); } catch {}
-        dismissSuggestion(suggestion.contactId);
         markContactSuggested(suggestion.contactId).catch(() => {});
         await markContacted(suggestion.contactId);
       }

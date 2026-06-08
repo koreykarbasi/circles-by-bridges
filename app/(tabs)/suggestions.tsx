@@ -306,7 +306,6 @@ export default function SuggestionsScreen() {
   const handlePlanHangout = useCallback(
     async (suggestion: GeneratedSuggestion) => {
       await markContacted(suggestion.contact.id);
-      dismissSuggestion(suggestion.contact.id);
       router.push({
         pathname: "/create-hangout",
         params: {
@@ -346,7 +345,6 @@ export default function SuggestionsScreen() {
   const handleCopyText = useCallback(
     (contactId: string) => {
       markContacted(contactId);
-      dismissSuggestion(contactId);
     },
     [markContacted],
   );
