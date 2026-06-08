@@ -527,8 +527,8 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   dayOfWeekText: {
-    fontSize: 14,
-    fontFamily: "Nunito_700Bold",
+    fontSize: 17,
+    fontFamily: "Nunito_800ExtraBold",
     color: Colors.primary,
     letterSpacing: 0.5,
   },
