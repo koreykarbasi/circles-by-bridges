@@ -305,7 +305,6 @@ export default function SuggestionsScreen() {
 
   const handlePlanHangout = useCallback(
     async (suggestion: GeneratedSuggestion) => {
-      await markContacted(suggestion.contact.id);
       router.push({
         pathname: "/create-hangout",
         params: {
@@ -314,7 +313,7 @@ export default function SuggestionsScreen() {
         },
       });
     },
-    [markContacted],
+    [],
   );
 
   const handleDone = useCallback(
@@ -343,10 +342,10 @@ export default function SuggestionsScreen() {
   }, [copiedToastAnim]);
 
   const handleCopyText = useCallback(
-    (contactId: string) => {
-      markContacted(contactId);
+    (_contactId: string) => {
+      // copying alone does not mark as contacted — only explicit "done" does
     },
-    [markContacted],
+    [],
   );
 
   const handleReminderComplete = useCallback(

@@ -384,21 +384,19 @@ export default function HomeScreen() {
       }
       showCopiedToast();
       markContactSuggested(suggestion.contactId).catch(() => {});
-      await markContacted(suggestion.contactId);
     },
-    [markContacted, contacts, showCopiedToast],
+    [contacts, showCopiedToast],
   );
 
   const handleSuggestionHangout = useCallback(
     async (suggestion: Suggestion) => {
-      await markContacted(suggestion.contactId);
       markContactSuggested(suggestion.contactId).catch(() => {});
       router.push({
         pathname: "/create-hangout",
         params: { contactName: suggestion.contactName },
       });
     },
-    [markContacted],
+    [],
   );
 
   const openSmsForSuggestion = useCallback(
@@ -423,9 +421,8 @@ export default function HomeScreen() {
       }
       showCopiedToast();
       markContactSuggested(suggestion.contactId).catch(() => {});
-      await markContacted(suggestion.contactId);
     },
-    [contacts, markContacted, showCopiedToast],
+    [contacts, showCopiedToast],
   );
 
   const handleSuggestionSms = useCallback(
@@ -446,12 +443,11 @@ export default function HomeScreen() {
       if (suggestion.phone) {
         try { await Linking.openURL(`tel:${suggestion.phone}`); } catch {}
         markContactSuggested(suggestion.contactId).catch(() => {});
-        await markContacted(suggestion.contactId);
       } else {
         setPhoneSheet({ suggestion, mode: "call" });
       }
     },
-    [markContacted],
+    [],
   );
 
   const handlePhoneSheetConfirm = useCallback(
@@ -467,10 +463,9 @@ export default function HomeScreen() {
       } else {
         try { await Linking.openURL(`tel:${phone}`); } catch {}
         markContactSuggested(suggestion.contactId).catch(() => {});
-        await markContacted(suggestion.contactId);
       }
     },
-    [phoneSheet, openSmsForSuggestion, markContacted, savePhoneNumber],
+    [phoneSheet, openSmsForSuggestion, savePhoneNumber],
   );
 
   const profileCompletion = useMemo(() => computeProfileCompletion(contacts), [contacts]);
