@@ -55,10 +55,12 @@ async function tryScheduleNotification(contactName: string, pushDue: string, typ
   try {
     const triggerDate = new Date(pushDue);
     if (triggerDate <= new Date()) return undefined;
-    const title = `Reach out to ${contactName}`;
+    const title = type === "hangout"
+      ? `Plan a hangout with ${contactName}`
+      : `Reach out to ${contactName}`;
     const body = type === "hangout"
-      ? `It's been a while since you hung out with ${contactName} — a good time to plan something.`
-      : `It's been a while since you connected with ${contactName} — a good time to send a text or give them a call.`;
+      ? `It's been a while since you hung out with ${contactName} — open the app to set up a hangout.`
+      : `It's been a while since you connected with ${contactName} — check the app for suggestions on what to say.`;
     const id = await Notifications.scheduleNotificationAsync({
       content: { title, body, sound: true },
       trigger: {
@@ -81,6 +83,17 @@ async function tryCancelNotification(notifId: string | undefined): Promise<void>
 
 export async function setElevation(entry: Omit<ElevationEntry, "scheduledNotifId">): Promise<void> {
   const store = await load();
+
+  // If ANY elevation for this contact already has a future scheduled notification,
+  // leave it in place — avoids double-fire when the same contact appears on both
+  // Home and Suggestions tabs.
+  const now = new Date();
+  for (const v of Object.values(store)) {
+    if (v.contactId === entry.contactId && v.scheduledNotifId && new Date(v.pushDue) > now) {
+      return;
+    }
+  }
+
   const key = storeKey(entry.contactId, entry.type);
   const existing = store[key];
   if (existing?.scheduledNotifId) {

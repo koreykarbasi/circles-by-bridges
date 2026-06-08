@@ -86,6 +86,15 @@ export const hangoutVotes = pgTable("hangout_votes", {
     .on(table.planId, table.voterName, table.optionId),
 }));
 
+export const notificationLog = pgTable("notification_log", {
+  id: varchar("id")
+    .primaryKey()
+    .default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").notNull(),
+  contactId: varchar("contact_id").notNull(),
+  sentAt: timestamp("sent_at").defaultNow().notNull(),
+});
+
 export const insertUserSchema = createInsertSchema(users).pick({
   email: true,
   password: true,

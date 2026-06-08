@@ -1,4 +1,4 @@
-import { db } from "./db";
+import { db, pool } from "./db";
 import { users, contacts, hangoutVotes, hangoutOptions, hangoutPlans } from "@shared/schema";
 import { isNotNull, eq } from "drizzle-orm";
 
@@ -15,9 +15,15 @@ function getDaysUntilBirthday(birthday?: string | null): number | null {
   if (!birthday) return null;
   const now = new Date();
   const bday = new Date(birthday);
+  if (isNaN(bday.getTime())) return null;
   const thisYear = new Date(now.getFullYear(), bday.getMonth(), bday.getDate());
   if (thisYear < now) thisYear.setFullYear(thisYear.getFullYear() + 1);
   return Math.floor((thisYear.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+}
+
+interface CustomReminder {
+  label: string;
+  date: string;
 }
 
 interface PushMessage {
@@ -33,6 +39,7 @@ type ContactRow = {
   birthday?: string | null;
   lastContacted?: string | null;
   lastHangout?: string | null;
+  customReminders?: unknown;
 };
 
 // Birthday day-of messages — delivered at midnight so users wake up with the reminder
@@ -92,6 +99,8 @@ function buildReminderMessages(contact: ContactRow): PushMessage[] {
         : `${daysSinceContact} days since you last connected`;
       messages.push({ title: `Check in with ${contact.name}`, body, contactId: contact.id });
     }
+    // Custom reminders: C1 advance at 30/14/7/day-of
+    buildCustomReminderMessages(contact, [30, 14, 7, 0], messages);
   } else if (contact.circleLevel === 2) {
     // Birthday advance milestone (day-of handled at midnight)
     if (daysUntilBirthday !== null && daysUntilBirthday === 7) {
@@ -112,10 +121,101 @@ function buildReminderMessages(contact: ContactRow): PushMessage[] {
       const weeks = Math.floor(daysSinceHangout / 7);
       messages.push({ title: `Plan a hangout with ${contact.name}`, body: `${weeks} weeks since your last hangout`, contactId: contact.id });
     }
+    // Custom reminders: C2 advance at 7/day-of
+    buildCustomReminderMessages(contact, [7, 0], messages);
+  } else if (contact.circleLevel === 3) {
+    // Check-in overdue: > 75 days
+    const daysSinceContact3 = getDaysSince(contact.lastContacted);
+    if (daysSinceContact3 !== null && daysSinceContact3 > 75) {
+      messages.push({ title: `Check in with ${contact.name}`, body: `${daysSinceContact3} days since you last connected`, contactId: contact.id });
+    }
+    // Custom reminders: C3 day-of only
+    buildCustomReminderMessages(contact, [0], messages);
   }
-  // Circle 3: no non-birthday reminders at 9am
 
   return messages;
+}
+
+function buildCustomReminderMessages(
+  contact: ContactRow,
+  milestones: number[],
+  messages: PushMessage[],
+): void {
+  let reminders: CustomReminder[] = [];
+  try {
+    const raw = contact.customReminders;
+    if (Array.isArray(raw)) reminders = raw as CustomReminder[];
+  } catch {
+    return;
+  }
+
+  for (const cr of reminders) {
+    if (!cr.label || !cr.date) continue;
+    const daysUntil = getDaysUntilBirthday(cr.date);
+    if (daysUntil === null) continue;
+    if (!milestones.includes(daysUntil)) continue;
+
+    if (daysUntil === 0) {
+      messages.push({
+        title: `${cr.label} — ${contact.name}`,
+        body: `Today is ${contact.name}'s ${cr.label}.`,
+        contactId: contact.id,
+      });
+    } else if (daysUntil === 7) {
+      messages.push({
+        title: `${contact.name}'s ${cr.label} is coming up`,
+        body: `${contact.name}'s ${cr.label} is a week away.`,
+        contactId: contact.id,
+      });
+    } else if (daysUntil === 14) {
+      messages.push({
+        title: `${contact.name}'s ${cr.label} in 2 weeks`,
+        body: `${contact.name}'s ${cr.label} is 2 weeks away.`,
+        contactId: contact.id,
+      });
+    } else if (daysUntil === 30) {
+      messages.push({
+        title: `${contact.name}'s ${cr.label} is a month away`,
+        body: `${contact.name}'s ${cr.label} is coming up in a month.`,
+        contactId: contact.id,
+      });
+    }
+  }
+}
+
+// ─── 24-hour per-contact deduplication ───────────────────────────────────────
+
+async function getRecentlySentContactIds(userId: string): Promise<Set<string>> {
+  try {
+    const result = await pool.query<{ contact_id: string }>(
+      `SELECT DISTINCT contact_id FROM notification_log WHERE user_id = $1 AND sent_at > NOW() - INTERVAL '24 hours'`,
+      [userId],
+    );
+    return new Set(result.rows.map((r) => r.contact_id));
+  } catch {
+    return new Set();
+  }
+}
+
+async function logNotifiedContacts(userId: string, contactIds: Set<string>): Promise<void> {
+  for (const contactId of contactIds) {
+    try {
+      await pool.query(
+        `INSERT INTO notification_log (user_id, contact_id) VALUES ($1, $2)`,
+        [userId, contactId],
+      );
+    } catch {
+      // Non-fatal: dedup is best-effort
+    }
+  }
+}
+
+async function pruneOldNotificationLog(): Promise<void> {
+  try {
+    await pool.query(`DELETE FROM notification_log WHERE sent_at < NOW() - INTERVAL '7 days'`);
+  } catch {
+    // Non-fatal
+  }
 }
 
 // ─── Expo push sender ─────────────────────────────────────────────────────────
@@ -173,6 +273,9 @@ function isMidnightLocalNow(timezone: string): boolean {
 export async function sendDailyReminders() {
   console.log("[push] Checking per-user reminders (midnight birthday + 9am)…");
   try {
+    // Clean up stale dedup log entries at the start of each run
+    await pruneOldNotificationLog();
+
     const usersWithTokens = await db
       .select({
         id: users.id,
@@ -207,15 +310,28 @@ export async function sendDailyReminders() {
         }
       }
 
+      // Deduplicate: skip messages for contacts already notified in the last 24h
+      const recentContactIds = await getRecentlySentContactIds(user.id);
+      const filtered = messages.filter(
+        (msg) => !msg.contactId || !recentContactIds.has(msg.contactId),
+      );
+
       // Cap at 3 notifications per user per delivery window to avoid spam
-      for (const msg of messages.slice(0, 3)) {
+      const notifiedContactIds = new Set<string>();
+      for (const msg of filtered.slice(0, 3)) {
         await sendExpoPush(
           user.pushToken,
           msg.title,
           msg.body,
           msg.contactId ? { contactId: msg.contactId } : undefined,
         );
+        if (msg.contactId) notifiedContactIds.add(msg.contactId);
         sent++;
+      }
+
+      // Log newly notified contacts for future deduplication
+      if (notifiedContactIds.size > 0) {
+        await logNotifiedContacts(user.id, notifiedContactIds);
       }
     }
     if (sent > 0) {

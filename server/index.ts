@@ -258,6 +258,22 @@ function setupErrorHandler(app: express.Application) {
 import { seedDatabase, updateExistingContactsWithLabels } from "./seed";
 import { initPromptSync } from "./prompts-sync";
 import { scheduleDailyNotifications } from "./push-notifications";
+import { pool } from "./db";
+
+async function ensureNotificationLogTable() {
+  try {
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS notification_log (
+        id VARCHAR PRIMARY KEY DEFAULT gen_random_uuid(),
+        user_id VARCHAR NOT NULL,
+        contact_id VARCHAR NOT NULL,
+        sent_at TIMESTAMP NOT NULL DEFAULT NOW()
+      )
+    `);
+  } catch (err) {
+    console.error("[startup] Failed to create notification_log table:", err);
+  }
+}
 
 (async () => {
   setupCors(app);
@@ -266,6 +282,8 @@ import { scheduleDailyNotifications } from "./push-notifications";
   setupRequestLogging(app);
 
   configureExpoAndLanding(app);
+
+  await ensureNotificationLogTable();
 
   const server = await registerRoutes(app);
 

@@ -217,9 +217,14 @@ export default function HomeScreen() {
         return {
           contact: c,
           score: scoreSuggestion(c.circleLevel as 1 | 2 | 3, daysSinceLastSug, daysSinceContact, daysUntilBday, elevationMap[c.id]),
+          elevated: !!elevationMap[c.id],
         };
       })
-      .sort((a, b) => b.score - a.score)
+      .sort((a, b) => {
+        // Elevated contacts always appear first regardless of score
+        if (a.elevated !== b.elevated) return a.elevated ? -1 : 1;
+        return b.score - a.score;
+      })
       .slice(0, MAX_SUGGESTIONS)
       .map((x) => x.contact);
 
