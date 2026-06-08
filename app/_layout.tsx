@@ -122,7 +122,7 @@ function RootLayoutNav() {
     } else {
       router.replace("/(tabs)");
     }
-  }, [user, hasCompletedOnboarding, isReplayRequested, isCacheHydrated]);
+  }, [user?.id, hasCompletedOnboarding, isReplayRequested, isCacheHydrated]);
 
   if (hasCompletedOnboarding === null || !isCacheHydrated) {
     return (
