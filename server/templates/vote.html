@@ -152,8 +152,8 @@ function esc(s) {
   return d.innerHTML;
 }
 
-// Prepend day-of-week to a time label like "June 21, 2026 at 7:00 PM"
-// → "Friday June 21, 2026 at 7:00 PM". Falls back gracefully if unparseable.
+// Prepend abbreviated day-of-week to a time label like "June 21, 2026 at 7:00 PM"
+// → "Mon. June 21, 2026 at 7:00 PM". Falls back gracefully if unparseable.
 function addDayOfWeek(label) {
   if (!label) return label;
   const atIdx = label.indexOf(' at ');
@@ -161,8 +161,8 @@ function addDayOfWeek(label) {
   try {
     const d = new Date(datePart);
     if (isNaN(d.getTime())) return label;
-    const day = d.toLocaleDateString('en-US', { weekday: 'long' });
-    return day + ' ' + label;
+    const day = d.toLocaleDateString('en-US', { weekday: 'short' });
+    return day + '. ' + label;
   } catch(_) { return label; }
 }
 
@@ -406,7 +406,10 @@ function renderResults(showFinalized) {
 
     html += `<div class="results-section-title">${label}</div>`;
     sorted.forEach(opt => {
-      const isWinner = showFinalized && opt.id === planData.finalizedOptionId;
+      const isWinner = showFinalized && (
+        (key === 'time' && opt.id === planData.finalizedTimeOptionId) ||
+        (key !== 'time' && opt.id === planData.finalizedOptionId)
+      );
       const pct = maxScore > 0 ? ((opt.bordaScore || 0) / maxScore) * 100 : 0;
       html += `
         <div class="result-card${isWinner ? ' winner' : ''}">
