@@ -247,7 +247,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           console.error("Session save error:", err);
           return res.status(500).json({ message: "Login failed" });
         }
-        res.json({ id: user.id, email: user.email, name: user.username, profilePhotoUri: user.profilePhotoUri });
+        res.json({ id: user.id, email: user.email, name: user.username, profilePhotoUri: user.profilePhotoUri, suggestionNotifFrequency: user.suggestionNotifFrequency, suggestionNotifTime: user.suggestionNotifTime });
       });
     } catch (err) {
       console.error("Login error:", err);
@@ -275,7 +275,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           console.error("Session save error:", err);
           return res.status(500).json({ message: "Guest login failed" });
         }
-        res.status(201).json({ id: updated!.id, email: updated!.email, name: updated!.username, profilePhotoUri: updated!.profilePhotoUri });
+        res.status(201).json({ id: updated!.id, email: updated!.email, name: updated!.username, profilePhotoUri: updated!.profilePhotoUri, suggestionNotifFrequency: updated!.suggestionNotifFrequency, suggestionNotifTime: updated!.suggestionNotifTime });
       });
     } catch (err) {
       console.error("Guest login error:", err);
@@ -339,7 +339,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           console.error("Session save error (apple):", err);
           return res.status(500).json({ message: "Sign in failed" });
         }
-        res.json({ id: user!.id, email: user!.email, name: user!.username, profilePhotoUri: user!.profilePhotoUri });
+        res.json({ id: user!.id, email: user!.email, name: user!.username, profilePhotoUri: user!.profilePhotoUri, suggestionNotifFrequency: user!.suggestionNotifFrequency, suggestionNotifTime: user!.suggestionNotifTime });
       });
     } catch (err) {
       console.error("Apple auth error:", err);
@@ -382,7 +382,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           console.error("Session save error (google):", err);
           return res.status(500).json({ message: "Sign in failed" });
         }
-        res.json({ id: user!.id, email: user!.email, name: user!.username, profilePhotoUri: user!.profilePhotoUri });
+        res.json({ id: user!.id, email: user!.email, name: user!.username, profilePhotoUri: user!.profilePhotoUri, suggestionNotifFrequency: user!.suggestionNotifFrequency, suggestionNotifTime: user!.suggestionNotifTime });
       });
     } catch (err) {
       console.error("Google auth error:", err);
@@ -407,7 +407,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     if (!user) {
       return res.status(401).json({ message: "User not found" });
     }
-    res.json({ id: user.id, email: user.email, name: user.username, profilePhotoUri: user.profilePhotoUri });
+    res.json({ id: user.id, email: user.email, name: user.username, profilePhotoUri: user.profilePhotoUri, suggestionNotifFrequency: user.suggestionNotifFrequency, suggestionNotifTime: user.suggestionNotifTime });
   });
 
   app.post("/api/notifications/local-log", requireAuth, async (req, res) => {
@@ -424,6 +424,33 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (err) {
       console.error("Error logging local notification:", err);
       res.status(500).json({ message: "Failed to log notification" });
+    }
+  });
+
+  app.put("/api/notifications/preferences", requireAuth, async (req, res) => {
+    try {
+      const { frequency, time } = req.body;
+      const VALID_FREQUENCIES = ["daily", "3x_week", "weekly", "off"];
+      const VALID_TIMES = ["morning", "afternoon"];
+      if (!frequency || typeof frequency !== "string" || !VALID_FREQUENCIES.includes(frequency)) {
+        return bad(res, "frequency must be one of: daily, 3x_week, weekly, off");
+      }
+      const update: { suggestionNotifFrequency: string; suggestionNotifTime?: string | null } = {
+        suggestionNotifFrequency: frequency,
+      };
+      if (frequency !== "off") {
+        update.suggestionNotifTime = time && VALID_TIMES.includes(time) ? time : "morning";
+      } else {
+        update.suggestionNotifTime = null;
+      }
+      const user = await storage.updateUser(req.session.userId!, update);
+      if (!user) {
+        return res.status(404).json({ message: "User not found" });
+      }
+      res.json({ id: user.id, email: user.email, name: user.username, profilePhotoUri: user.profilePhotoUri, suggestionNotifFrequency: user.suggestionNotifFrequency, suggestionNotifTime: user.suggestionNotifTime });
+    } catch (err) {
+      console.error("Error saving notification preferences:", err);
+      res.status(500).json({ message: "Failed to save notification preferences" });
     }
   });
 
@@ -460,7 +487,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (!user) {
         return res.status(404).json({ message: "User not found" });
       }
-      res.json({ id: user.id, email: user.email, name: user.username, profilePhotoUri: user.profilePhotoUri });
+      res.json({ id: user.id, email: user.email, name: user.username, profilePhotoUri: user.profilePhotoUri, suggestionNotifFrequency: user.suggestionNotifFrequency, suggestionNotifTime: user.suggestionNotifTime });
     } catch (err) {
       console.error("Profile update error:", err);
       res.status(500).json({ message: "Failed to update profile" });

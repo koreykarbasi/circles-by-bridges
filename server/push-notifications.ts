@@ -446,6 +446,93 @@ export async function sendHangoutFinalizedNotifications(
   }
 }
 
+// ─── Suggestion nudges ────────────────────────────────────────────────────────
+
+export async function sendSuggestionNudges() {
+  try {
+    const result = await pool.query<{
+      id: string;
+      push_token: string;
+      notification_timezone: string | null;
+      suggestion_notif_frequency: string;
+      suggestion_notif_time: string | null;
+    }>(
+      `SELECT id, push_token, notification_timezone, suggestion_notif_frequency, suggestion_notif_time
+       FROM users
+       WHERE push_token IS NOT NULL
+         AND suggestion_notif_frequency IS NOT NULL
+         AND suggestion_notif_frequency != 'off'`,
+    );
+
+    let sent = 0;
+    for (const user of result.rows) {
+      const tz = user.notification_timezone ?? "UTC";
+      const localHour = getLocalHour(tz);
+
+      const preferredHour = user.suggestion_notif_time === "afternoon" ? 17 : 9;
+      if (localHour !== preferredHour) continue;
+
+      const freq = user.suggestion_notif_frequency;
+      const dayOfWeek = new Date().getDay(); // 0=Sun,1=Mon,...,6=Sat
+      if (freq === "3x_week" && ![1, 3, 6].includes(dayOfWeek)) continue; // Mon, Wed, Sat
+      if (freq === "weekly" && dayOfWeek !== 3) continue; // Wednesday
+
+      const contactsResult = await pool.query<{
+        id: string;
+        name: string;
+        circle_level: number;
+        last_contacted: string | null;
+        birthday: string | null;
+      }>(
+        `SELECT id, name, circle_level, last_contacted, birthday FROM contacts WHERE user_id = $1`,
+        [user.id],
+      );
+
+      if (contactsResult.rows.length === 0) continue;
+
+      const recentContactIds = await getRecentlySentContactIds(user.id);
+
+      let bestContact: { id: string; name: string } | null = null;
+      let bestScore = -1;
+
+      for (const c of contactsResult.rows) {
+        if (recentContactIds.has(c.id)) continue;
+
+        const daysSince = c.last_contacted
+          ? Math.floor((Date.now() - new Date(c.last_contacted).getTime()) / (1000 * 60 * 60 * 24))
+          : 60;
+
+        const daysUntilBday = getDaysUntilBirthday(c.birthday);
+        const birthdayBonus = daysUntilBday !== null && daysUntilBday >= 0 && daysUntilBday <= 30 ? 500 : 0;
+        const circleBonus = c.circle_level === 1 ? 200 : c.circle_level === 2 ? 100 : 0;
+
+        const score = daysSince + birthdayBonus + circleBonus;
+        if (score > bestScore) {
+          bestScore = score;
+          bestContact = { id: c.id, name: c.name };
+        }
+      }
+
+      if (!bestContact) continue;
+
+      await sendExpoPush(
+        user.push_token,
+        `Time to reach out to ${bestContact.name}`,
+        "Open Bridges to see what to say.",
+        { contactId: bestContact.id },
+      );
+      await logNotifiedContacts(user.id, new Set([bestContact.id]));
+      sent++;
+    }
+
+    if (sent > 0) {
+      console.log(`[push] Sent ${sent} suggestion nudges.`);
+    }
+  } catch (err) {
+    console.error("[push] Error sending suggestion nudges:", err);
+  }
+}
+
 // ─── Hourly scheduler ─────────────────────────────────────────────────────────
 // Runs every hour; sendDailyReminders() only delivers to users for whom it
 // is currently 9am local time, so each user gets notified once per day.
@@ -458,13 +545,16 @@ export function scheduleDailyNotifications() {
     return MS_PER_HOUR - (now % MS_PER_HOUR);
   }
 
+  async function runHourly() {
+    await sendDailyReminders().catch((err) => console.error("[push] Uncaught:", err));
+    await sendSuggestionNudges().catch((err) => console.error("[push] Uncaught:", err));
+  }
+
   // First run at the top of the next hour, then every hour after that
   setTimeout(() => {
-    sendDailyReminders().catch((err) => console.error("[push] Uncaught:", err));
-    setInterval(() => {
-      sendDailyReminders().catch((err) => console.error("[push] Uncaught:", err));
-    }, MS_PER_HOUR);
+    runHourly();
+    setInterval(runHourly, MS_PER_HOUR);
   }, msUntilNextHour());
 
-  console.log("[push] Hourly notification scheduler started (delivers at 9am per user timezone)");
+  console.log("[push] Hourly notification scheduler started (delivers at 9am/5pm per user timezone)");
 }

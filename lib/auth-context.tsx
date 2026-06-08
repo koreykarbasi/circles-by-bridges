@@ -53,6 +53,7 @@ interface AuthContextValue {
   logout: () => Promise<void>;
   updateProfilePhoto: (uri: string) => Promise<void>;
   updateName: (name: string) => Promise<void>;
+  updateNotificationPreferences: (frequency: string, time: string | null) => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null);
@@ -156,14 +157,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     writeAuthCache(data);
   }, []);
 
+  const updateNotificationPreferences = useCallback(async (frequency: string, time: string | null) => {
+    const res = await apiRequest("PUT", "/api/notifications/preferences", { frequency, time });
+    const data = await res.json();
+    setUser(data);
+    writeAuthCache(data);
+  }, []);
+
   const value = useMemo(
     () => ({
       user, isLoading, isCacheHydrated,
       login, register, loginAsGuest,
       loginWithApple, loginWithGoogle,
-      logout, updateProfilePhoto, updateName,
+      logout, updateProfilePhoto, updateName, updateNotificationPreferences,
     }),
-    [user, isLoading, isCacheHydrated, login, register, loginAsGuest, loginWithApple, loginWithGoogle, logout, updateProfilePhoto, updateName],
+    [user, isLoading, isCacheHydrated, login, register, loginAsGuest, loginWithApple, loginWithGoogle, logout, updateProfilePhoto, updateName, updateNotificationPreferences],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

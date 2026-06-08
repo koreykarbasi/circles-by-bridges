@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useState } from "react";
 import {
   View,
   Text,
@@ -24,7 +24,40 @@ export default function ProfileScreen() {
   const insets = useSafeAreaInsets();
   const { contacts } = useContacts();
   const { resetOnboarding } = useOnboarding();
-  const { user, logout, updateProfilePhoto } = useAuth();
+  const { user, logout, updateProfilePhoto, updateNotificationPreferences } = useAuth();
+
+  const [notifFreq, setNotifFreq] = useState<string>(user?.suggestionNotifFrequency ?? "daily");
+  const [notifTime, setNotifTime] = useState<string>(user?.suggestionNotifTime ?? "morning");
+
+  const FREQ_OPTIONS = [
+    { value: "daily", label: "Daily" },
+    { value: "3x_week", label: "3x / week" },
+    { value: "weekly", label: "Weekly" },
+    { value: "off", label: "Off" },
+  ];
+
+  const TIME_OPTIONS = [
+    { value: "morning", label: "Morning", sub: "9am" },
+    { value: "afternoon", label: "Afternoon", sub: "5pm" },
+  ];
+
+  const handleFreqChange = async (freq: string) => {
+    setNotifFreq(freq);
+    try {
+      await updateNotificationPreferences(freq, freq !== "off" ? notifTime : null);
+    } catch {
+      // Non-fatal
+    }
+  };
+
+  const handleTimeChange = async (t: string) => {
+    setNotifTime(t);
+    try {
+      await updateNotificationPreferences(notifFreq, t);
+    } catch {
+      // Non-fatal
+    }
+  };
 
   const webTopInset = Platform.OS === "web" ? 67 : 0;
   const webBottomInset = Platform.OS === "web" ? 34 : 0;
@@ -142,6 +175,53 @@ export default function ProfileScreen() {
               </View>
             );
           })}
+        </View>
+
+        <View style={styles.section}>
+          <Text style={styles.sectionLabel}>Notifications</Text>
+          <View style={[styles.menuItem, { flexDirection: "column", alignItems: "flex-start", gap: 12 }]}>
+            <Text style={styles.menuTitle}>Suggestion nudges</Text>
+            <View style={profileNotifStyles.tilesGrid}>
+              {FREQ_OPTIONS.map((opt) => (
+                <Pressable
+                  key={opt.value}
+                  style={[profileNotifStyles.tile, notifFreq === opt.value && profileNotifStyles.tileActive]}
+                  onPress={() => {
+                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                    handleFreqChange(opt.value);
+                  }}
+                >
+                  <Text style={[profileNotifStyles.tileLabel, notifFreq === opt.value && profileNotifStyles.tileLabelActive]}>
+                    {opt.label}
+                  </Text>
+                </Pressable>
+              ))}
+            </View>
+            {notifFreq !== "off" && (
+              <View style={{ width: "100%" }}>
+                <Text style={[styles.menuDesc, { marginBottom: 8 }]}>Time of day</Text>
+                <View style={profileNotifStyles.timeRow}>
+                  {TIME_OPTIONS.map((opt) => (
+                    <Pressable
+                      key={opt.value}
+                      style={[profileNotifStyles.timeTile, notifTime === opt.value && profileNotifStyles.timeTileActive]}
+                      onPress={() => {
+                        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                        handleTimeChange(opt.value);
+                      }}
+                    >
+                      <Text style={[profileNotifStyles.timeTileLabel, notifTime === opt.value && profileNotifStyles.timeTileLabelActive]}>
+                        {opt.label}
+                      </Text>
+                      <Text style={[profileNotifStyles.timeTileSub, notifTime === opt.value && profileNotifStyles.timeTileSubActive]}>
+                        {opt.sub}
+                      </Text>
+                    </Pressable>
+                  ))}
+                </View>
+              </View>
+            )}
+          </View>
         </View>
 
         <View style={styles.section}>
@@ -350,5 +430,70 @@ const styles = StyleSheet.create({
     fontFamily: "Nunito_400Regular",
     color: Colors.textTertiary,
     marginTop: 1,
+  },
+});
+
+const profileNotifStyles = StyleSheet.create({
+  tilesGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap" as const,
+    gap: 8,
+    width: "100%",
+  },
+  tile: {
+    paddingVertical: 10,
+    paddingHorizontal: 14,
+    borderRadius: 10,
+    borderWidth: 1.5,
+    borderColor: Colors.borderLight,
+    backgroundColor: Colors.background,
+  },
+  tileActive: {
+    borderColor: Colors.primary,
+    backgroundColor: Colors.primary + "18",
+  },
+  tileLabel: {
+    fontSize: 13,
+    fontFamily: "Nunito_600SemiBold",
+    color: Colors.textSecondary,
+  },
+  tileLabelActive: {
+    color: Colors.primary,
+  },
+  timeRow: {
+    flexDirection: "row" as const,
+    gap: 8,
+    width: "100%",
+  },
+  timeTile: {
+    flex: 1,
+    paddingVertical: 12,
+    paddingHorizontal: 10,
+    borderRadius: 10,
+    borderWidth: 1.5,
+    borderColor: Colors.borderLight,
+    backgroundColor: Colors.background,
+    alignItems: "center" as const,
+    gap: 2,
+  },
+  timeTileActive: {
+    borderColor: Colors.primary,
+    backgroundColor: Colors.primary + "18",
+  },
+  timeTileLabel: {
+    fontSize: 13,
+    fontFamily: "Nunito_700Bold",
+    color: Colors.textSecondary,
+  },
+  timeTileLabelActive: {
+    color: Colors.primary,
+  },
+  timeTileSub: {
+    fontSize: 11,
+    fontFamily: "Nunito_400Regular",
+    color: Colors.textTertiary,
+  },
+  timeTileSubActive: {
+    color: Colors.primary + "cc",
   },
 });

@@ -275,6 +275,15 @@ async function ensureNotificationLogTable() {
   }
 }
 
+async function ensureUserNotifPreferenceColumns() {
+  try {
+    await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS suggestion_notif_frequency TEXT`);
+    await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS suggestion_notif_time TEXT`);
+  } catch (err) {
+    console.error("[startup] Failed to add suggestion notif columns:", err);
+  }
+}
+
 (async () => {
   setupCors(app);
   setupBodyParsing(app);
@@ -284,6 +293,7 @@ async function ensureNotificationLogTable() {
   configureExpoAndLanding(app);
 
   await ensureNotificationLogTable();
+  await ensureUserNotifPreferenceColumns();
 
   const server = await registerRoutes(app);
 

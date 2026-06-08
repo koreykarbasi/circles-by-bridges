@@ -29,6 +29,8 @@ export interface AuthUser {
   email: string;
   name?: string | null;
   profilePhotoUri?: string | null;
+  suggestionNotifFrequency?: string | null;
+  suggestionNotifTime?: string | null;
 }
 
 export interface HangoutPlan {

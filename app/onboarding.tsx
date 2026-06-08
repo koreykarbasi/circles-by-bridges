@@ -24,6 +24,7 @@ import { useOnboarding } from "@/lib/onboarding-context";
 import { useContacts } from "@/lib/contacts-context";
 import { useAuth } from "@/lib/auth-context";
 import * as Haptics from "expo-haptics";
+import * as Notifications from "expo-notifications";
 import * as AppleAuthentication from "expo-apple-authentication";
 import * as Google from "expo-auth-session/providers/google";
 
@@ -37,6 +38,7 @@ type OnboardingStep =
   | "circle1"
   | "circle2"
   | "circle3"
+  | "notifications"
   | "done";
 
 const STEPS: OnboardingStep[] = [
@@ -47,6 +49,7 @@ const STEPS: OnboardingStep[] = [
   "circle1",
   "circle2",
   "circle3",
+  "notifications",
   "done",
 ];
 
@@ -113,8 +116,9 @@ export default function OnboardingScreen() {
 
   const currentStep = STEPS[currentIndex];
   const isAuthStep = currentStep === "auth";
+  const isNotifStep = currentStep === "notifications";
   const isImportStep = ["circle1", "circle2", "circle3"].includes(currentStep);
-  const isSkippable = currentStep === "circle2" || currentStep === "circle3";
+  const isSkippable = currentStep === "circle2" || currentStep === "circle3" || currentStep === "notifications";
 
   const renderPage = useCallback(
     ({ item }: { item: OnboardingStep }) => {
@@ -163,6 +167,8 @@ export default function OnboardingScreen() {
               }
             />
           );
+        case "notifications":
+          return <NotificationsPage onNext={goNext} />;
         case "done":
           return (
             <DonePage
@@ -219,7 +225,7 @@ export default function OnboardingScreen() {
         })}
       />
 
-      {!isAuthStep && (
+      {!isAuthStep && !isNotifStep && (
         <View style={[styles.bottomBar, { paddingBottom: insets.bottom + 16 + webBottomInset }]}>
           {currentStep === "done" ? (
             <Pressable
@@ -834,6 +840,122 @@ function CircleImportPage({
   );
 }
 
+// ─── Notifications Page ───────────────────────────────────────────────────────
+
+function NotificationsPage({ onNext }: { onNext: () => void }) {
+  const { updateNotificationPreferences } = useAuth();
+  const [frequency, setFrequency] = useState<string>("daily");
+  const [time, setTime] = useState<string>("morning");
+  const [saving, setSaving] = useState(false);
+  const insets = useSafeAreaInsets();
+  const webBottomInset = Platform.OS === "web" ? 34 : 0;
+
+  const FREQ_OPTIONS = [
+    { value: "daily", label: "Once a day" },
+    { value: "3x_week", label: "Three times a week" },
+    { value: "weekly", label: "Once a week" },
+    { value: "off", label: "Not right now" },
+  ];
+
+  const TIME_OPTIONS = [
+    { value: "morning", label: "Morning", sub: "Around 9am" },
+    { value: "afternoon", label: "Afternoon", sub: "Around 5pm" },
+  ];
+
+  const handleContinue = async () => {
+    setSaving(true);
+    try {
+      if (frequency !== "off" && Platform.OS !== "web") {
+        await Notifications.requestPermissionsAsync();
+      }
+      await updateNotificationPreferences(frequency, frequency !== "off" ? time : null);
+    } catch {
+      // Non-fatal — continue to next step regardless
+    } finally {
+      setSaving(false);
+      onNext();
+    }
+  };
+
+  return (
+    <View style={pageStyles.page}>
+      <ScrollView
+        contentContainerStyle={pageStyles.scrollContent}
+        showsVerticalScrollIndicator={false}
+      >
+        <Animated.View entering={FadeIn.duration(600)}>
+          <Text style={pageStyles.title}>Stay connected without thinking about it</Text>
+          <Text style={pageStyles.subtitle}>
+            Bridges can nudge you when it's a good time to reach out to someone you care about.
+          </Text>
+        </Animated.View>
+
+        <Animated.View entering={FadeIn.delay(200).duration(600)} style={notifStyles.group}>
+          <Text style={notifStyles.groupLabel}>How often should we nudge you?</Text>
+          <View style={notifStyles.tilesGrid}>
+            {FREQ_OPTIONS.map((opt) => (
+              <Pressable
+                key={opt.value}
+                style={[notifStyles.tile, frequency === opt.value && notifStyles.tileActive]}
+                onPress={() => {
+                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                  setFrequency(opt.value);
+                }}
+              >
+                <Text style={[notifStyles.tileLabel, frequency === opt.value && notifStyles.tileLabelActive]}>
+                  {opt.label}
+                </Text>
+              </Pressable>
+            ))}
+          </View>
+        </Animated.View>
+
+        {frequency !== "off" && (
+          <Animated.View entering={FadeIn.duration(400)} style={notifStyles.group}>
+            <Text style={notifStyles.groupLabel}>Best time to receive them?</Text>
+            <View style={notifStyles.timeRow}>
+              {TIME_OPTIONS.map((opt) => (
+                <Pressable
+                  key={opt.value}
+                  style={[notifStyles.timeTile, time === opt.value && notifStyles.timeTileActive]}
+                  onPress={() => {
+                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                    setTime(opt.value);
+                  }}
+                >
+                  <Text style={[notifStyles.timeTileLabel, time === opt.value && notifStyles.timeTileLabelActive]}>
+                    {opt.label}
+                  </Text>
+                  <Text style={[notifStyles.timeTileSub, time === opt.value && notifStyles.timeTileSubActive]}>
+                    {opt.sub}
+                  </Text>
+                </Pressable>
+              ))}
+            </View>
+          </Animated.View>
+        )}
+      </ScrollView>
+
+      <View style={[notifStyles.bottomBar, { paddingBottom: insets.bottom + 16 + webBottomInset }]}>
+        <Pressable
+          onPress={handleContinue}
+          disabled={saving}
+          style={({ pressed }) => [styles.primaryButton, (pressed || saving) && { opacity: 0.8 }]}
+        >
+          {saving ? (
+            <ActivityIndicator size="small" color="#fff" />
+          ) : (
+            <>
+              <Text style={styles.primaryButtonText}>Continue</Text>
+              <Ionicons name="arrow-forward" size={18} color="#fff" />
+            </>
+          )}
+        </Pressable>
+      </View>
+    </View>
+  );
+}
+
 // ─── Done Page ────────────────────────────────────────────────────────────────
 
 function DonePage({ total }: { total: number }) {
@@ -1148,6 +1270,89 @@ const pageStyles = StyleSheet.create({
     fontSize: 15,
     fontFamily: "Nunito_600SemiBold",
     color: Colors.text,
+  },
+});
+
+const notifStyles = StyleSheet.create({
+  group: {
+    marginTop: 28,
+  },
+  groupLabel: {
+    fontSize: 14,
+    fontFamily: "Nunito_600SemiBold",
+    color: Colors.textSecondary,
+    marginBottom: 12,
+  },
+  tilesGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap" as const,
+    gap: 10,
+  },
+  tile: {
+    minWidth: "47%",
+    flex: 1,
+    paddingVertical: 14,
+    paddingHorizontal: 12,
+    borderRadius: 14,
+    borderWidth: 1.5,
+    borderColor: Colors.borderLight,
+    backgroundColor: Colors.surface,
+    alignItems: "center" as const,
+  },
+  tileActive: {
+    borderColor: Colors.primary,
+    backgroundColor: Colors.primary + "18",
+  },
+  tileLabel: {
+    fontSize: 14,
+    fontFamily: "Nunito_600SemiBold",
+    color: Colors.textSecondary,
+    textAlign: "center" as const,
+  },
+  tileLabelActive: {
+    color: Colors.primary,
+  },
+  timeRow: {
+    flexDirection: "row" as const,
+    gap: 10,
+  },
+  timeTile: {
+    flex: 1,
+    paddingVertical: 16,
+    paddingHorizontal: 12,
+    borderRadius: 14,
+    borderWidth: 1.5,
+    borderColor: Colors.borderLight,
+    backgroundColor: Colors.surface,
+    alignItems: "center" as const,
+    gap: 4,
+  },
+  timeTileActive: {
+    borderColor: Colors.primary,
+    backgroundColor: Colors.primary + "18",
+  },
+  timeTileLabel: {
+    fontSize: 15,
+    fontFamily: "Nunito_700Bold",
+    color: Colors.textSecondary,
+  },
+  timeTileLabelActive: {
+    color: Colors.primary,
+  },
+  timeTileSub: {
+    fontSize: 12,
+    fontFamily: "Nunito_400Regular",
+    color: Colors.textTertiary,
+  },
+  timeTileSubActive: {
+    color: Colors.primary + "cc",
+  },
+  bottomBar: {
+    paddingHorizontal: 20,
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: Colors.borderLight,
+    backgroundColor: Colors.background,
   },
 });
 

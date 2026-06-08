@@ -13,6 +13,8 @@ export const users = pgTable("users", {
   username: text("username"),
   pushToken: text("push_token"),
   notificationTimezone: text("notification_timezone"),
+  suggestionNotifFrequency: text("suggestion_notif_frequency"),
+  suggestionNotifTime: text("suggestion_notif_time"),
 });
 
 export const contacts = pgTable("contacts", {
