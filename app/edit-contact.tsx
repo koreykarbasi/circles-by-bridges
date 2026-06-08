@@ -82,8 +82,8 @@ export default function EditContactScreen() {
     if (focusBirthday === "true") {
       setShowBirthdayPicker(true);
       const timer = setTimeout(() => {
-        scrollRef.current?.scrollToEnd({ animated: true });
-      }, 400);
+        scrollRef.current?.scrollTo({ x: 0, y: 0, animated: true });
+      }, 300);
       return () => clearTimeout(timer);
     }
   }, [focusBirthday]);
