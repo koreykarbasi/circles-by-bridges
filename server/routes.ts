@@ -194,6 +194,100 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }),
   );
 
+  // Common disposable/throwaway email domains
+  const DISPOSABLE_DOMAINS = new Set([
+    "mailinator.com","guerrillamail.com","guerrillamail.net","guerrillamail.org",
+    "guerrillamail.biz","guerrillamail.de","guerrillamail.info","guerrillamailblock.com",
+    "10minutemail.com","10minutemail.net","10minutemail.org","10minutemail.co.uk",
+    "tempmail.com","temp-mail.org","temp-mail.io","tmpmail.net","tmpmail.org",
+    "throwam.com","throwaway.email","dispostable.com","mailnull.com","spamgourmet.com",
+    "spamgourmet.net","spamgourmet.org","trashmail.com","trashmail.at","trashmail.io",
+    "trashmail.me","trashmail.net","trashmail.org","trashmail.xyz","trashmail.de",
+    "yopmail.com","yopmail.fr","cool.fr.nf","jetable.fr.nf","nospam.ze.tc",
+    "nomail.xl.cx","mega.zik.dj","speed.1s.fr","courriel.fr.nf","moncourrier.fr.nf",
+    "monemail.fr.nf","monmail.fr.nf","sharklasers.com","guerrillamailblock.com",
+    "grr.la","guerrillamail.info","spam4.me","fakeinbox.com","mailnesia.com",
+    "mailnull.com","maildrop.cc","discard.email","spamspot.com","spamevader.com",
+    "inboxbear.com","throwam.com","throwam.net","mytrashmail.com","throwam.org",
+    "mailsiphon.com","owlpic.com","spamhereplease.com","spamhereplease.net",
+    "getnada.com","crazymailing.com","mohmal.com","getairmail.com","filzmail.com",
+    "dispostable.com","mt2015.com","mt2014.com","anonmails.de","antichef.com",
+    "antichef.net","antispam.de","binkmail.com","bobmail.info","casualdx.com",
+    "cubiclink.com","dacoolest.com","dandikmail.com","discard.email","disposableaddress.com",
+    "disposableemailaddresses.com","dogit.com","dumpmail.de","e4ward.com",
+    "emaildrop.io","emailias.com","emailsensei.com","emailtemporanea.com",
+    "emailto.de","emailwarden.com","fakemailgenerator.com","fakemail.net",
+    "filzmail.com","fizmail.com","forgetmail.com","fux0ringduh.com","getonemail.com",
+    "girlsundertheinfluence.com","hatespam.org","highbros.org","ieatspam.eu",
+    "ieatspam.info","imails.info","inoutmail.de","inoutmail.eu","inoutmail.info",
+    "inoutmail.net","internet-e-mail.de","internet-mail.de","internetemails.net",
+    "jnxjn.com","jourrapide.com","kasmail.com","klassmaster.com","klzlk.com",
+    "kurzepost.de","letthemeatspam.com","lhsdv.com","libox.fr","mailbidon.com",
+    "mailblade.net","mailblocks.com","mailbucket.org","mailcat.biz","mailcatch.com",
+    "mailchop.com","mailde.net","maildrop.cc","mailexpire.com","mailfall.com",
+    "mailfreeonline.com","mailguard.me","mailin8r.com","mailinater.com",
+    "mailme.lv","mailme24.com","mailmetrash.com","mailmoat.com","mailnew.com",
+    "mailnull.com","mailorg.org","mailpick.biz","mailquack.com","mailseal.de",
+    "mailshell.com","mailsiphon.com","mailslite.com","mailsucker.net","mailtemp.info",
+    "mailtome.de","mailtome.net","mailtothis.com","mailzilla.com","mailzilla.org",
+    "mbx.cc","mega.zik.dj","meinspamschutz.de","memoware.com","messagebeamer.de",
+    "ministry-of-silly-walks.de","mintemail.com","misterpinball.de","mm.st",
+    "moncourrier.fr.nf","monemail.fr.nf","monmail.fr.nf","msa.minsmail.com",
+    "mx0.wwwnew.eu","my10minutemail.com","mypartyclip.de","myphantomemail.com",
+    "mysamp.de","myspaceinc.com","myspaceinc.net","myspaceinc.org","myspacepimpage.com",
+    "mytempemail.com","mytrashmail.com","neomailbox.com","netmails.com","netmails.net",
+    "netzidiot.de","neverbox.com","no-spam.ws","noblepioneer.com","noclickemail.com",
+    "nogmailspam.info","noisemails.com","nomail.pw","nomail2me.com","nomorespam.iv.pl",
+    "nonspam.eu","nonspammer.de","noref.in","nospam.ze.tc","nospam4.us",
+    "nospamfor.us","nospammail.net","nospamthanks.info","notmailinator.com",
+    "nowmymail.com","nurfuerspam.de","nus.edu.sg","objectmail.com","odaymail.com",
+    "oi.com.br","onewaymail.com","online.ms","oopi.org","opentrash.com",
+    "ordinaryamerican.net","owlpic.com","pecinan.com","pecinan.net","pecinan.org",
+    "pepbot.com","perzo.com","pimpedupmyspace.com","plexolan.de","pookmail.com",
+    "proxymail.eu","prtnx.com","prtz.eu","pubmail.io","punkass.com",
+    "putthisinyourspamdatabase.com","qq.com","quickinbox.com","rcpt.at",
+    "recode.me","recursor.net","rklips.com","rmqkr.net","rppkn.com","rtrtr.com",
+    "s0ny.net","safe-mail.net","safetymail.info","safetypost.de","samsclass.info",
+    "sandelf.de","schafmail.de","schrott-mail.de","secretemail.de","secure-mail.biz",
+    "skeefmail.com","sl.pt","slopsbox.com","smellfear.com","snkmail.com",
+    "sofortmail.de","sofort-mail.de","soGetItNow.com","spam.la","spam.mn",
+    "spam.su","spamavert.com","spambob.com","spambob.net","spambob.org",
+    "spambox.info","spambox.irishspringrealty.com","spambox.us","spamcon.org",
+    "spamcorptastic.com","spamcowboy.com","spamcowboy.net","spamcowboy.org",
+    "spamday.com","spamex.com","spamfree.eu","spamfree24.de","spamfree24.eu",
+    "spamfree24.info","spamfree24.net","spamfree24.org","spamgoes.in",
+    "spamgourmet.com","spamgourmet.net","spamgourmet.org","spamgrave.com",
+    "spamhereplease.com","spamhole.com","spamify.com","spaminator.de",
+    "spamkill.info","spaml.com","spaml.de","spammotel.com","spamoff.de",
+    "spamslicer.com","spamspot.com","spamstack.net","spamthis.co.uk","spamthisplease.com",
+    "spamtrail.com","super-auswahl.de","supermailer.jp","suremail.info",
+    "teewars.org","tefl.ro","tempalias.com","tempe-mail.com","tempemail.biz",
+    "tempemail.com","tempemail.net","tempemail.org","tempinbox.co.uk","tempinbox.com",
+    "tempomail.fr","temporamail.com","temporaryemail.net","temporaryemail.us",
+    "temporaryforwarding.com","temporaryinbox.com","temporarymail.org","tempsky.com",
+    "tempthe.net","tempymail.com","thanksnospam.info","thisisnotmyrealemail.com",
+    "thinktankmovement.com","throwam.com","throwam.net","tilien.com","tmailinator.com",
+    "tokem.co","toomail.biz","tradermail.info","trash-amil.com","trash-mail.at",
+    "trash-mail.cf","trash-mail.ga","trash-mail.gq","trash-mail.ml","trash-mail.tk",
+    "trash2009.com","trash2010.com","trash2011.com","trashdevil.com","trashdevil.de",
+    "trashemail.de","trashimail.de","trashmail.app","trashmail.at","trashmail.com",
+    "trashmail.io","trashmail.me","trashmail.net","trashmail.org","trashmail.xyz",
+    "trashmailer.com","trashymail.com","trbvm.com","turual.com","twinmail.de",
+    "tyldd.com","uggsrock.com","uk2.net","umail.net","upliftnow.com",
+    "uploadnolimit.com","uroid.com","us.af","venompen.com","veryrealemail.com",
+    "viditag.com","viewcastmedia.com","viewcastmedia.net","viewcastmedia.org",
+    "vomoto.com","vpn.st","vsimcard.com","vubby.com","wasteland.rfc822.org",
+    "webemail.me","webm4il.info","weg-werf-email.de","wegwerf-emails.de",
+    "wegwerfadresse.de","wegwerfemail.com","wegwerfemail.de","wegwerfmail.de",
+    "wegwerfmail.info","wegwerfmail.net","wegwerfmail.org","wh4f.org","whyspam.me",
+    "willhackforfood.biz","willselfdestruct.com","wilemail.com","winemaven.info",
+    "wronghead.com","www.e4ward.com","www.mailinator.com","xagloo.com",
+    "xemaps.com","xents.com","xmaily.com","xoxy.net","xyzfree.net","yapped.net",
+    "yeah.net","yogamaven.com","yopmail.com","yopmail.fr","yourdomain.com",
+    "ypmail.webarnak.fr.eu.org","yuurok.com","z1p.biz","za.com","zehnminuten.de",
+    "zehnminutenmail.de","zoemail.net","zoemail.org","zomg.info","zxcv.com","zxcvbnm.com",
+  ]);
+
   app.post("/api/auth/register", registerRateLimiter, async (req, res) => {
     try {
       const { email, password, name } = req.body;
@@ -202,6 +296,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       if (password.length < 6) {
         return res.status(400).json({ message: "Password must be at least 6 characters" });
+      }
+      // Block disposable/throwaway email domains
+      const emailDomain = email.toLowerCase().trim().split("@")[1] ?? "";
+      if (DISPOSABLE_DOMAINS.has(emailDomain)) {
+        return res.status(400).json({ message: "Please use a real email address to create an account." });
       }
       // Silent-success pattern: always return the same 201 response regardless
       // of whether this email was already registered, so the endpoint cannot be
@@ -255,33 +354,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post("/api/auth/guest", authRateLimiter, async (req, res) => {
-    try {
-      const { name } = req.body;
-      if (!name || !name.trim()) {
-        return res.status(400).json({ message: "Name is required" });
-      }
-      const guestEmail = `guest_${Date.now()}_${Math.random().toString(36).substr(2, 6)}@bridges.guest`;
-      const hashedPassword = await bcrypt.hash(Math.random().toString(36), 10);
-      const user = await storage.createUser({
-        email: guestEmail,
-        password: hashedPassword,
-      });
-      await storage.updateUser(user.id, { username: name.trim() });
-      const updated = await storage.getUser(user.id);
-      req.session.userId = user.id;
-      req.session.save((err) => {
-        if (err) {
-          console.error("Session save error:", err);
-          return res.status(500).json({ message: "Guest login failed" });
-        }
-        res.status(201).json({ id: updated!.id, email: updated!.email, name: updated!.username, profilePhotoUri: updated!.profilePhotoUri, suggestionNotifFrequency: updated!.suggestionNotifFrequency, suggestionNotifTime: updated!.suggestionNotifTime });
-      });
-    } catch (err) {
-      console.error("Guest login error:", err);
-      res.status(500).json({ message: "Guest login failed" });
-    }
-  });
 
   app.post("/api/auth/apple", authRateLimiter, async (req, res) => {
     try {

@@ -47,7 +47,6 @@ interface AuthContextValue {
   isCacheHydrated: boolean;
   login: (email: string, password: string) => Promise<void>;
   register: (email: string, password: string, name?: string) => Promise<void>;
-  loginAsGuest: (name: string) => Promise<void>;
   loginWithApple: (identityToken: string, fullName?: { givenName?: string | null; familyName?: string | null }) => Promise<void>;
   loginWithGoogle: (accessToken: string) => Promise<void>;
   logout: () => Promise<void>;
@@ -113,13 +112,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     await apiRequest("POST", "/api/auth/register", { email, password, name });
   }, []);
 
-  const loginAsGuest = useCallback(async (name: string) => {
-    const res = await apiRequest("POST", "/api/auth/guest", { name });
-    const data = await res.json();
-    setUser(data);
-    writeAuthCache(data);
-  }, []);
-
   const loginWithApple = useCallback(async (
     identityToken: string,
     fullName?: { givenName?: string | null; familyName?: string | null }
@@ -167,11 +159,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const value = useMemo(
     () => ({
       user, isLoading, isCacheHydrated,
-      login, register, loginAsGuest,
+      login, register,
       loginWithApple, loginWithGoogle,
       logout, updateProfilePhoto, updateName, updateNotificationPreferences,
     }),
-    [user, isLoading, isCacheHydrated, login, register, loginAsGuest, loginWithApple, loginWithGoogle, logout, updateProfilePhoto, updateName, updateNotificationPreferences],
+    [user, isLoading, isCacheHydrated, login, register, loginWithApple, loginWithGoogle, logout, updateProfilePhoto, updateName, updateNotificationPreferences],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

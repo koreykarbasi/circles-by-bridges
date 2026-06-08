@@ -19,7 +19,7 @@ import { useAuth } from "@/lib/auth-context";
 
 export default function AuthScreen() {
   const insets = useSafeAreaInsets();
-  const { login, register, loginAsGuest } = useAuth();
+  const { login, register } = useAuth();
   const [isLogin, setIsLogin] = useState(true);
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
@@ -29,8 +29,6 @@ export default function AuthScreen() {
   const [error, setError] = useState("");
   const [successMessage, setSuccessMessage] = useState("");
   const [showPassword, setShowPassword] = useState(false);
-  const [guestMode, setGuestMode] = useState(false);
-  const [guestName, setGuestName] = useState("");
 
   const handleSubmit = async () => {
     setError("");
@@ -75,91 +73,6 @@ export default function AuthScreen() {
       setIsSubmitting(false);
     }
   };
-
-  const handleGuestLogin = async () => {
-    setError("");
-    if (!guestName.trim()) {
-      setError("Please enter your name");
-      return;
-    }
-    setIsSubmitting(true);
-    try {
-      await loginAsGuest(guestName.trim());
-    } catch (err: any) {
-      const msg = err?.message || "Something went wrong";
-      setError(msg);
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
-
-  if (guestMode) {
-    return (
-      <KeyboardAvoidingView
-        style={[styles.container, { paddingTop: insets.top + (Platform.OS === "web" ? 67 : 0) }]}
-        behavior={Platform.OS === "ios" ? "padding" : "height"}
-      >
-        <View style={styles.content}>
-          <View style={styles.logoSection}>
-            <Image
-              source={require("@/assets/images/bridge-logo.png")}
-              style={styles.logoImage}
-              tintColor={Colors.primary}
-              resizeMode="contain"
-            />
-            <Text style={styles.appName}>Bridges</Text>
-            <Text style={styles.tagline}>Preview as Guest</Text>
-          </View>
-
-          <View style={styles.form}>
-            {error ? (
-              <View style={styles.errorBox}>
-                <Ionicons name="alert-circle" size={16} color={Colors.danger} />
-                <Text style={styles.errorText}>{error}</Text>
-              </View>
-            ) : null}
-
-            <View style={styles.inputGroup}>
-              <Text style={styles.label}>Your Name</Text>
-              <View style={styles.inputWrapper}>
-                <Ionicons name="person-outline" size={18} color={Colors.textSecondary} style={styles.inputIcon} />
-                <TextInput
-                  style={styles.input}
-                  placeholder="Enter your name"
-                  placeholderTextColor={Colors.textTertiary}
-                  value={guestName}
-                  onChangeText={setGuestName}
-                  autoCapitalize="words"
-                  autoCorrect={false}
-                  testID="guest-name"
-                />
-              </View>
-            </View>
-
-            <TouchableOpacity
-              style={[styles.submitButton, isSubmitting && styles.submitButtonDisabled]}
-              onPress={handleGuestLogin}
-              disabled={isSubmitting}
-              testID="guest-submit"
-            >
-              {isSubmitting ? (
-                <ActivityIndicator color="#fff" />
-              ) : (
-                <Text style={styles.submitText}>Continue as Guest</Text>
-              )}
-            </TouchableOpacity>
-
-            <View style={styles.switchRow}>
-              <Text style={styles.switchText}>Want full access?</Text>
-              <TouchableOpacity onPress={() => { setGuestMode(false); setError(""); }}>
-                <Text style={styles.switchLink}>Sign In or Register</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        </View>
-      </KeyboardAvoidingView>
-    );
-  }
 
   return (
     <KeyboardAvoidingView
@@ -299,21 +212,6 @@ export default function AuthScreen() {
             </TouchableOpacity>
           </View>
 
-          <View style={styles.divider}>
-            <View style={styles.dividerLine} />
-            <Text style={styles.dividerText}>or</Text>
-            <View style={styles.dividerLine} />
-          </View>
-
-          <TouchableOpacity
-            style={styles.guestButton}
-            onPress={() => { setGuestMode(true); setError(""); }}
-            testID="guest-mode-btn"
-          >
-            <Ionicons name="eye-outline" size={18} color={Colors.primary} />
-            <Text style={styles.guestButtonText}>Continue as Guest</Text>
-          </TouchableOpacity>
-
           {isLogin && (
             <View style={styles.demoHint}>
               <Text style={styles.demoText}>
@@ -446,38 +344,6 @@ const styles = StyleSheet.create({
   switchLink: {
     fontSize: 14,
     fontFamily: "Nunito_700Bold",
-    color: Colors.primary,
-  },
-  divider: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 12,
-    marginVertical: 4,
-  },
-  dividerLine: {
-    flex: 1,
-    height: 1,
-    backgroundColor: Colors.border,
-  },
-  dividerText: {
-    fontSize: 13,
-    fontFamily: "Nunito_400Regular",
-    color: Colors.textTertiary,
-  },
-  guestButton: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 8,
-    paddingVertical: 14,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: Colors.primary + "40",
-    backgroundColor: Colors.primary + "10",
-  },
-  guestButtonText: {
-    fontSize: 15,
-    fontFamily: "Nunito_600SemiBold",
     color: Colors.primary,
   },
   successBox: {
