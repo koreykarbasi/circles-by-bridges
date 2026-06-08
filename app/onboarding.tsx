@@ -847,8 +847,24 @@ function NotificationsPage({ onNext }: { onNext: () => void }) {
   const [frequency, setFrequency] = useState<string>("daily");
   const [time, setTime] = useState<string>("morning");
   const [saving, setSaving] = useState(false);
+  const [permDenied, setPermDenied] = useState(false);
   const insets = useSafeAreaInsets();
   const webBottomInset = Platform.OS === "web" ? 34 : 0;
+
+  // Request notification permission as soon as the screen is shown
+  useEffect(() => {
+    if (Platform.OS === "web") return;
+    (async () => {
+      try {
+        const { status } = await Notifications.requestPermissionsAsync();
+        if (status !== "granted") {
+          setPermDenied(true);
+        }
+      } catch {
+        // Non-fatal
+      }
+    })();
+  }, []);
 
   const FREQ_OPTIONS = [
     { value: "daily", label: "Once a day" },
@@ -865,9 +881,6 @@ function NotificationsPage({ onNext }: { onNext: () => void }) {
   const handleContinue = async () => {
     setSaving(true);
     try {
-      if (frequency !== "off" && Platform.OS !== "web") {
-        await Notifications.requestPermissionsAsync();
-      }
       await updateNotificationPreferences(frequency, frequency !== "off" ? time : null);
     } catch {
       // Non-fatal — continue to next step regardless
@@ -886,9 +899,17 @@ function NotificationsPage({ onNext }: { onNext: () => void }) {
         <Animated.View entering={FadeIn.duration(600)}>
           <Text style={pageStyles.title}>Stay connected without thinking about it</Text>
           <Text style={pageStyles.subtitle}>
-            Bridges can nudge you when it's a good time to reach out to someone you care about.
+            Birthday and check-in reminders are always on. Choose how often you want proactive nudges suggesting who to reach out to next.
           </Text>
         </Animated.View>
+
+        {permDenied && (
+          <Animated.View entering={FadeIn.duration(400)} style={notifStyles.deniedBanner}>
+            <Text style={notifStyles.deniedText}>
+              Notifications are currently disabled. To receive nudges, enable them in your device Settings.
+            </Text>
+          </Animated.View>
+        )}
 
         <Animated.View entering={FadeIn.delay(200).duration(600)} style={notifStyles.group}>
           <Text style={notifStyles.groupLabel}>How often should we nudge you?</Text>
@@ -1346,6 +1367,20 @@ const notifStyles = StyleSheet.create({
   },
   timeTileSubActive: {
     color: Colors.primary + "cc",
+  },
+  deniedBanner: {
+    marginTop: 16,
+    padding: 14,
+    borderRadius: 12,
+    backgroundColor: Colors.surface,
+    borderWidth: 1,
+    borderColor: Colors.borderLight,
+  },
+  deniedText: {
+    fontSize: 13,
+    fontFamily: "Nunito_400Regular",
+    color: Colors.textSecondary,
+    lineHeight: 18,
   },
   bottomBar: {
     paddingHorizontal: 20,

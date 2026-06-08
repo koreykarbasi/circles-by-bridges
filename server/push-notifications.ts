@@ -258,6 +258,21 @@ function getLocalHour(timezone: string): number {
   }
 }
 
+// Returns the local day-of-week (0=Sun … 6=Sat) in the given timezone.
+const DAY_SHORT = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"] as const;
+function getLocalDayOfWeek(timezone: string): number {
+  try {
+    const short = new Intl.DateTimeFormat("en-US", {
+      timeZone: timezone,
+      weekday: "short",
+    }).format(new Date());
+    const idx = DAY_SHORT.indexOf(short as (typeof DAY_SHORT)[number]);
+    return idx >= 0 ? idx : new Date().getDay();
+  } catch {
+    return new Date().getDay();
+  }
+}
+
 // Returns true if it is currently between 9:00 and 9:59 in the given timezone.
 function isNineAmLocalNow(timezone: string): boolean {
   return getLocalHour(timezone) === 9;
@@ -473,9 +488,11 @@ export async function sendSuggestionNudges() {
       if (localHour !== preferredHour) continue;
 
       const freq = user.suggestion_notif_frequency;
-      const dayOfWeek = new Date().getDay(); // 0=Sun,1=Mon,...,6=Sat
-      if (freq === "3x_week" && ![1, 3, 6].includes(dayOfWeek)) continue; // Mon, Wed, Sat
-      if (freq === "weekly" && dayOfWeek !== 3) continue; // Wednesday
+      // Derive local weekday from the same timezone as localHour to avoid
+      // day-boundary mismatches for users in non-UTC timezones.
+      const localDayOfWeek = getLocalDayOfWeek(tz);
+      if (freq === "3x_week" && ![1, 3, 6].includes(localDayOfWeek)) continue; // Mon, Wed, Sat
+      if (freq === "weekly" && localDayOfWeek !== 3) continue; // Wednesday
 
       const contactsResult = await pool.query<{
         id: string;
@@ -518,7 +535,7 @@ export async function sendSuggestionNudges() {
       await sendExpoPush(
         user.push_token,
         `Time to reach out to ${bestContact.name}`,
-        "Open Bridges to see what to say.",
+        "Open the app to see what to say.",
         { contactId: bestContact.id },
       );
       await logNotifiedContacts(user.id, new Set([bestContact.id]));

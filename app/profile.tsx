@@ -29,6 +29,12 @@ export default function ProfileScreen() {
   const [notifFreq, setNotifFreq] = useState<string>(user?.suggestionNotifFrequency ?? "daily");
   const [notifTime, setNotifTime] = useState<string>(user?.suggestionNotifTime ?? "morning");
 
+  // Keep local state in sync when the auth context user hydrates after mount
+  React.useEffect(() => {
+    if (user?.suggestionNotifFrequency) setNotifFreq(user.suggestionNotifFrequency);
+    if (user?.suggestionNotifTime) setNotifTime(user.suggestionNotifTime);
+  }, [user?.suggestionNotifFrequency, user?.suggestionNotifTime]);
+
   const FREQ_OPTIONS = [
     { value: "daily", label: "Daily" },
     { value: "3x_week", label: "3x / week" },
