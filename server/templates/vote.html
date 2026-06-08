@@ -152,6 +152,20 @@ function esc(s) {
   return d.innerHTML;
 }
 
+// Prepend day-of-week to a time label like "June 21, 2026 at 7:00 PM"
+// → "Friday June 21, 2026 at 7:00 PM". Falls back gracefully if unparseable.
+function addDayOfWeek(label) {
+  if (!label) return label;
+  const atIdx = label.indexOf(' at ');
+  const datePart = atIdx >= 0 ? label.substring(0, atIdx) : label;
+  try {
+    const d = new Date(datePart);
+    if (isNaN(d.getTime())) return label;
+    const day = d.toLocaleDateString('en-US', { weekday: 'long' });
+    return day + ' ' + label;
+  } catch(_) { return label; }
+}
+
 async function load() {
   try {
     const res = await fetch('/api/vote/' + shareCode);
@@ -336,7 +350,7 @@ function renderRankSection(type, title, subtitle) {
           ${isRejected ? '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>' : rank}
         </div>
         <div class="rank-card-content">
-          <div class="rank-card-label">${esc(opt.label)}</div>
+          <div class="rank-card-label">${esc(type === 'time' ? addDayOfWeek(opt.label) : opt.label)}</div>
           ${opt.dateTime ? `<div class="rank-card-meta">${esc(opt.dateTime)}</div>` : ''}
         </div>
         <div class="reject-btn${isRejected ? ' active' : ''}" onclick="toggleReject('${optId}', '${type}')" title="${isRejected ? 'Undo rejection' : 'Not interested'}">
@@ -371,7 +385,7 @@ function renderResults(showFinalized) {
   if (rec && (rec.bestActivity || rec.bestTime || rec.bestLocation)) {
     html += `<div class="results-banner"><div class="results-banner-title">Best picks</div>`;
     if (rec.bestActivity) html += `<div class="rec-row"><span class="rec-label">Activity</span><span class="rec-value">${esc(rec.bestActivity.label)}</span></div>`;
-    if (rec.bestTime) html += `<div class="rec-row"><span class="rec-label">Time</span><span class="rec-value">${esc(rec.bestTime.label)}</span></div>`;
+    if (rec.bestTime) html += `<div class="rec-row"><span class="rec-label">Time</span><span class="rec-value">${esc(addDayOfWeek(rec.bestTime.label))}</span></div>`;
     if (rec.bestLocation) html += `<div class="rec-row"><span class="rec-label">Where</span><span class="rec-value">${esc(rec.bestLocation.label)}</span></div>`;
     if (rec.totalVoters !== undefined) html += `<div class="rec-row" style="margin-top:6px"><span class="rec-label">Voters</span><span class="rec-value">${rec.totalVoters}</span></div>`;
     html += `</div>`;
@@ -398,7 +412,7 @@ function renderResults(showFinalized) {
         <div class="result-card${isWinner ? ' winner' : ''}">
           <div class="result-label">
             ${isWinner ? '<span class="trophy">&#x1F3C6;</span>' : ''}
-            ${esc(opt.label)}
+            ${esc(key === 'time' ? addDayOfWeek(opt.label) : opt.label)}
           </div>
           <div class="result-bar-wrap"><div class="result-bar-fill" style="width:${pct}%"></div></div>
           <div class="result-score">${opt.bordaScore || 0} pts &middot; ${opt.voteCount || 0} voter${(opt.voteCount || 0) !== 1 ? 's' : ''}</div>
@@ -564,7 +578,7 @@ function renderSection(type, animate = false) {
         ${isRejected ? '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>' : (idx + 1)}
       </div>
       <div class="rank-card-content">
-        <div class="rank-card-label">${esc(opt.label)}</div>
+        <div class="rank-card-label">${esc(type === 'time' ? addDayOfWeek(opt.label) : opt.label)}</div>
         ${opt.dateTime ? `<div class="rank-card-meta">${esc(opt.dateTime)}</div>` : ''}
       </div>
       <div class="reject-btn${isRejected ? ' active' : ''}" title="${isRejected ? 'Undo rejection' : 'Not interested'}">
