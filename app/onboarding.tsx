@@ -168,7 +168,7 @@ export default function OnboardingScreen() {
             />
           );
         case "notifications":
-          return <NotificationsPage onNext={goNext} />;
+          return <NotificationsPage onNext={goNext} isActive={currentIndex === 7} />;
         case "done":
           return (
             <DonePage
@@ -179,7 +179,7 @@ export default function OnboardingScreen() {
           return null;
       }
     },
-    [circle1Contacts, circle2Contacts, circle3Contacts, goNext],
+    [circle1Contacts, circle2Contacts, circle3Contacts, goNext, currentIndex],
   );
 
   return (
@@ -842,18 +842,21 @@ function CircleImportPage({
 
 // ─── Notifications Page ───────────────────────────────────────────────────────
 
-function NotificationsPage({ onNext }: { onNext: () => void }) {
+function NotificationsPage({ onNext, isActive }: { onNext: () => void; isActive: boolean }) {
   const { updateNotificationPreferences } = useAuth();
   const [frequency, setFrequency] = useState<string>("daily");
   const [time, setTime] = useState<string>("morning");
   const [saving, setSaving] = useState(false);
   const [permDenied, setPermDenied] = useState(false);
+  const hasRequestedPerm = useRef(false);
   const insets = useSafeAreaInsets();
   const webBottomInset = Platform.OS === "web" ? 34 : 0;
 
-  // Request notification permission as soon as the screen is shown
+  // Request notification permission when this slide becomes active.
+  // The ref ensures we only prompt once per onboarding flow.
   useEffect(() => {
-    if (Platform.OS === "web") return;
+    if (!isActive || Platform.OS === "web" || hasRequestedPerm.current) return;
+    hasRequestedPerm.current = true;
     (async () => {
       try {
         const { status } = await Notifications.requestPermissionsAsync();
@@ -864,7 +867,7 @@ function NotificationsPage({ onNext }: { onNext: () => void }) {
         // Non-fatal
       }
     })();
-  }, []);
+  }, [isActive]);
 
   const FREQ_OPTIONS = [
     { value: "daily", label: "Once a day" },
