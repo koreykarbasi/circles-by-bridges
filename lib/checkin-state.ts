@@ -1,6 +1,7 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Platform } from "react-native";
 import * as Notifications from "expo-notifications";
+import { apiRequest } from "@/lib/query-client";
 
 const ELEVATION_KEY = "bridges_checkin_elevation_v1";
 
@@ -102,6 +103,12 @@ export async function setElevation(entry: Omit<ElevationEntry, "scheduledNotifId
   const scheduledNotifId = await tryScheduleNotification(entry.contactName, entry.pushDue, entry.type);
   store[key] = { ...entry, scheduledNotifId };
   await persist();
+
+  // Register this locally-scheduled notification in the server's dedup log so
+  // the 9am server run won't send a duplicate push for the same contact today.
+  if (scheduledNotifId) {
+    apiRequest("POST", "/api/notifications/local-log", { contactId: entry.contactId }).catch(() => {});
+  }
 }
 
 export async function getElevations(): Promise<ElevationEntry[]> {

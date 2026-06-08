@@ -410,6 +410,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
     res.json({ id: user.id, email: user.email, name: user.username, profilePhotoUri: user.profilePhotoUri });
   });
 
+  app.post("/api/notifications/local-log", requireAuth, async (req, res) => {
+    try {
+      const { contactId } = req.body;
+      if (!contactId || typeof contactId !== "string") {
+        return bad(res, "contactId is required");
+      }
+      await pool.query(
+        `INSERT INTO notification_log (user_id, contact_id) VALUES ($1, $2)`,
+        [req.session.userId!, contactId.trim()],
+      );
+      res.json({ ok: true });
+    } catch (err) {
+      console.error("Error logging local notification:", err);
+      res.status(500).json({ message: "Failed to log notification" });
+    }
+  });
+
   app.put("/api/notifications/token", requireAuth, async (req, res) => {
     try {
       const { token, timezone } = req.body;

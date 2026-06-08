@@ -310,9 +310,19 @@ export async function sendDailyReminders() {
         }
       }
 
+      // Collapse to one message per contact (first/highest-priority wins)
+      const seenInRun = new Set<string>();
+      const deduped = messages.filter((msg) => {
+        if (!msg.contactId) return true;
+        if (seenInRun.has(msg.contactId)) return false;
+        seenInRun.add(msg.contactId);
+        return true;
+      });
+
       // Deduplicate: skip messages for contacts already notified in the last 24h
+      // (covers both previous server sends AND locally-scheduled elevation pushes)
       const recentContactIds = await getRecentlySentContactIds(user.id);
-      const filtered = messages.filter(
+      const filtered = deduped.filter(
         (msg) => !msg.contactId || !recentContactIds.has(msg.contactId),
       );
 
