@@ -55,8 +55,8 @@ Bridges is a relationship management app based on Dunbar's social brain theory. 
 - Suggestion frequency scoring: Circle 2 = ~2x/week, Circle 1 = ~1x/week, Circle 3 = every 15 days
 - Suggestion scheduler: AsyncStorage-backed tracking prevents repeat suggestions, cycling bonus up to +400 based on days since last suggested
 - Circle 3 suggestions included in regular pool (text/hangout only, no call); scored with base 1000
-- Text suggestions: copyable starter template ("Hey {name}, I was just thinking about you — …") with real name substituted; auto-marks contact as contacted on copy
-- Hangout suggestions: calendar button navigates to create-hangout, auto-marks contact as contacted
+- Text suggestions: copyable starter template built from the prompt topic (season of life, memory, compliment, etc.); copying or opening SMS does not mark as contacted
+- Hangout suggestions: calendar button navigates to create-hangout; pressing it does not mark as contacted
 - Home page: up to 5 reminders + top-3 deterministic suggestions (all circles, scored by priority), cross-off to mark done
 - Suggestions tab: collapsible full reminders list + suggestions below
 - Personalized suggestions/prompts with separate call/text/hangout lists per circle

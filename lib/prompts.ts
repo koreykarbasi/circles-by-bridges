@@ -87,8 +87,8 @@ const CIRCLE_1_TEXT_PROMPTS = [
   "Tell [Name] one thing you hope never changes about them.",
   "Tell [Name] that you admire how they show up for others.",
   "Ask [Name] what they've been learning about themselves lately.",
-  "Send [Name] a note: you don't have to have it all figured out - I'm here.",
-  "Ask [Name] what part of life feels most uncertain for them right now.",
+  "Ask [Name] what they're most excited about right now.",
+  "Ask [Name] what part of life has surprised them the most lately.",
 ];
 
 const CIRCLE_1_HANGOUT_PROMPTS = [

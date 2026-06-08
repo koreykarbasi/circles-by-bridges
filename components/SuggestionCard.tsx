@@ -52,76 +52,279 @@ function pick<T>(arr: T[]): T {
 function reasonFromPrompt(prompt: string, interests: string[], labels: string[]): string {
   const lower = prompt.toLowerCase();
 
-  for (const interest of interests) {
-    if (lower.includes(interest.toLowerCase())) {
-      return `How's the ${interest.toLowerCase()} been going? Would love to hear what's new with you.`;
-    }
-  }
-
-  if (lower.includes("memory") || lower.includes("remember") || lower.includes("reminiscing") || lower.includes("shared memory")) {
+  // Season / chapter of life
+  if (lower.includes("season of life") || lower.includes("this season") || lower.includes("chapter of life")) {
     return pick([
-      "I was just thinking about some of our memories together. How have you been?",
-      "I was just reminiscing about old times. We need to catch up soon!",
+      "What's been different or special about this season of life for you?",
+      "I've been curious — what's this chapter been like for you lately?",
     ]);
   }
-  if (lower.includes("appreciat") || lower.includes("admire") || lower.includes("grateful") || lower.includes("thankful")) {
-    return "I've been thinking about how much I value our friendship. Hope everything's going well on your end!";
+
+  // Compliment — hasn't been said yet
+  if (lower.includes("compliment") && (lower.includes("haven't said") || lower.includes("havent said") || lower.includes("out loud") || lower.includes("noticed"))) {
+    return pick([
+      "I wanted to share something I don't say enough — I genuinely admire how you show up.",
+      "There's something I've been meaning to say: you're someone I really look up to.",
+      "I realized I don't say this enough — you're a genuinely impressive person.",
+    ]);
   }
-  if (lower.includes("laugh") || lower.includes("funny") || lower.includes("joke")) {
-    return "Something happened recently that made me laugh and instantly reminded me of you. How have you been?";
+  if (lower.includes("compliment")) {
+    return "I wanted to pass along a genuine compliment — I think you're doing great.";
   }
-  if (lower.includes("support") || lower.includes("there for") || lower.includes("helped") || lower.includes("challenge")) {
-    return "I've been thinking about you lately. Hope things are going great — how have you been?";
+
+  // Appreciation / gratitude / value
+  if (lower.includes("appreciat") || lower.includes("grateful") || lower.includes("thankful") || lower.includes("value about")) {
+    return pick([
+      "Just wanted to say I appreciate you more than I probably show.",
+      "I've been meaning to say how much I appreciate having you around.",
+    ]);
   }
-  if (lower.includes("vulnerable") || lower.includes("honest") || lower.includes("open up")) {
-    return "There's something I've been meaning to share with you. Can we catch up soon?";
+
+  // Admiration
+  if (lower.includes("admire")) {
+    return pick([
+      "There's something I genuinely admire about you that I don't say enough.",
+      "I've been meaning to tell you — I really admire how you handle things.",
+    ]);
   }
-  if (lower.includes("voice") || lower.includes("hear your voice") || lower.includes("voice note")) {
-    return "I'd love to hear how things are going for you. What's new?";
+
+  // Proud / rooting for them
+  if (lower.includes("proud of") || lower.includes("rooting for")) {
+    return pick([
+      "Just wanted to say I'm proud of you — you're doing great things.",
+      "Wanted to let you know I've been rooting for you. How are things going?",
+    ]);
   }
-  if (lower.includes("plan") || lower.includes("hang") || lower.includes("get together") || lower.includes("spontaneous")) {
-    return "We should really make plans to hang out soon. What does your schedule look like?";
+
+  // Helped you grow / impact
+  if (lower.includes("helped") && lower.includes("grow")) {
+    return pick([
+      "Just wanted to say — you've had a real positive impact on me.",
+      "I've been meaning to say how much you've helped me grow.",
+    ]);
   }
+
+  // Shared memories / throwback
+  if (lower.includes("memory") || lower.includes("memories") || lower.includes("remember") || lower.includes("reminiscing") || lower.includes("throwback") || lower.includes("shared memory")) {
+    return pick([
+      "I was just thinking about one of our memories and it put a big smile on my face.",
+      "Something reminded me of a great time we had — hope you're doing well!",
+      "Had a flashback to one of our old memories recently. How have you been?",
+    ]);
+  }
+
+  // Laugh / funny / meme
+  if (lower.includes("laugh") || lower.includes("funny") || lower.includes("joke") || lower.includes("meme") || lower.includes("ridiculous")) {
+    return pick([
+      "Came across something that made me laugh and instantly thought of you.",
+      "Saw something today that you would absolutely find hilarious.",
+    ]);
+  }
+
+  // Something that made you think of them
+  if (lower.includes("made you think of them") || lower.includes("think they'd") || lower.includes("reminded you of") || lower.includes("small that made") || lower.includes("thought they'd")) {
+    return pick([
+      "Came across something this week that made me think of you.",
+      "Saw something recently that you'd love — had to reach out.",
+    ]);
+  }
+
+  // Just because / no reason / say hi
+  if (lower.includes("just because") || lower.includes("no reason") || lower.includes("just to say hi") || lower.includes("always the right time") || lower.includes("don't need a reason")) {
+    return pick([
+      "No particular reason — just wanted to say hi. Hope you're doing well!",
+      "Just dropping by to say hi. Hope things are great!",
+    ]);
+  }
+
+  // What's been on their heart / mind
+  if (lower.includes("on their heart") || lower.includes("on your heart")) {
+    return "How are you doing? What's been on your mind lately?";
+  }
+
+  // What they've been learning about themselves
+  if (lower.includes("learning about themselves") || lower.includes("learning about yourself")) {
+    return pick([
+      "What have you been learning about yourself lately?",
+      "Curious — what's been teaching you the most about yourself recently?",
+    ]);
+  }
+
+  // What are they figuring out / working on
+  if (lower.includes("figuring out") || lower.includes("working through") || lower.includes("working on")) {
+    return pick([
+      "What are you figuring out these days?",
+      "How are things going? What have you been working on lately?",
+    ]);
+  }
+
+  // What's bringing them joy / making them happy
+  if (lower.includes("joy") || lower.includes("making them happy") || lower.includes("happy lately") || lower.includes("bringing them joy") || lower.includes("brings you joy")) {
+    return pick([
+      "What's been bringing you joy lately?",
+      "What's been making you happy these days?",
+    ]);
+  }
+
+  // What they wish they had more time for
+  if (lower.includes("more time for") || lower.includes("wish they had")) {
+    return "What's something you wish you had more time for these days?";
+  }
+
+  // What are they looking forward to
+  if (lower.includes("looking forward to") || lower.includes("excited about")) {
+    return pick([
+      "What are you looking forward to lately?",
+      "What's something you're excited about right now?",
+    ]);
+  }
+
+  // Harder than expected
+  if (lower.includes("harder than expected")) {
+    return "What's been harder than expected for you lately? Would love to hear how things are going.";
+  }
+
+  // How they're really doing (beyond the surface)
+  if (lower.includes("really doing") || lower.includes("not the surface") || lower.includes("beyond the surface") || lower.includes("polished version") || lower.includes("really mean it")) {
+    return pick([
+      "How are you actually doing these days?",
+      "Been meaning to check in — how are you really doing?",
+    ]);
+  }
+
+  // Catch up / what's new
+  if (lower.includes("what's new") || lower.includes("whats new") || lower.includes("catch up") || lower.includes("been up to") || lower.includes("their world") || lower.includes("what's going on")) {
+    return pick([
+      "What's new with you? Would love to catch up!",
+      "It's been a bit — what have you been up to lately?",
+      "What's going on in your world these days?",
+    ]);
+  }
+
+  // Celebration / milestone / encouragement
+  if (lower.includes("celebrat") || lower.includes("milestone") || lower.includes("congratulat") || lower.includes("encouragement") || lower.includes("overdue for a celebration")) {
+    return pick([
+      "I feel like you deserve some recognition — you've been doing great things.",
+      "Just wanted to send some good energy your way. Hope things are going well!",
+    ]);
+  }
+
+  // Advice / value their opinion
+  if (lower.includes("advice") || lower.includes("value their opinion")) {
+    return "I'd love your take on something when you have a minute — I really value your perspective.";
+  }
+
+  // What they need / check-in style
+  if (lower.includes("what they need") || lower.includes("what do you need")) {
+    return pick([
+      "How are things going? What's keeping you busy these days?",
+      "Just checking in — how have you been?",
+    ]);
+  }
+
+  // Article / opportunity / something new discovered
+  if (lower.includes("article") || lower.includes("opportunity") || lower.includes("discovered") || lower.includes("new recipe") || lower.includes("new spot") || lower.includes("share something new")) {
+    return "Came across something I thought you'd find interesting — had to share!";
+  }
+
+  // Plans / hang out / get together
+  if (lower.includes("plan") || lower.includes("hang") || lower.includes("get together") || lower.includes("spontaneous") || lower.includes("micro-hangout") || lower.includes("make plans")) {
+    return pick([
+      "We should actually make plans to hang out soon — what does your schedule look like?",
+      "Been meaning to suggest getting together. What do you think?",
+    ]);
+  }
+
+  // Birthday
   if (lower.includes("birthday")) {
-    return "Your birthday is on my mind and I didn't want to let it slip by. Hope you have the best day!";
+    return "Your birthday is coming up and I didn't want to let it slip by — hope you have an amazing day!";
   }
+
+  // Travel / adventure
   if (lower.includes("trip") || lower.includes("travel") || lower.includes("adventure")) {
-    return "I've been thinking about your travels lately. How have the adventures been going?";
+    return pick([
+      "What adventures have you been on lately?",
+      "Any fun trips coming up? Would love to hear what you've been up to.",
+    ]);
   }
+
+  // Work / career / projects
   if (lower.includes("work") || lower.includes("career") || lower.includes("job") || lower.includes("project")) {
-    return "How's work been going for you lately? Would love to hear what you've been up to.";
+    return pick([
+      "How's work going for you these days?",
+      "How are things going with your projects lately?",
+    ]);
   }
-  if (lower.includes("recipe") || lower.includes("cook") || lower.includes("food")) {
-    return "I tried a new recipe recently and it made me think of you. How have you been?";
+
+  // Food / cooking / coffee
+  if (lower.includes("recipe") || lower.includes("cook") || lower.includes("food") || lower.includes("lunch") || lower.includes("dinner") || lower.includes("coffee")) {
+    return "I tried something new recently and it made me think of you. How have you been?";
   }
+
+  // Reading / books
   if (lower.includes("read") || lower.includes("book")) {
-    return "I read something recently that made me think of you. How have you been?";
+    return "Read something recently that reminded me of you. How have you been?";
   }
-  if (lower.includes("training") || lower.includes("workout") || lower.includes("hike") || lower.includes("run") || lower.includes("gym")) {
-    return "How's the training been going? Would love to hear how things are.";
+
+  // Fitness / training / outdoors
+  if (lower.includes("training") || lower.includes("workout") || lower.includes("hike") || lower.includes("run") || lower.includes("gym") || lower.includes("fitness")) {
+    return pick([
+      "How's the training been going?",
+      "How have the workouts been lately?",
+    ]);
   }
+
+  // Music / concerts
   if (lower.includes("music") || lower.includes("concert") || lower.includes("show")) {
     return "Heard something recently that made me think of you. How have you been?";
   }
 
+  // Contact's specific interests
+  for (const interest of interests) {
+    if (lower.includes(interest.toLowerCase())) {
+      return pick([
+        `How's the ${interest.toLowerCase()} going lately?`,
+        `What's new with the ${interest.toLowerCase()}? Would love to hear.`,
+      ]);
+    }
+  }
+
+  // Interest-based fallback
+  if (interests.length > 0) {
+    return `How's the ${interests[0].toLowerCase()} going lately?`;
+  }
+
+  // Label-based fallback
   if (labels.length > 0) {
     const label = labels[0].toLowerCase();
     if (label.includes("childhood") || label.includes("college")) {
-      return "I was just thinking about our history together. How have you been?";
+      return pick([
+        "I was just thinking about some of our old memories. How have you been?",
+        "Randomly thought of you and some good times we've had. Hope things are great!",
+      ]);
     }
     if (label.includes("work")) {
       return "How are things going at work? Would love to catch up!";
     }
     if (label.includes("family")) {
-      return "How's the family doing? Would love to hear from you.";
+      return "How's everything going? Would love to hear what's new with you.";
+    }
+    if (label.includes("neighbor")) {
+      return "Just wanted to say hi and check in — how have you been?";
+    }
+    if (label.includes("gym") || label.includes("fitness")) {
+      return "How's the training been going? Would love to hear what you've been up to.";
+    }
+    if (label.includes("travel")) {
+      return "What adventures have you been on lately? Would love to hear!";
     }
   }
 
-  if (interests.length > 0) {
-    return `How's the ${interests[0].toLowerCase()} been going lately?`;
-  }
-
-  return "How have you been? Would love to catch up soon.";
+  return pick([
+    "Just wanted to check in — how have you been?",
+    "Hope things are going well! What's new with you?",
+    "Just thought of you and wanted to say hi. How are things?",
+  ]);
 }
 
 export function getTextCopyMessage(
@@ -161,10 +364,10 @@ export function getTextCopyMessage(
   }
 
   const opener = pick([
-    `Hey ${firstName}! Thinking of you.`,
-    `Hey ${firstName}! You've been on my mind.`,
-    `Hey ${firstName}! Randomly thought of you today.`,
-    `Hey ${firstName}! You crossed my mind.`,
+    `Hey ${firstName}!`,
+    `Hey ${firstName}, hope you're doing well.`,
+    `Hey ${firstName}! Just thought of you.`,
+    `Hey ${firstName}, wanted to reach out.`,
   ]);
   const reason = reasonFromPrompt(prompt, interests, labels);
   return `${opener} ${reason}`;
