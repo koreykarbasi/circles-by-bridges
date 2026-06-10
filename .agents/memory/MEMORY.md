@@ -1,1 +1,2 @@
 - [Supabase DB vs local PG](supabase-db-routing.md) — server/db.ts uses SUPABASE_URL first; migrations must target SUPABASE_URL, not just DATABASE_URL.
+- [Suggestion scoring overhaul](suggestion-scoring-overhaul.md) — C3 gap fix, recency-over-cooldown rebalance, push dedup + 404 fix decisions.

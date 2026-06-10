@@ -109,29 +109,28 @@ export function scoreSuggestion(
   circleLevel: 1 | 2 | 3,
   daysSinceLastSuggested: number | null,
   daysSinceContact: number | null,
-  daysUntilBirthday: number | null,
+  _daysUntilBirthday: number | null,
   elevationBonus?: number,
 ): number {
   let score = 0;
 
-  if (circleLevel === 2) score += 1400;
+  // Narrower gaps so Circle 3 can naturally compete after a short cooldown
+  if (circleLevel === 2) score += 1300;
   else if (circleLevel === 1) score += 1200;
-  else score += 1000;
+  else score += 1100;
 
+  // Cooldown bonus: rewards contacts not recently surfaced in the suggestions UI.
+  // Capped lower so it doesn't dominate over real-world recency.
   if (daysSinceLastSuggested === null) {
-    score += 400;
+    score += 150;
   } else {
-    score += Math.min(daysSinceLastSuggested * 30, 400);
+    score += Math.min(daysSinceLastSuggested * 12, 150);
   }
 
-  if (daysUntilBirthday !== null) {
-    if (daysUntilBirthday <= 7) score += 250;
-    else if (daysUntilBirthday <= 14) score += 120;
-    else if (daysUntilBirthday <= 30) score += 50;
-  }
-
+  // Recency bonus: primary signal — how long since you actually spoke to this person.
+  // Weighted 2× with a higher cap so neglected contacts rise naturally.
   if (daysSinceContact !== null) {
-    score += Math.min(daysSinceContact, 90);
+    score += Math.min(daysSinceContact * 2, 250);
   } else {
     score += 40;
   }

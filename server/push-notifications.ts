@@ -227,7 +227,7 @@ async function sendExpoPush(
   title: string,
   body: string,
   data?: Record<string, string>,
-) {
+): Promise<boolean> {
   try {
     const payload = { to: token, title, body, sound: "default", data: data ?? {} };
     const res = await fetch(EXPO_PUSH_URL, {
@@ -237,9 +237,12 @@ async function sendExpoPush(
     });
     if (!res.ok) {
       console.error(`[push] HTTP ${res.status} sending to ${token.slice(0, 20)}…`);
+      return false;
     }
+    return true;
   } catch (err) {
     console.error("[push] Failed to send notification:", err);
+    return false;
   }
 }
 
@@ -344,14 +347,16 @@ export async function sendDailyReminders() {
       // Cap at 3 notifications per user per delivery window to avoid spam
       const notifiedContactIds = new Set<string>();
       for (const msg of filtered.slice(0, 3)) {
-        await sendExpoPush(
+        const ok = await sendExpoPush(
           user.pushToken,
           msg.title,
           msg.body,
           msg.contactId ? { contactId: msg.contactId } : undefined,
         );
-        if (msg.contactId) notifiedContactIds.add(msg.contactId);
-        sent++;
+        if (ok) {
+          if (msg.contactId) notifiedContactIds.add(msg.contactId);
+          sent++;
+        }
       }
 
       // Log newly notified contacts for future deduplication
@@ -462,6 +467,50 @@ export async function sendHangoutFinalizedNotifications(
 }
 
 // ─── Suggestion nudges ────────────────────────────────────────────────────────
+//
+// Scoring mirrors lib/suggestion-scheduler.ts scoreSuggestion() exactly:
+//   base (C1=1200 C2=1300 C3=1100) + cooldown bonus + recency bonus
+//   No birthday bonus — birthday push is handled by the daily reminder path.
+//
+// "Days since last suggested" server-side = days since contact was last pushed
+// via this function, using notification_log as the source of truth.
+//
+// Elevated contacts are already registered in notification_log via the
+// /api/notifications/local-log endpoint called by lib/checkin-state.ts when
+// a local elevation notification is scheduled. They are excluded naturally by
+// the frequency-matched dedup window.
+
+function scoreSuggestionServer(
+  circleLevel: number,
+  daysSinceLastPushed: number | null,
+  daysSinceContact: number | null,
+): number {
+  let score = circleLevel === 2 ? 1300 : circleLevel === 1 ? 1200 : 1100;
+
+  // Cooldown bonus: lower cap so real-world recency dominates
+  if (daysSinceLastPushed === null) {
+    score += 150;
+  } else {
+    score += Math.min(daysSinceLastPushed * 12, 150);
+  }
+
+  // Recency bonus: primary signal — how long since you actually spoke to them
+  if (daysSinceContact !== null) {
+    score += Math.min(daysSinceContact * 2, 250);
+  } else {
+    score += 40; // never contacted
+  }
+
+  return score;
+}
+
+// Returns the dedup window in hours based on user frequency.
+// Elevated contacts registered via local-log are excluded for this window too.
+function dedupWindowHours(frequency: string): number {
+  if (frequency === "3x_week") return 60;  // 2.5 days
+  if (frequency === "weekly") return 144;  // 6 days
+  return 23;                               // daily
+}
 
 export async function sendSuggestionNudges() {
   try {
@@ -483,47 +532,62 @@ export async function sendSuggestionNudges() {
     for (const user of result.rows) {
       const tz = user.notification_timezone ?? "UTC";
       const localHour = getLocalHour(tz);
-
       const preferredHour = user.suggestion_notif_time === "afternoon" ? 17 : 9;
       if (localHour !== preferredHour) continue;
 
       const freq = user.suggestion_notif_frequency;
-      // Derive local weekday from the same timezone as localHour to avoid
-      // day-boundary mismatches for users in non-UTC timezones.
       const localDayOfWeek = getLocalDayOfWeek(tz);
       if (freq === "3x_week" && ![1, 3, 6].includes(localDayOfWeek)) continue; // Mon, Wed, Sat
       if (freq === "weekly" && localDayOfWeek !== 3) continue; // Wednesday
+
+      // Frequency-matched dedup window — also covers elevated contacts whose
+      // local notifications were registered via /api/notifications/local-log
+      const windowHours = dedupWindowHours(freq);
+      const recentResult = await pool.query<{ contact_id: string }>(
+        `SELECT DISTINCT contact_id FROM notification_log
+         WHERE user_id = $1 AND sent_at > NOW() - make_interval(hours => $2)`,
+        [user.id, windowHours],
+      );
+      const recentContactIds = new Set(recentResult.rows.map((r) => r.contact_id));
 
       const contactsResult = await pool.query<{
         id: string;
         name: string;
         circle_level: number;
         last_contacted: string | null;
-        birthday: string | null;
       }>(
-        `SELECT id, name, circle_level, last_contacted, birthday FROM contacts WHERE user_id = $1`,
+        `SELECT id, name, circle_level, last_contacted FROM contacts WHERE user_id = $1`,
         [user.id],
       );
-
       if (contactsResult.rows.length === 0) continue;
 
-      const recentContactIds = await getRecentlySentContactIds(user.id);
+      // Days since each contact was last pushed (server-side cooldown equivalent)
+      const lastPushedResult = await pool.query<{ contact_id: string; last_sent: string }>(
+        `SELECT contact_id, MAX(sent_at) AS last_sent
+         FROM notification_log WHERE user_id = $1 GROUP BY contact_id`,
+        [user.id],
+      );
+      const lastPushedMap = new Map(
+        lastPushedResult.rows.map((r) => [r.contact_id, r.last_sent]),
+      );
 
       let bestContact: { id: string; name: string } | null = null;
       let bestScore = -1;
 
       for (const c of contactsResult.rows) {
+        // Skip contacts in dedup window (includes elevated + recently pushed)
         if (recentContactIds.has(c.id)) continue;
 
-        const daysSince = c.last_contacted
+        const lastPushed = lastPushedMap.get(c.id);
+        const daysSinceLastPushed = lastPushed
+          ? Math.floor((Date.now() - new Date(lastPushed).getTime()) / (1000 * 60 * 60 * 24))
+          : null;
+
+        const daysSinceContact = c.last_contacted
           ? Math.floor((Date.now() - new Date(c.last_contacted).getTime()) / (1000 * 60 * 60 * 24))
-          : 60;
+          : null;
 
-        const daysUntilBday = getDaysUntilBirthday(c.birthday);
-        const birthdayBonus = daysUntilBday !== null && daysUntilBday >= 0 && daysUntilBday <= 30 ? 500 : 0;
-        const circleBonus = c.circle_level === 1 ? 200 : c.circle_level === 2 ? 100 : 0;
-
-        const score = daysSince + birthdayBonus + circleBonus;
+        const score = scoreSuggestionServer(c.circle_level, daysSinceLastPushed, daysSinceContact);
         if (score > bestScore) {
           bestScore = score;
           bestContact = { id: c.id, name: c.name };
@@ -532,14 +596,17 @@ export async function sendSuggestionNudges() {
 
       if (!bestContact) continue;
 
-      await sendExpoPush(
+      // Only log as notified if the push actually delivered (fix 404 burn bug)
+      const ok = await sendExpoPush(
         user.push_token,
         `Time to reach out to ${bestContact.name}`,
         "Open the app to see what to say.",
         { contactId: bestContact.id },
       );
-      await logNotifiedContacts(user.id, new Set([bestContact.id]));
-      sent++;
+      if (ok) {
+        await logNotifiedContacts(user.id, new Set([bestContact.id]));
+        sent++;
+      }
     }
 
     if (sent > 0) {
