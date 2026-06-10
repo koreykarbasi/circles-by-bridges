@@ -11,6 +11,8 @@ import { useContacts } from "@/lib/contacts-context";
 import { apiRequest, queryClient } from "@/lib/query-client";
 import { Avatar } from "@/components/Avatar";
 import { DateWheelPicker } from "@/components/DateWheelPicker";
+import { useSequentialHints, HINT_TEXT } from "@/lib/hints-store";
+import { HintTooltip } from "@/components/HintTooltip";
 
 type SurveyMode = "standard" | "fixed-activity";
 
@@ -79,6 +81,7 @@ export default function CreateHangoutScreen() {
 
   const [submitting, setSubmitting] = useState(false);
   const webTopInset = Platform.OS === "web" ? 67 : 0;
+  const [activeHint, dismissHint] = useSequentialHints(["create_hangout_survey"]);
 
   const defaultDeadline = useMemo(() => {
     const d = new Date();
@@ -564,6 +567,13 @@ export default function CreateHangoutScreen() {
           </Pressable>
         </View>
       )}
+
+      <HintTooltip
+        visible={step === 3 && activeHint === "create_hangout_survey"}
+        text={HINT_TEXT.create_hangout_survey}
+        onDismiss={dismissHint}
+        bottomOffset={20}
+      />
     </View>
   );
 }

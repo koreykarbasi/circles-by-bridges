@@ -26,6 +26,8 @@ import * as Clipboard from "expo-clipboard";
 import { router, useFocusEffect } from "expo-router";
 import { useQuery } from "@tanstack/react-query";
 import { getViewedTimestamps, hasUnreadVotes } from "@/lib/hangout-notifications";
+import { useSequentialHints, HINT_TEXT } from "@/lib/hints-store";
+import { HintTooltip } from "@/components/HintTooltip";
 
 const MAX_REMINDERS = 5;
 const MAX_SUGGESTIONS = 3;
@@ -78,6 +80,7 @@ export default function HomeScreen() {
   const [copiedToast, setCopiedToast] = useState(false);
   const copiedToastAnim = useRef(new Animated.Value(0)).current;
   const copiedToastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [activeHint, dismissHint] = useSequentialHints(["home_reminders", "home_suggestions"]);
   const [phoneSheet, setPhoneSheet] = useState<{ suggestion: Suggestion; mode: "sms" | "call" } | null>(null);
 
   const { data: hangouts } = useQuery<HangoutPlan[]>({
@@ -752,6 +755,13 @@ export default function HomeScreen() {
         <Text style={styles.copiedToastText}>Text copied</Text>
       </Animated.View>
     )}
+
+    <HintTooltip
+      visible={!!activeHint}
+      text={activeHint ? HINT_TEXT[activeHint] : ""}
+      onDismiss={dismissHint}
+      bottomOffset={80}
+    />
     </View>
   );
 }

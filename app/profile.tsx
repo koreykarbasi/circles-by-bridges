@@ -17,6 +17,7 @@ import Colors from "@/constants/colors";
 import { useContacts } from "@/lib/contacts-context";
 import { useOnboarding } from "@/lib/onboarding-context";
 import { useAuth } from "@/lib/auth-context";
+import { resetAllHints } from "@/lib/hints-store";
 import { CIRCLE_CONFIG } from "@/lib/types";
 import * as Haptics from "expo-haptics";
 
@@ -83,6 +84,23 @@ export default function ProfileScreen() {
           text: "Replay",
           onPress: async () => {
             await resetOnboarding();
+          },
+        },
+      ],
+    );
+  };
+
+  const handleResetHints = () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    Alert.alert(
+      "Reset Tips",
+      "This will show all the contextual tips again the next time you visit each page.",
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Reset",
+          onPress: async () => {
+            await resetAllHints();
           },
         },
       ],
@@ -242,6 +260,19 @@ export default function ProfileScreen() {
             <View style={styles.menuContent}>
               <Text style={styles.menuTitle}>Replay Walkthrough</Text>
               <Text style={styles.menuDesc}>Review how Bridges works</Text>
+            </View>
+            <Ionicons name="chevron-forward" size={18} color={Colors.textTertiary} />
+          </Pressable>
+          <Pressable
+            onPress={handleResetHints}
+            style={({ pressed }) => [styles.menuItem, pressed && { opacity: 0.7 }]}
+          >
+            <View style={[styles.menuIcon, { backgroundColor: Colors.primaryMuted }]}>
+              <Ionicons name="bulb-outline" size={20} color={Colors.primaryLight} />
+            </View>
+            <View style={styles.menuContent}>
+              <Text style={styles.menuTitle}>Reset Tips</Text>
+              <Text style={styles.menuDesc}>Show contextual tips again on each page</Text>
             </View>
             <Ionicons name="chevron-forward" size={18} color={Colors.textTertiary} />
           </Pressable>

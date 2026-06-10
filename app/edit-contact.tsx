@@ -23,6 +23,8 @@ import { formatLastContacted } from "@/lib/helpers";
 import { Avatar } from "@/components/Avatar";
 import { DateWheelPicker } from "@/components/DateWheelPicker";
 import * as Haptics from "expo-haptics";
+import { useSequentialHints, HINT_TEXT } from "@/lib/hints-store";
+import { HintTooltip } from "@/components/HintTooltip";
 
 const PREDEFINED_LABELS = [
   "Family", "Childhood Friend", "College Friend", "Work Friend", "Neighbor",
@@ -221,6 +223,7 @@ export default function EditContactScreen() {
   }, [contact.id, markContacted]);
 
   const webTopInset = Platform.OS === "web" ? 67 : 0;
+  const [activeHint, dismissHint] = useSequentialHints(["edit_custom_reminder", "edit_labels"]);
 
   return (
     <View style={styles.container}>
@@ -692,6 +695,13 @@ export default function EditContactScreen() {
           <Text style={styles.deleteButtonText}>Remove from circles</Text>
         </Pressable>
       </ScrollView>
+
+      <HintTooltip
+        visible={!!activeHint}
+        text={activeHint ? HINT_TEXT[activeHint] : ""}
+        onDismiss={dismissHint}
+        bottomOffset={20}
+      />
     </View>
   );
 }

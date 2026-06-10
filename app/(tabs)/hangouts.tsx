@@ -12,6 +12,8 @@ import { EmptyState } from "@/components/EmptyState";
 import type { HangoutPlan } from "@/lib/types";
 import { getViewedTimestamps, hasUnreadVotes, countNewVoters } from "@/lib/hangout-notifications";
 import { useAuth } from "@/lib/auth-context";
+import { useSequentialHints, HINT_TEXT } from "@/lib/hints-store";
+import { HintTooltip } from "@/components/HintTooltip";
 
 function HangoutCard({ plan, viewedAt }: { plan: HangoutPlan; viewedAt: string | undefined }) {
   const isFinalized = plan.status === "finalized";
@@ -100,6 +102,7 @@ export default function HangoutsScreen() {
 
   const activeHangouts = (hangouts || []).filter((h) => h.status !== "finalized");
   const pastHangouts = (hangouts || []).filter((h) => h.status === "finalized");
+  const [activeHint, dismissHint] = useSequentialHints(["hangouts_intro"]);
 
   return (
     <View style={styles.screen}>
@@ -155,6 +158,13 @@ export default function HangoutsScreen() {
           </>
         )}
       </ScrollView>
+
+      <HintTooltip
+        visible={activeHint === "hangouts_intro"}
+        text={HINT_TEXT.hangouts_intro}
+        onDismiss={dismissHint}
+        bottomOffset={80}
+      />
     </View>
   );
 }

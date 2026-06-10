@@ -12,6 +12,8 @@ import { router, useLocalSearchParams } from "expo-router";
 import * as Haptics from "expo-haptics";
 import { computeProfileCompletion } from "@/lib/profile-completion";
 import { BellSheet, computeBellDotColor } from "@/components/BellSheet";
+import { useSequentialHints, HINT_TEXT } from "@/lib/hints-store";
+import { HintTooltip } from "@/components/HintTooltip";
 
 export default function CirclesScreen() {
   const insets = useSafeAreaInsets();
@@ -22,6 +24,7 @@ export default function CirclesScreen() {
   const [bellSheetOpen, setBellSheetOpen] = useState(false);
   const [addSheetOpen, setAddSheetOpen] = useState(false);
   const searchRef = useRef<TextInput>(null);
+  const [activeHint, dismissHint] = useSequentialHints(["circles_viz", "circles_calendar"]);
 
   useEffect(() => {
     const parsed = parseInt(circleParam ?? "", 10);
@@ -269,6 +272,13 @@ export default function CirclesScreen() {
           </Pressable>
         </View>
       </Modal>
+
+      <HintTooltip
+        visible={!!activeHint}
+        text={activeHint ? HINT_TEXT[activeHint] : ""}
+        onDismiss={dismissHint}
+        bottomOffset={80}
+      />
     </View>
   );
 }

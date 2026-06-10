@@ -19,6 +19,8 @@ import type { Contact } from "@/lib/types";
 import type { Reminder } from "@/lib/reminders";
 import { router, useFocusEffect } from "expo-router";
 import * as Haptics from "expo-haptics";
+import { useSequentialHints, HINT_TEXT } from "@/lib/hints-store";
+import { HintTooltip } from "@/components/HintTooltip";
 
 interface GeneratedSuggestion {
   contact: Contact;
@@ -440,6 +442,7 @@ export default function SuggestionsScreen() {
   }, []);
 
   const webTopInset = Platform.OS === "web" ? 67 : 0;
+  const [activeHint, dismissHint] = useSequentialHints(["suggestions_filter", "suggestions_actions"]);
 
   return (
     <View style={styles.screenWrapper}>
@@ -645,6 +648,13 @@ export default function SuggestionsScreen() {
         <Text style={styles.copiedToastText}>Text copied</Text>
       </Animated.View>
     )}
+
+    <HintTooltip
+      visible={!!activeHint}
+      text={activeHint ? HINT_TEXT[activeHint] : ""}
+      onDismiss={dismissHint}
+      bottomOffset={80}
+    />
     </View>
   );
 }
