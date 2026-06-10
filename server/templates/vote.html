@@ -172,9 +172,13 @@ async function load() {
     if (!res.ok) throw new Error('Not found');
     planData = await res.json();
 
-    // If this browser already submitted a vote for this survey, show results directly
+    // If this browser already submitted a vote, show results with change-vote option
     try {
-      if (localStorage.getItem('voted_' + shareCode) === 'true') {
+      const storedName = localStorage.getItem('voter_name_' + shareCode);
+      if (storedName) {
+        submitted = true;
+        voterName = storedName;
+      } else if (localStorage.getItem('voted_' + shareCode) === 'true') {
         submitted = true;
       }
     } catch(_) {}
@@ -229,6 +233,7 @@ function render() {
       </div>
     `;
     html += renderResults(false);
+    html += `<button class="submit-btn" style="background:transparent;color:#9B7DFF;border:1.5px solid #9B7DFF40;margin-top:8px" onclick="changeVote()">Change your vote</button>`;
   } else {
     html += renderVoteForm();
   }
@@ -695,7 +700,10 @@ async function submitVotes() {
     }
     submitted = true;
     voterName = name;
-    try { localStorage.setItem('voted_' + shareCode, 'true'); } catch(_) {}
+    try {
+      localStorage.setItem('voted_' + shareCode, 'true');
+      localStorage.setItem('voter_name_' + shareCode, name);
+    } catch(_) {}
 
     // Refresh plan data to show updated results
     const updated = await fetch('/api/vote/' + shareCode);
@@ -706,6 +714,12 @@ async function submitVotes() {
     btn.textContent = 'Submit my rankings';
     alert(e.message || 'Failed to submit. Please try again.');
   }
+}
+
+function changeVote() {
+  submitted = false;
+  render();
+  window.scrollTo({ top: 0, behavior: 'smooth' });
 }
 
 load();

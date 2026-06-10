@@ -104,6 +104,7 @@ export function NoPhoneSheet({ visible, contactName, mode, onConfirm, onDismiss 
           Contacts.Fields.Name,
           Contacts.Fields.Birthday,
           Contacts.Fields.Image,
+          Contacts.Fields.RawImage,
         ],
       });
       const withPhone: DeviceContact[] = [];
@@ -111,12 +112,18 @@ export function NoPhoneSheet({ visible, contactName, mode, onConfirm, onDismiss 
         if (!c.phoneNumbers || c.phoneNumbers.length === 0) continue;
         const phone = c.phoneNumbers[0].number ?? "";
         if (!phone) continue;
+        let imageUri: string | null = null;
+        if ((c.rawImage as { base64?: string } | undefined)?.base64) {
+          imageUri = `data:image/jpeg;base64,${(c.rawImage as { base64?: string }).base64}`;
+        } else if ((c.image as { uri?: string } | undefined)?.uri) {
+          imageUri = (c.image as { uri: string }).uri;
+        }
         withPhone.push({
           id: c.id ?? Math.random().toString(),
           name: c.name ?? "Unknown",
           phone,
           birthday: formatDeviceBirthday(c.birthday as { year?: number; month?: number; day?: number } | undefined),
-          imageUri: (c.image as { uri?: string } | undefined)?.uri ?? null,
+          imageUri,
         });
       }
       withPhone.sort((a, b) => a.name.localeCompare(b.name));

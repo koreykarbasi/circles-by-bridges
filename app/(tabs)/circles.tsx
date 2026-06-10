@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useEffect, useRef } from "react";
-import { View, Text, StyleSheet, ScrollView, Pressable, TextInput, Platform, Modal } from "react-native";
+import { View, Text, StyleSheet, ScrollView, Pressable, TextInput, Platform, Modal, ActivityIndicator } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import Colors from "@/constants/colors";
@@ -17,7 +17,7 @@ import { HintTooltip } from "@/components/HintTooltip";
 
 export default function CirclesScreen() {
   const insets = useSafeAreaInsets();
-  const { contacts, getCircleContacts, markContacted, deleteContact } = useContacts();
+  const { contacts, getCircleContacts, markContacted, deleteContact, isLoading } = useContacts();
   const { circle: circleParam } = useLocalSearchParams<{ circle?: string }>();
   const [activeCircle, setActiveCircle] = useState<1 | 2 | 3>(1);
   const [searchQuery, setSearchQuery] = useState("");
@@ -167,7 +167,9 @@ export default function CirclesScreen() {
           </View>
         )}
 
-        {circleContacts.length === 0 ? (
+        {isLoading ? (
+          <ActivityIndicator size="large" color={Colors.primary} style={{ marginTop: 48 }} />
+        ) : circleContacts.length === 0 ? (
           <EmptyState
             icon="person-add-outline"
             title={`No one in ${config.label}`}

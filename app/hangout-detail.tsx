@@ -14,6 +14,20 @@ import type { HangoutPlan, HangoutOption } from "@/lib/types";
 import { markHangoutViewed } from "@/lib/hangout-notifications";
 import { useAuth } from "@/lib/auth-context";
 
+function addDayOfWeek(label: string): string {
+  if (!label) return label;
+  const atIdx = label.indexOf(" at ");
+  const datePart = atIdx >= 0 ? label.substring(0, atIdx) : label;
+  try {
+    const d = new Date(datePart);
+    if (isNaN(d.getTime())) return label;
+    const days = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+    return days[d.getDay()] + ". " + label;
+  } catch {
+    return label;
+  }
+}
+
 function getBordaColor(rank: number, total: number): string {
   if (total <= 1) return Colors.primary;
   const pct = 1 - (rank - 1) / (total - 1);
@@ -69,7 +83,9 @@ function SurveySection({
                 }
               </View>
               <View style={{ flex: 1 }}>
-                <Text style={ss.optionLabel}>{opt.label}</Text>
+                <Text style={ss.optionLabel}>
+                  {opt.questionType === "time" ? addDayOfWeek(opt.label) : opt.label}
+                </Text>
               </View>
               <View style={ss.scoreBox}>
                 <Text style={[ss.scoreNum, isWinner && { color: Colors.warning }, isLocked && { color: Colors.success }]}>
@@ -303,7 +319,7 @@ export default function HangoutDetailScreen() {
     ? [...locationOptions].sort((a, b) => (b.bordaScore || 0) - (a.bordaScore || 0))[0]
     : null;
 
-  const timeLabel = lockedTimeOption?.label || "TBD";
+  const timeLabel = lockedTimeOption ? addDayOfWeek(lockedTimeOption.label) : "TBD";
   const locationLabel = lockedLocationOption?.label || null;
 
   return (
@@ -414,7 +430,7 @@ export default function HangoutDetailScreen() {
             {rec.bestTime && (
               <View style={styles.recRow}>
                 <Text style={styles.recRowLabel}>When</Text>
-                <Text style={styles.recRowValue}>{rec.bestTime.label}</Text>
+                <Text style={styles.recRowValue}>{addDayOfWeek(rec.bestTime.label)}</Text>
               </View>
             )}
             {rec.bestLocation && (

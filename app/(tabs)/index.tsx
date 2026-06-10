@@ -1,5 +1,5 @@
 import React, { useState, useCallback, useMemo, useEffect, useRef } from "react";
-import { View, Text, StyleSheet, ScrollView, Platform, RefreshControl, Pressable, Image, Animated, Linking } from "react-native";
+import { View, Text, StyleSheet, ScrollView, Platform, RefreshControl, Pressable, Image, Animated, Linking, ActivityIndicator } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import Colors from "@/constants/colors";
@@ -67,7 +67,7 @@ interface Suggestion {
 export default function HomeScreen() {
   const insets = useSafeAreaInsets();
   const { user } = useAuth();
-  const { contacts, markContacted, markHangout, refreshContacts, savePhoneNumber } = useContacts();
+  const { contacts, markContacted, markHangout, refreshContacts, savePhoneNumber, isLoading } = useContacts();
   const [refreshing, setRefreshing] = useState(false);
   const [dismissedReminders, setDismissedReminders] = useState<Set<string>>(new Set());
   const dismissedSuggestions = useDismissedSuggestions();
@@ -514,7 +514,9 @@ export default function HomeScreen() {
           <View style={styles.headerText}>
             <Text style={styles.greeting}>Your Bridges</Text>
             <Text style={styles.subtitle}>
-              {contacts.length === 0
+              {isLoading
+                ? "Loading your circles..."
+                : contacts.length === 0
                 ? "Start by adding people to your circles"
                 : `${contacts.length} ${contacts.length === 1 ? "person" : "people"} in your circles`}
             </Text>
@@ -544,7 +546,13 @@ export default function HomeScreen() {
         </View>
       </View>
 
-      <CirclesVisualization contacts={contacts} user={user} />
+      {isLoading ? (
+        <View style={{ height: 220, alignItems: "center", justifyContent: "center" }}>
+          <ActivityIndicator size="large" color={Colors.primary} />
+        </View>
+      ) : (
+        <CirclesVisualization contacts={contacts} user={user} />
+      )}
 
       <Pressable
         onPress={() => router.push("/create-hangout")}
@@ -562,7 +570,7 @@ export default function HomeScreen() {
         <Ionicons name="chevron-forward" size={16} color={Colors.textTertiary} />
       </Pressable>
 
-      {contacts.length === 0 && (
+      {!isLoading && contacts.length === 0 && (
         <View style={styles.section}>
           <EmptyState
             icon="people-outline"
