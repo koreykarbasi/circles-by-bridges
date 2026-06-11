@@ -154,15 +154,21 @@ function esc(s) {
 
 // Prepend abbreviated day-of-week to a time label like "June 21, 2026 at 7:00 PM"
 // → "Mon. June 21, 2026 at 7:00 PM". Falls back gracefully if unparseable.
+const MONTH_MAP_DOW = {
+  January:0,February:1,March:2,April:3,May:4,June:5,
+  July:6,August:7,September:8,October:9,November:10,December:11
+};
 function addDayOfWeek(label) {
   if (!label) return label;
   const atIdx = label.indexOf(' at ');
   const datePart = atIdx >= 0 ? label.substring(0, atIdx) : label;
   try {
-    const d = new Date(datePart);
-    if (isNaN(d.getTime())) return label;
-    const day = d.toLocaleDateString('en-US', { weekday: 'short' });
-    return day + '. ' + label;
+    // Parse "Month DD, YYYY" manually to avoid timezone/engine ambiguity
+    const m = datePart.match(/^(\w+)\s+(\d+),\s*(\d+)$/);
+    if (!m || MONTH_MAP_DOW[m[1]] === undefined) return label;
+    const d = new Date(parseInt(m[3],10), MONTH_MAP_DOW[m[1]], parseInt(m[2],10));
+    const days = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+    return days[d.getDay()] + '. ' + label;
   } catch(_) { return label; }
 }
 

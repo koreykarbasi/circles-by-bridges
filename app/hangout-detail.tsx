@@ -14,13 +14,23 @@ import type { HangoutPlan, HangoutOption } from "@/lib/types";
 import { markHangoutViewed } from "@/lib/hangout-notifications";
 import { useAuth } from "@/lib/auth-context";
 
+const MONTH_MAP: Record<string, number> = {
+  January: 0, February: 1, March: 2, April: 3, May: 4, June: 5,
+  July: 6, August: 7, September: 8, October: 9, November: 10, December: 11,
+};
+
 function addDayOfWeek(label: string): string {
   if (!label) return label;
   const atIdx = label.indexOf(" at ");
   const datePart = atIdx >= 0 ? label.substring(0, atIdx) : label;
   try {
-    const d = new Date(datePart);
-    if (isNaN(d.getTime())) return label;
+    // Parse "Month DD, YYYY" manually — Hermes (React Native) does not
+    // reliably parse non-ISO strings with new Date("June 12, 2026")
+    const m = datePart.match(/^(\w+)\s+(\d+),\s*(\d+)$/);
+    if (!m) return label;
+    const monthNum = MONTH_MAP[m[1]];
+    if (monthNum === undefined) return label;
+    const d = new Date(parseInt(m[3], 10), monthNum, parseInt(m[2], 10));
     const days = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
     return days[d.getDay()] + ". " + label;
   } catch {
