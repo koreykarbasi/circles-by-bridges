@@ -32,6 +32,7 @@ export function ContactsProvider({ children }: { children: ReactNode }) {
   const [isLoading, setIsLoading] = useState(true);
 
   const fetchContacts = useCallback(async () => {
+    setIsLoading(true);
     try {
       const baseUrl = getApiUrl();
       const url = new URL("/api/contacts", baseUrl);
