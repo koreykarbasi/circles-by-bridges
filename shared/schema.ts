@@ -15,6 +15,7 @@ export const users = pgTable("users", {
   notificationTimezone: text("notification_timezone"),
   suggestionNotifFrequency: text("suggestion_notif_frequency"),
   suggestionNotifTime: text("suggestion_notif_time"),
+  hasPassword: boolean("has_password").notNull().default(true),
 });
 
 export const contacts = pgTable("contacts", {
@@ -97,6 +98,17 @@ export const notificationLog = pgTable("notification_log", {
   sentAt: timestamp("sent_at").defaultNow().notNull(),
 });
 
+export const passwordResetTokens = pgTable("password_reset_tokens", {
+  id: varchar("id")
+    .primaryKey()
+    .default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").notNull().references(() => users.id),
+  tokenHash: text("token_hash").notNull(),
+  expiresAt: timestamp("expires_at").notNull(),
+  usedAt: timestamp("used_at"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
 export const insertUserSchema = createInsertSchema(users).pick({
   email: true,
   password: true,
@@ -132,3 +144,4 @@ export type HangoutOption = typeof hangoutOptions.$inferSelect;
 export type InsertHangoutOption = z.infer<typeof insertHangoutOptionSchema>;
 export type HangoutVote = typeof hangoutVotes.$inferSelect;
 export type InsertHangoutVote = z.infer<typeof insertHangoutVoteSchema>;
+export type PasswordResetToken = typeof passwordResetTokens.$inferSelect;

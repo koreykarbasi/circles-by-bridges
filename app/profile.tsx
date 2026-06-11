@@ -8,6 +8,8 @@ import {
   Platform,
   Alert,
   Image,
+  TextInput,
+  ActivityIndicator,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
@@ -20,6 +22,7 @@ import { useAuth } from "@/lib/auth-context";
 import { resetAllHints } from "@/lib/hints-store";
 import { CIRCLE_CONFIG } from "@/lib/types";
 import * as Haptics from "expo-haptics";
+import { apiRequest } from "@/lib/query-client";
 
 export default function ProfileScreen() {
   const insets = useSafeAreaInsets();
@@ -29,6 +32,15 @@ export default function ProfileScreen() {
 
   const [notifFreq, setNotifFreq] = useState<string>(user?.suggestionNotifFrequency ?? "daily");
   const [notifTime, setNotifTime] = useState<string>(user?.suggestionNotifTime ?? "morning");
+
+  const [currentPassword, setCurrentPassword] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmNewPassword, setConfirmNewPassword] = useState("");
+  const [changePwSubmitting, setChangePwSubmitting] = useState(false);
+  const [changePwError, setChangePwError] = useState("");
+  const [changePwSuccess, setChangePwSuccess] = useState(false);
+  const [showCurrentPw, setShowCurrentPw] = useState(false);
+  const [showNewPw, setShowNewPw] = useState(false);
 
   // Keep local state in sync when the auth context user hydrates after mount
   React.useEffect(() => {
@@ -124,6 +136,43 @@ export default function ProfileScreen() {
         },
       ],
     );
+  };
+
+  const handleChangePassword = async () => {
+    setChangePwError("");
+    setChangePwSuccess(false);
+    if (!currentPassword) {
+      setChangePwError("Please enter your current password");
+      return;
+    }
+    if (!newPassword || newPassword.length < 6) {
+      setChangePwError("New password must be at least 6 characters");
+      return;
+    }
+    if (newPassword !== confirmNewPassword) {
+      setChangePwError("New passwords do not match");
+      return;
+    }
+    setChangePwSubmitting(true);
+    try {
+      await apiRequest("PUT", "/api/auth/change-password", { currentPassword, newPassword });
+      setChangePwSuccess(true);
+      setCurrentPassword("");
+      setNewPassword("");
+      setConfirmNewPassword("");
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    } catch (err: any) {
+      const msg = err?.message || "Failed to change password";
+      const cleaned = msg.replace(/^\d+:\s*/, "").replace(/^"/, "").replace(/"$/, "");
+      try {
+        const parsed = JSON.parse(cleaned);
+        setChangePwError(parsed.message || cleaned);
+      } catch {
+        setChangePwError(cleaned);
+      }
+    } finally {
+      setChangePwSubmitting(false);
+    }
   };
 
   const handlePickPhoto = async () => {
@@ -302,6 +351,96 @@ export default function ProfileScreen() {
           </View>
         </View>
 
+        {user?.hasPassword !== false && (
+          <View style={styles.section}>
+            <Text style={styles.sectionLabel}>Security</Text>
+            <View style={[styles.menuItem, { flexDirection: "column", alignItems: "flex-start", gap: 14 }]}>
+              <Text style={styles.menuTitle}>Change password</Text>
+
+              {changePwSuccess ? (
+                <View style={pwStyles.successBanner}>
+                  <Ionicons name="checkmark-circle" size={16} color={Colors.success} />
+                  <Text style={pwStyles.successText}>Password updated successfully</Text>
+                </View>
+              ) : null}
+
+              {changePwError ? (
+                <View style={pwStyles.errorBanner}>
+                  <Ionicons name="alert-circle" size={15} color={Colors.danger} />
+                  <Text style={pwStyles.errorText}>{changePwError}</Text>
+                </View>
+              ) : null}
+
+              <View style={pwStyles.fieldGroup}>
+                <Text style={pwStyles.fieldLabel}>Current password</Text>
+                <View style={pwStyles.inputRow}>
+                  <TextInput
+                    style={pwStyles.input}
+                    placeholder="Enter current password"
+                    placeholderTextColor={Colors.textTertiary}
+                    value={currentPassword}
+                    onChangeText={(t) => { setCurrentPassword(t); setChangePwError(""); setChangePwSuccess(false); }}
+                    secureTextEntry={!showCurrentPw}
+                    autoCapitalize="none"
+                    testID="profile-current-password"
+                  />
+                  <Pressable onPress={() => setShowCurrentPw(!showCurrentPw)} hitSlop={8}>
+                    <Ionicons name={showCurrentPw ? "eye-off-outline" : "eye-outline"} size={18} color={Colors.textTertiary} />
+                  </Pressable>
+                </View>
+              </View>
+
+              <View style={pwStyles.fieldGroup}>
+                <Text style={pwStyles.fieldLabel}>New password</Text>
+                <View style={pwStyles.inputRow}>
+                  <TextInput
+                    style={pwStyles.input}
+                    placeholder="At least 6 characters"
+                    placeholderTextColor={Colors.textTertiary}
+                    value={newPassword}
+                    onChangeText={(t) => { setNewPassword(t); setChangePwError(""); setChangePwSuccess(false); }}
+                    secureTextEntry={!showNewPw}
+                    autoCapitalize="none"
+                    testID="profile-new-password"
+                  />
+                  <Pressable onPress={() => setShowNewPw(!showNewPw)} hitSlop={8}>
+                    <Ionicons name={showNewPw ? "eye-off-outline" : "eye-outline"} size={18} color={Colors.textTertiary} />
+                  </Pressable>
+                </View>
+              </View>
+
+              <View style={pwStyles.fieldGroup}>
+                <Text style={pwStyles.fieldLabel}>Confirm new password</Text>
+                <View style={pwStyles.inputRow}>
+                  <TextInput
+                    style={pwStyles.input}
+                    placeholder="Repeat new password"
+                    placeholderTextColor={Colors.textTertiary}
+                    value={confirmNewPassword}
+                    onChangeText={(t) => { setConfirmNewPassword(t); setChangePwError(""); setChangePwSuccess(false); }}
+                    secureTextEntry={!showNewPw}
+                    autoCapitalize="none"
+                    testID="profile-confirm-password"
+                  />
+                </View>
+              </View>
+
+              <Pressable
+                style={({ pressed }) => [pwStyles.saveButton, pressed && { opacity: 0.7 }, changePwSubmitting && { opacity: 0.5 }]}
+                onPress={handleChangePassword}
+                disabled={changePwSubmitting}
+                testID="profile-change-password-submit"
+              >
+                {changePwSubmitting ? (
+                  <ActivityIndicator size="small" color="#fff" />
+                ) : (
+                  <Text style={pwStyles.saveButtonText}>Update password</Text>
+                )}
+              </Pressable>
+            </View>
+          </View>
+        )}
+
         <View style={styles.section}>
           <Text style={styles.sectionLabel}>Account</Text>
           <Pressable
@@ -467,6 +606,85 @@ const styles = StyleSheet.create({
     fontFamily: "Nunito_400Regular",
     color: Colors.textTertiary,
     marginTop: 1,
+  },
+});
+
+const pwStyles = StyleSheet.create({
+  fieldGroup: {
+    width: "100%",
+    gap: 5,
+  },
+  fieldLabel: {
+    fontSize: 12,
+    fontFamily: "Nunito_600SemiBold",
+    color: Colors.textTertiary,
+    marginLeft: 2,
+  },
+  inputRow: {
+    flexDirection: "row" as const,
+    alignItems: "center",
+    backgroundColor: Colors.background,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    paddingHorizontal: 12,
+    paddingVertical: 2,
+    gap: 8,
+  },
+  input: {
+    flex: 1,
+    fontSize: 14,
+    fontFamily: "Nunito_400Regular",
+    color: Colors.text,
+    paddingVertical: 10,
+  },
+  saveButton: {
+    width: "100%",
+    backgroundColor: Colors.primary,
+    borderRadius: 10,
+    paddingVertical: 12,
+    alignItems: "center" as const,
+  },
+  saveButtonText: {
+    fontSize: 14,
+    fontFamily: "Nunito_700Bold",
+    color: "#fff",
+  },
+  successBanner: {
+    flexDirection: "row" as const,
+    alignItems: "center",
+    gap: 8,
+    backgroundColor: "rgba(74,222,128,0.1)",
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    width: "100%",
+    borderWidth: 1,
+    borderColor: "rgba(74,222,128,0.2)",
+  },
+  successText: {
+    fontSize: 13,
+    fontFamily: "Nunito_400Regular",
+    color: Colors.success,
+    flex: 1,
+  },
+  errorBanner: {
+    flexDirection: "row" as const,
+    alignItems: "center",
+    gap: 8,
+    backgroundColor: "rgba(255,71,87,0.1)",
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    width: "100%",
+    borderWidth: 1,
+    borderColor: "rgba(255,71,87,0.2)",
+  },
+  errorText: {
+    fontSize: 13,
+    fontFamily: "Nunito_400Regular",
+    color: Colors.danger,
+    flex: 1,
   },
 });
 

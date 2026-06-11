@@ -197,9 +197,24 @@ function configureExpoAndLanding(app: express.Application) {
     ? fs.readFileSync(voteTemplatePath, "utf-8")
     : null;
 
+  const resetPasswordTemplatePath = path.resolve(
+    process.cwd(),
+    "server",
+    "templates",
+    "reset-password.html",
+  );
+  const resetPasswordTemplate = fs.existsSync(resetPasswordTemplatePath)
+    ? fs.readFileSync(resetPasswordTemplatePath, "utf-8")
+    : null;
+
   app.use((req: Request, res: Response, next: NextFunction) => {
     if (req.path.startsWith("/api")) {
       return next();
+    }
+
+    if (req.path === "/reset-password" && resetPasswordTemplate) {
+      res.setHeader("Content-Type", "text/html; charset=utf-8");
+      return res.status(200).send(resetPasswordTemplate);
     }
 
     if (req.path.startsWith("/vote/") && votePageTemplate) {
@@ -284,6 +299,35 @@ async function ensureUserNotifPreferenceColumns() {
   }
 }
 
+async function ensureHasPasswordColumn() {
+  try {
+    await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS has_password BOOLEAN NOT NULL DEFAULT TRUE`);
+  } catch (err) {
+    console.error("[startup] Failed to add has_password column:", err);
+  }
+}
+
+async function ensurePasswordResetTokensTable() {
+  try {
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS password_reset_tokens (
+        id VARCHAR PRIMARY KEY DEFAULT gen_random_uuid(),
+        user_id VARCHAR NOT NULL REFERENCES users(id),
+        token_hash TEXT NOT NULL,
+        expires_at TIMESTAMP NOT NULL,
+        used_at TIMESTAMP,
+        created_at TIMESTAMP NOT NULL DEFAULT NOW()
+      )
+    `);
+    await pool.query(`
+      CREATE INDEX IF NOT EXISTS idx_password_reset_tokens_hash
+      ON password_reset_tokens (token_hash)
+    `);
+  } catch (err) {
+    console.error("[startup] Failed to create password_reset_tokens table:", err);
+  }
+}
+
 (async () => {
   setupCors(app);
   setupBodyParsing(app);
@@ -294,6 +338,8 @@ async function ensureUserNotifPreferenceColumns() {
 
   await ensureNotificationLogTable();
   await ensureUserNotifPreferenceColumns();
+  await ensureHasPasswordColumn();
+  await ensurePasswordResetTokensTable();
 
   const server = await registerRoutes(app);
 

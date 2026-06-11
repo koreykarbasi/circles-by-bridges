@@ -5,9 +5,11 @@ import bcrypt from "bcryptjs";
 import session from "express-session";
 import connectPgSimple from "connect-pg-simple";
 import rateLimit from "express-rate-limit";
+import crypto from "crypto";
 import { pool } from "./db";
 import { getPrompts, syncFromSheet } from "./prompts-sync";
 import { sendHangoutFinalizedNotifications } from "./push-notifications";
+import { sendPasswordResetEmail } from "./email";
 import type { InsertContact } from "@shared/schema";
 import * as chrono from "chrono-node";
 
@@ -346,7 +348,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           console.error("Session save error:", err);
           return res.status(500).json({ message: "Login failed" });
         }
-        res.json({ id: user.id, email: user.email, name: user.username, profilePhotoUri: user.profilePhotoUri, suggestionNotifFrequency: user.suggestionNotifFrequency, suggestionNotifTime: user.suggestionNotifTime });
+        res.json({ id: user.id, email: user.email, name: user.username, profilePhotoUri: user.profilePhotoUri, suggestionNotifFrequency: user.suggestionNotifFrequency, suggestionNotifTime: user.suggestionNotifTime, hasPassword: user.hasPassword !== false });
       });
     } catch (err) {
       console.error("Login error:", err);
@@ -395,6 +397,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           10
         );
         user = await storage.createUser({ email: userEmail, password: hashedPassword });
+        await storage.updateUser(user.id, { hasPassword: false });
         if (fullName?.givenName) {
           const name = [fullName.givenName, fullName.familyName]
             .filter(Boolean)
@@ -411,7 +414,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           console.error("Session save error (apple):", err);
           return res.status(500).json({ message: "Sign in failed" });
         }
-        res.json({ id: user!.id, email: user!.email, name: user!.username, profilePhotoUri: user!.profilePhotoUri, suggestionNotifFrequency: user!.suggestionNotifFrequency, suggestionNotifTime: user!.suggestionNotifTime });
+        res.json({ id: user!.id, email: user!.email, name: user!.username, profilePhotoUri: user!.profilePhotoUri, suggestionNotifFrequency: user!.suggestionNotifFrequency, suggestionNotifTime: user!.suggestionNotifTime, hasPassword: user!.hasPassword !== false });
       });
     } catch (err) {
       console.error("Apple auth error:", err);
@@ -444,6 +447,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           10
         );
         user = await storage.createUser({ email: email.toLowerCase().trim(), password: hashedPassword });
+        await storage.updateUser(user.id, { hasPassword: false });
         if (name) await storage.updateUser(user.id, { username: name.trim() });
         const updated = await storage.getUser(user.id);
         if (updated) user = updated;
@@ -454,7 +458,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           console.error("Session save error (google):", err);
           return res.status(500).json({ message: "Sign in failed" });
         }
-        res.json({ id: user!.id, email: user!.email, name: user!.username, profilePhotoUri: user!.profilePhotoUri, suggestionNotifFrequency: user!.suggestionNotifFrequency, suggestionNotifTime: user!.suggestionNotifTime });
+        res.json({ id: user!.id, email: user!.email, name: user!.username, profilePhotoUri: user!.profilePhotoUri, suggestionNotifFrequency: user!.suggestionNotifFrequency, suggestionNotifTime: user!.suggestionNotifTime, hasPassword: user!.hasPassword !== false });
       });
     } catch (err) {
       console.error("Google auth error:", err);
@@ -479,7 +483,114 @@ export async function registerRoutes(app: Express): Promise<Server> {
     if (!user) {
       return res.status(401).json({ message: "User not found" });
     }
-    res.json({ id: user.id, email: user.email, name: user.username, profilePhotoUri: user.profilePhotoUri, suggestionNotifFrequency: user.suggestionNotifFrequency, suggestionNotifTime: user.suggestionNotifTime });
+    res.json({ id: user.id, email: user.email, name: user.username, profilePhotoUri: user.profilePhotoUri, suggestionNotifFrequency: user.suggestionNotifFrequency, suggestionNotifTime: user.suggestionNotifTime, hasPassword: user.hasPassword !== false });
+  });
+
+  app.post("/api/auth/forgot-password", authRateLimiter, async (req, res) => {
+    try {
+      const { email } = req.body;
+      if (!email || typeof email !== "string") {
+        return res.status(200).json({ message: "If that email is registered, you'll receive a reset link shortly." });
+      }
+
+      const user = await storage.getUserByEmail(email.toLowerCase().trim());
+      if (user && user.hasPassword !== false) {
+        const rawToken = crypto.randomBytes(32).toString("hex");
+        const tokenHash = crypto.createHash("sha256").update(rawToken).digest("hex");
+        const expiresAt = new Date(Date.now() + 15 * 60 * 1000);
+
+        await storage.createPasswordResetToken(user.id, tokenHash, expiresAt);
+
+        const baseUrl = process.env.APP_BASE_URL ||
+          (process.env.EXPO_PUBLIC_DOMAIN ? `https://${process.env.EXPO_PUBLIC_DOMAIN.replace(/:\d+$/, "")}` : null) ||
+          "https://buildmybridges.com";
+        const resetUrl = `${baseUrl}/reset-password?token=${rawToken}`;
+
+        try {
+          await sendPasswordResetEmail(user.email, resetUrl);
+        } catch (emailErr) {
+          console.error("[forgot-password] Email send failed:", emailErr);
+        }
+      } else if (user) {
+        await bcrypt.hash(email, 4);
+      } else {
+        await bcrypt.hash(email, 4);
+      }
+
+      res.status(200).json({ message: "If that email is registered, you'll receive a reset link shortly." });
+    } catch (err) {
+      console.error("Forgot password error:", err);
+      res.status(200).json({ message: "If that email is registered, you'll receive a reset link shortly." });
+    }
+  });
+
+  app.post("/api/auth/reset-password", authRateLimiter, async (req, res) => {
+    try {
+      const { token, newPassword } = req.body;
+      if (!token || typeof token !== "string") {
+        return res.status(400).json({ message: "Invalid or missing token" });
+      }
+      if (!newPassword || typeof newPassword !== "string" || newPassword.length < 6) {
+        return res.status(400).json({ message: "Password must be at least 6 characters" });
+      }
+
+      const tokenHash = crypto.createHash("sha256").update(token).digest("hex");
+      const tokenRecord = await storage.getPasswordResetTokenByHash(tokenHash);
+
+      if (!tokenRecord) {
+        return res.status(400).json({ message: "This reset link is invalid or has already been used." });
+      }
+      if (tokenRecord.usedAt) {
+        return res.status(400).json({ message: "This reset link has already been used. Please request a new one." });
+      }
+      if (new Date() > tokenRecord.expiresAt) {
+        return res.status(400).json({ message: "This reset link has expired. Please request a new one." });
+      }
+
+      const hashedPassword = await bcrypt.hash(newPassword, 10);
+      await storage.updateUser(tokenRecord.userId, { password: hashedPassword, hasPassword: true });
+      await storage.markPasswordResetTokenUsed(tokenRecord.id);
+
+      await pool.query(`DELETE FROM session WHERE sess->>'userId' = $1`, [tokenRecord.userId]);
+
+      res.json({ message: "Password updated successfully." });
+    } catch (err) {
+      console.error("Reset password error:", err);
+      res.status(500).json({ message: "Failed to reset password" });
+    }
+  });
+
+  app.put("/api/auth/change-password", requireAuth, async (req, res) => {
+    try {
+      const { currentPassword, newPassword } = req.body;
+      if (!currentPassword || typeof currentPassword !== "string") {
+        return bad(res, "Current password is required");
+      }
+      if (!newPassword || typeof newPassword !== "string" || newPassword.length < 6) {
+        return bad(res, "New password must be at least 6 characters");
+      }
+
+      const user = await storage.getUser(req.session.userId!);
+      if (!user) {
+        return res.status(404).json({ message: "User not found" });
+      }
+      if (user.hasPassword === false) {
+        return res.status(400).json({ message: "Password change is not available for social login accounts" });
+      }
+
+      const valid = await bcrypt.compare(currentPassword, user.password);
+      if (!valid) {
+        return res.status(400).json({ message: "Current password is incorrect" });
+      }
+
+      const hashedPassword = await bcrypt.hash(newPassword, 10);
+      await storage.updateUser(user.id, { password: hashedPassword });
+
+      res.json({ message: "Password updated successfully." });
+    } catch (err) {
+      console.error("Change password error:", err);
+      res.status(500).json({ message: "Failed to change password" });
+    }
   });
 
   app.post("/api/notifications/local-log", requireAuth, async (req, res) => {
@@ -519,7 +630,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (!user) {
         return res.status(404).json({ message: "User not found" });
       }
-      res.json({ id: user.id, email: user.email, name: user.username, profilePhotoUri: user.profilePhotoUri, suggestionNotifFrequency: user.suggestionNotifFrequency, suggestionNotifTime: user.suggestionNotifTime });
+      res.json({ id: user.id, email: user.email, name: user.username, profilePhotoUri: user.profilePhotoUri, suggestionNotifFrequency: user.suggestionNotifFrequency, suggestionNotifTime: user.suggestionNotifTime, hasPassword: user.hasPassword !== false });
     } catch (err) {
       console.error("Error saving notification preferences:", err);
       res.status(500).json({ message: "Failed to save notification preferences" });
@@ -559,7 +670,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (!user) {
         return res.status(404).json({ message: "User not found" });
       }
-      res.json({ id: user.id, email: user.email, name: user.username, profilePhotoUri: user.profilePhotoUri, suggestionNotifFrequency: user.suggestionNotifFrequency, suggestionNotifTime: user.suggestionNotifTime });
+      res.json({ id: user.id, email: user.email, name: user.username, profilePhotoUri: user.profilePhotoUri, suggestionNotifFrequency: user.suggestionNotifFrequency, suggestionNotifTime: user.suggestionNotifTime, hasPassword: user.hasPassword !== false });
     } catch (err) {
       console.error("Profile update error:", err);
       res.status(500).json({ message: "Failed to update profile" });

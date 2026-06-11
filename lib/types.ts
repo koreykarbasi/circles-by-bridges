@@ -31,6 +31,7 @@ export interface AuthUser {
   profilePhotoUri?: string | null;
   suggestionNotifFrequency?: string | null;
   suggestionNotifTime?: string | null;
+  hasPassword?: boolean;
 }
 
 export interface HangoutPlan {

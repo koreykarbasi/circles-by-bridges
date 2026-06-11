@@ -11,11 +11,13 @@ import {
   Alert,
   Image,
   ScrollView,
+  Modal,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import Colors from "@/constants/colors";
 import { useAuth } from "@/lib/auth-context";
+import { apiRequest } from "@/lib/query-client";
 
 export default function AuthScreen() {
   const insets = useSafeAreaInsets();
@@ -29,6 +31,12 @@ export default function AuthScreen() {
   const [error, setError] = useState("");
   const [successMessage, setSuccessMessage] = useState("");
   const [showPassword, setShowPassword] = useState(false);
+
+  const [showForgotModal, setShowForgotModal] = useState(false);
+  const [forgotEmail, setForgotEmail] = useState("");
+  const [forgotSubmitting, setForgotSubmitting] = useState(false);
+  const [forgotSuccess, setForgotSuccess] = useState(false);
+  const [forgotError, setForgotError] = useState("");
 
   const handleSubmit = async () => {
     setError("");
@@ -72,6 +80,31 @@ export default function AuthScreen() {
     } finally {
       setIsSubmitting(false);
     }
+  };
+
+  const handleForgotPassword = async () => {
+    setForgotError("");
+    if (!forgotEmail.trim()) {
+      setForgotError("Please enter your email address");
+      return;
+    }
+    setForgotSubmitting(true);
+    try {
+      await apiRequest("POST", "/api/auth/forgot-password", { email: forgotEmail.trim() });
+      setForgotSuccess(true);
+    } catch {
+      setForgotError("Something went wrong. Please try again.");
+    } finally {
+      setForgotSubmitting(false);
+    }
+  };
+
+  const closeForgotModal = () => {
+    setShowForgotModal(false);
+    setForgotEmail("");
+    setForgotSuccess(false);
+    setForgotError("");
+    setForgotSubmitting(false);
   };
 
   return (
@@ -201,6 +234,16 @@ export default function AuthScreen() {
             )}
           </TouchableOpacity>
 
+          {isLogin && (
+            <TouchableOpacity
+              onPress={() => { setForgotEmail(email.trim()); setShowForgotModal(true); }}
+              style={styles.forgotRow}
+              testID="auth-forgot-password"
+            >
+              <Text style={styles.forgotText}>Forgot password?</Text>
+            </TouchableOpacity>
+          )}
+
           <View style={styles.switchRow}>
             <Text style={styles.switchText}>
               {isLogin ? "Don't have an account?" : "Already have an account?"}
@@ -221,6 +264,86 @@ export default function AuthScreen() {
           )}
         </View>
       </ScrollView>
+
+      <Modal
+        visible={showForgotModal}
+        transparent
+        animationType="fade"
+        onRequestClose={closeForgotModal}
+      >
+        <View style={styles.modalOverlay}>
+          <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : "height"} style={{ width: "100%" }}>
+            <View style={styles.modalCard}>
+              <View style={styles.modalHeader}>
+                <Text style={styles.modalTitle}>Forgot password?</Text>
+                <TouchableOpacity onPress={closeForgotModal} hitSlop={12}>
+                  <Ionicons name="close" size={22} color={Colors.textSecondary} />
+                </TouchableOpacity>
+              </View>
+
+              {forgotSuccess ? (
+                <View style={styles.forgotSuccessContent}>
+                  <View style={styles.forgotSuccessIcon}>
+                    <Ionicons name="mail-outline" size={28} color={Colors.primary} />
+                  </View>
+                  <Text style={styles.forgotSuccessTitle}>Check your email</Text>
+                  <Text style={styles.forgotSuccessBody}>
+                    If that email is registered, you'll receive a reset link shortly. Check your spam folder if you don't see it.
+                  </Text>
+                  <TouchableOpacity style={styles.forgotDoneButton} onPress={closeForgotModal}>
+                    <Text style={styles.forgotDoneText}>Done</Text>
+                  </TouchableOpacity>
+                </View>
+              ) : (
+                <>
+                  <Text style={styles.modalSubtitle}>
+                    Enter your email and we'll send you a link to reset your password.
+                  </Text>
+
+                  {forgotError ? (
+                    <View style={[styles.errorBox, { marginBottom: 12 }]}>
+                      <Ionicons name="alert-circle" size={15} color={Colors.danger} />
+                      <Text style={styles.errorText}>{forgotError}</Text>
+                    </View>
+                  ) : null}
+
+                  <View style={styles.inputGroup}>
+                    <Text style={styles.label}>Email address</Text>
+                    <View style={styles.inputWrapper}>
+                      <Ionicons name="mail-outline" size={18} color={Colors.textSecondary} style={styles.inputIcon} />
+                      <TextInput
+                        style={styles.input}
+                        placeholder="you@example.com"
+                        placeholderTextColor={Colors.textTertiary}
+                        value={forgotEmail}
+                        onChangeText={setForgotEmail}
+                        keyboardType="email-address"
+                        autoCapitalize="none"
+                        autoCorrect={false}
+                        autoFocus
+                        testID="forgot-email-input"
+                      />
+                    </View>
+                  </View>
+
+                  <TouchableOpacity
+                    style={[styles.submitButton, forgotSubmitting && styles.submitButtonDisabled, { marginTop: 8 }]}
+                    onPress={handleForgotPassword}
+                    disabled={forgotSubmitting}
+                    testID="forgot-submit"
+                  >
+                    {forgotSubmitting ? (
+                      <ActivityIndicator color="#fff" />
+                    ) : (
+                      <Text style={styles.submitText}>Send reset link</Text>
+                    )}
+                  </TouchableOpacity>
+                </>
+              )}
+            </View>
+          </KeyboardAvoidingView>
+        </View>
+      </Modal>
     </KeyboardAvoidingView>
   );
 }
@@ -329,6 +452,16 @@ const styles = StyleSheet.create({
     fontFamily: "Nunito_700Bold",
     color: "#fff",
   },
+  forgotRow: {
+    alignItems: "center",
+    marginTop: -4,
+    paddingVertical: 4,
+  },
+  forgotText: {
+    fontSize: 14,
+    fontFamily: "Nunito_600SemiBold",
+    color: Colors.primary,
+  },
   switchRow: {
     flexDirection: "row",
     justifyContent: "center",
@@ -377,5 +510,78 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontFamily: "Nunito_400Regular",
     color: Colors.textTertiary,
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.7)",
+    justifyContent: "flex-end",
+    alignItems: "center",
+    paddingHorizontal: 16,
+    paddingBottom: 32,
+  },
+  modalCard: {
+    backgroundColor: Colors.surface,
+    borderRadius: 20,
+    padding: 24,
+    width: "100%",
+    borderWidth: 1,
+    borderColor: Colors.border,
+  },
+  modalHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: 12,
+  },
+  modalTitle: {
+    fontSize: 18,
+    fontFamily: "Nunito_700Bold",
+    color: Colors.text,
+  },
+  modalSubtitle: {
+    fontSize: 14,
+    fontFamily: "Nunito_400Regular",
+    color: Colors.textSecondary,
+    lineHeight: 20,
+    marginBottom: 20,
+  },
+  forgotSuccessContent: {
+    alignItems: "center",
+    paddingVertical: 8,
+  },
+  forgotSuccessIcon: {
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    backgroundColor: Colors.primary + "18",
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: 16,
+  },
+  forgotSuccessTitle: {
+    fontSize: 18,
+    fontFamily: "Nunito_700Bold",
+    color: Colors.text,
+    marginBottom: 8,
+  },
+  forgotSuccessBody: {
+    fontSize: 14,
+    fontFamily: "Nunito_400Regular",
+    color: Colors.textSecondary,
+    textAlign: "center",
+    lineHeight: 20,
+    marginBottom: 20,
+  },
+  forgotDoneButton: {
+    backgroundColor: Colors.primary,
+    paddingVertical: 14,
+    paddingHorizontal: 40,
+    borderRadius: 12,
+    alignItems: "center",
+  },
+  forgotDoneText: {
+    fontSize: 15,
+    fontFamily: "Nunito_700Bold",
+    color: "#fff",
   },
 });
