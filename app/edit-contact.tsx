@@ -29,7 +29,7 @@ import { HintTooltip } from "@/components/HintTooltip";
 const PREDEFINED_LABELS = [
   "Family", "Childhood Friend", "College Friend", "Work Friend", "Neighbor",
   "Family Friend", "International Friend", "Gym Buddy", "Travel Buddy",
-  "Mentor",
+  "Mentor", "Mentee",
 ];
 
 const MONTH_NAMES = [
@@ -70,7 +70,6 @@ export default function EditContactScreen() {
   const [photoUri, setPhotoUri] = useState<string | null>(contact?.photoUri ?? null);
   const [saving, setSaving] = useState(false);
   const [showBirthdayPicker, setShowBirthdayPicker] = useState(focusBirthday === "true");
-  const [showMoreDetails, setShowMoreDetails] = useState(!!(contact?.phone || contact?.email));
   const [customReminders, setCustomReminders] = useState<CustomReminder[]>(
     (contact?.customReminders ?? []).filter((r) => r && r.label && r.date)
   );
@@ -266,6 +265,16 @@ export default function EditContactScreen() {
           </Pressable>
         </View>
 
+        <View style={styles.inputGroup}>
+          <Text style={styles.label}>Name</Text>
+          <TextInput
+            style={styles.input}
+            value={name}
+            onChangeText={setName}
+            autoCapitalize="words"
+          />
+        </View>
+
         <View style={styles.contactMeta}>
           <View style={styles.contactMetaHeader}>
             <Text style={styles.lastContactLabel}>Last contacted</Text>
@@ -294,16 +303,6 @@ export default function EditContactScreen() {
               );
             })}
           </View>
-        </View>
-
-        <View style={styles.inputGroup}>
-          <Text style={styles.label}>Name</Text>
-          <TextInput
-            style={styles.input}
-            value={name}
-            onChangeText={setName}
-            autoCapitalize="words"
-          />
         </View>
 
         <View style={styles.inputGroup}>
@@ -422,19 +421,6 @@ export default function EditContactScreen() {
               );
             })}
           </View>
-        </View>
-
-        <View style={styles.inputGroup}>
-          <Text style={styles.label}>Email</Text>
-          <TextInput
-            style={styles.input}
-            placeholder="Enter email address"
-            placeholderTextColor={Colors.textTertiary}
-            value={email}
-            onChangeText={setEmail}
-            keyboardType="email-address"
-            autoCapitalize="none"
-          />
         </View>
 
         <View style={styles.inputGroup}>
@@ -617,6 +603,44 @@ export default function EditContactScreen() {
         </View>
 
         <View style={styles.inputGroup}>
+          <Text style={styles.label}>Email</Text>
+          <TextInput
+            style={styles.input}
+            placeholder="Enter email address"
+            placeholderTextColor={Colors.textTertiary}
+            value={email}
+            onChangeText={setEmail}
+            keyboardType="email-address"
+            autoCapitalize="none"
+          />
+        </View>
+
+        <View style={styles.inputGroup}>
+          <Text style={styles.label}>Phone</Text>
+          <View style={styles.phoneRow}>
+            <TextInput
+              style={[styles.input, styles.phoneInput]}
+              placeholder="Enter phone number"
+              placeholderTextColor={Colors.textTertiary}
+              value={phone}
+              onChangeText={setPhone}
+              keyboardType="phone-pad"
+            />
+            {phone.trim().length > 0 && (
+              <Pressable
+                onPress={() => {
+                  const cleaned = phone.replace(/\s/g, "");
+                  Linking.openURL(`tel:${cleaned}`);
+                }}
+                style={({ pressed }) => [styles.callButton, pressed && { opacity: 0.7 }]}
+              >
+                <Ionicons name="call" size={20} color="#fff" />
+              </Pressable>
+            )}
+          </View>
+        </View>
+
+        <View style={styles.inputGroup}>
           <Text style={styles.label}>Notes</Text>
           <TextInput
             style={[styles.input, styles.multilineInput]}
@@ -628,52 +652,6 @@ export default function EditContactScreen() {
             numberOfLines={3}
           />
         </View>
-
-        <Pressable
-          onPress={() => {
-            Haptics.selectionAsync();
-            setShowMoreDetails((v) => !v);
-          }}
-          style={({ pressed }) => [styles.moreDetailsToggle, pressed && { opacity: 0.7 }]}
-        >
-          <Ionicons
-            name={showMoreDetails ? "chevron-up" : "chevron-down"}
-            size={16}
-            color={Colors.textTertiary}
-          />
-          <Text style={styles.moreDetailsText}>
-            {showMoreDetails ? "Fewer details" : "Add phone number"}
-          </Text>
-        </Pressable>
-
-        {showMoreDetails && (
-          <View>
-            <View style={styles.inputGroup}>
-              <Text style={styles.label}>Phone</Text>
-              <View style={styles.phoneRow}>
-                <TextInput
-                  style={[styles.input, styles.phoneInput]}
-                  placeholder="Enter phone number"
-                  placeholderTextColor={Colors.textTertiary}
-                  value={phone}
-                  onChangeText={setPhone}
-                  keyboardType="phone-pad"
-                />
-                {phone.trim().length > 0 && (
-                  <Pressable
-                    onPress={() => {
-                      const cleaned = phone.replace(/\s/g, "");
-                      Linking.openURL(`tel:${cleaned}`);
-                    }}
-                    style={({ pressed }) => [styles.callButton, pressed && { opacity: 0.7 }]}
-                  >
-                    <Ionicons name="call" size={20} color="#fff" />
-                  </Pressable>
-                )}
-              </View>
-            </View>
-          </View>
-        )}
 
         <Pressable
           onPress={handleSave}
@@ -783,34 +761,37 @@ const styles = StyleSheet.create({
     textAlignVertical: "top",
   },
   circleOptions: {
+    flexDirection: "row",
     gap: 8,
   },
   circleOption: {
-    flexDirection: "row",
+    flex: 1,
+    flexDirection: "column",
     alignItems: "center",
-    paddingVertical: 14,
-    paddingHorizontal: 16,
+    paddingVertical: 12,
+    paddingHorizontal: 6,
     borderRadius: 12,
     backgroundColor: Colors.surface,
     borderWidth: 1.5,
     borderColor: Colors.borderLight,
-    gap: 10,
+    gap: 4,
   },
   circleOptionDot: {
-    width: 10,
-    height: 10,
-    borderRadius: 5,
+    width: 8,
+    height: 8,
+    borderRadius: 4,
   },
   circleOptionLabel: {
-    flex: 1,
-    fontSize: 15,
+    fontSize: 12,
     fontFamily: "Nunito_600SemiBold",
     color: Colors.text,
+    textAlign: "center",
   },
   circleOptionCount: {
-    fontSize: 13,
+    fontSize: 11,
     fontFamily: "Nunito_600SemiBold",
     color: Colors.textTertiary,
+    textAlign: "center",
   },
   birthdayHeader: {
     flexDirection: "row",
@@ -955,18 +936,6 @@ const styles = StyleSheet.create({
   },
   addLabelBtnDisabled: {
     borderColor: Colors.borderLight,
-  },
-  moreDetailsToggle: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-    marginBottom: 20,
-    paddingVertical: 8,
-  },
-  moreDetailsText: {
-    fontSize: 14,
-    fontFamily: "Nunito_600SemiBold",
-    color: Colors.textSecondary,
   },
   phoneRow: {
     flexDirection: "row" as const,

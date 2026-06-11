@@ -24,7 +24,7 @@ import * as Haptics from "expo-haptics";
 const PREDEFINED_LABELS = [
   "Family", "Childhood Friend", "College Friend", "Work Friend", "Neighbor",
   "Family Friend", "International Friend", "Gym Buddy", "Travel Buddy",
-  "Mentor",
+  "Mentor", "Mentee",
 ];
 
 const MONTH_NAMES = [
@@ -71,9 +71,6 @@ export default function AddContactScreen() {
   const [saving, setSaving] = useState(false);
   const [showBirthdayPicker, setShowBirthdayPicker] = useState(
     !!params.prefillBirthday || initialCircle === 1,
-  );
-  const [showMoreDetails, setShowMoreDetails] = useState(
-    !!(params.prefillPhone),
   );
 
   useEffect(() => {
@@ -353,19 +350,6 @@ export default function AddContactScreen() {
         </View>
 
         <View style={styles.inputGroup}>
-          <Text style={styles.label}>Email (optional)</Text>
-          <TextInput
-            style={styles.input}
-            placeholder="Enter email address"
-            placeholderTextColor={Colors.textTertiary}
-            value={email}
-            onChangeText={setEmail}
-            keyboardType="email-address"
-            autoCapitalize="none"
-          />
-        </View>
-
-        <View style={styles.inputGroup}>
           <Text style={styles.label}>Shared Interests</Text>
           <View style={styles.interestsGrid}>
             {AVAILABLE_INTERESTS.map((interest) => {
@@ -458,6 +442,31 @@ export default function AddContactScreen() {
         </View>
 
         <View style={styles.inputGroup}>
+          <Text style={styles.label}>Email (optional)</Text>
+          <TextInput
+            style={styles.input}
+            placeholder="Enter email address"
+            placeholderTextColor={Colors.textTertiary}
+            value={email}
+            onChangeText={setEmail}
+            keyboardType="email-address"
+            autoCapitalize="none"
+          />
+        </View>
+
+        <View style={styles.inputGroup}>
+          <Text style={styles.label}>Phone (optional)</Text>
+          <TextInput
+            style={styles.input}
+            placeholder="Enter phone number"
+            placeholderTextColor={Colors.textTertiary}
+            value={phone}
+            onChangeText={setPhone}
+            keyboardType="phone-pad"
+          />
+        </View>
+
+        <View style={styles.inputGroup}>
           <Text style={styles.label}>Notes (optional)</Text>
           <TextInput
             style={[styles.input, styles.multilineInput]}
@@ -469,39 +478,6 @@ export default function AddContactScreen() {
             numberOfLines={3}
           />
         </View>
-
-        <Pressable
-          onPress={() => {
-            Haptics.selectionAsync();
-            setShowMoreDetails((v) => !v);
-          }}
-          style={({ pressed }) => [styles.moreDetailsToggle, pressed && { opacity: 0.7 }]}
-        >
-          <Ionicons
-            name={showMoreDetails ? "chevron-up" : "chevron-down"}
-            size={16}
-            color={Colors.textTertiary}
-          />
-          <Text style={styles.moreDetailsText}>
-            {showMoreDetails ? "Fewer details" : "Add phone number"}
-          </Text>
-        </Pressable>
-
-        {showMoreDetails && (
-          <View>
-            <View style={styles.inputGroup}>
-              <Text style={styles.label}>Phone (optional)</Text>
-              <TextInput
-                style={styles.input}
-                placeholder="Enter phone number"
-                placeholderTextColor={Colors.textTertiary}
-                value={phone}
-                onChangeText={setPhone}
-                keyboardType="phone-pad"
-              />
-            </View>
-          </View>
-        )}
 
         <Pressable
           onPress={handleSave}
@@ -570,34 +546,37 @@ const styles = StyleSheet.create({
     textAlignVertical: "top",
   },
   circleOptions: {
+    flexDirection: "row",
     gap: 8,
   },
   circleOption: {
-    flexDirection: "row",
+    flex: 1,
+    flexDirection: "column",
     alignItems: "center",
-    paddingVertical: 14,
-    paddingHorizontal: 16,
+    paddingVertical: 12,
+    paddingHorizontal: 6,
     borderRadius: 12,
     backgroundColor: Colors.surface,
     borderWidth: 1.5,
     borderColor: Colors.borderLight,
-    gap: 10,
+    gap: 4,
   },
   circleOptionDot: {
-    width: 10,
-    height: 10,
-    borderRadius: 5,
+    width: 8,
+    height: 8,
+    borderRadius: 4,
   },
   circleOptionLabel: {
-    flex: 1,
-    fontSize: 15,
+    fontSize: 12,
     fontFamily: "Nunito_600SemiBold",
     color: Colors.text,
+    textAlign: "center",
   },
   circleOptionCount: {
-    fontSize: 13,
+    fontSize: 11,
     fontFamily: "Nunito_600SemiBold",
     color: Colors.textTertiary,
+    textAlign: "center",
   },
   birthdayHeader: {
     flexDirection: "row",
@@ -742,18 +721,6 @@ const styles = StyleSheet.create({
   },
   addLabelBtnDisabled: {
     borderColor: Colors.borderLight,
-  },
-  moreDetailsToggle: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-    marginBottom: 20,
-    paddingVertical: 8,
-  },
-  moreDetailsText: {
-    fontSize: 14,
-    fontFamily: "Nunito_600SemiBold",
-    color: Colors.textSecondary,
   },
   photoSection: {
     alignItems: "center",

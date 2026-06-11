@@ -600,8 +600,8 @@ export function getActionType(circleLevel: 1 | 2 | 3, prompt: string): "call" | 
 export const AVAILABLE_INTERESTS = [
   "Fitness", "Cooking", "Music", "Travel", "Gaming",
   "Reading", "Art", "Sports", "Tech", "Outdoors",
-  "Photography", "Movies", "Fashion", "Yoga", "Dancing",
-  "Volunteering", "Pets", "Gardening", "Writing", "Podcasts",
+  "Photography", "Movies", "Fashion", "Parties", "Dancing",
+  "Volunteering", "Pets", "Gardening", "TV", "Podcasts",
 ];
 
 export const AVAILABLE_LABELS = [
