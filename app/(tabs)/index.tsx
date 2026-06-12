@@ -139,7 +139,7 @@ export default function HomeScreen() {
   const allReminders = useMemo(() => {
     const all = generateReminders(contacts);
     return all.filter((r) => {
-      if ((r.type === "check-in-quickpick" || r.type === "hangout-quickpick") && snoozedContacts.has(r.contactId)) return false;
+      if ((r.type === "check-in-quickpick" || r.type === "hangout-quickpick") && r.contactId && snoozedContacts.has(r.contactId)) return false;
       return true;
     });
   }, [contacts, snoozedContacts]);
@@ -148,8 +148,8 @@ export default function HomeScreen() {
     () => allReminders
       .filter((r) => {
         if (dismissedReminders.has(r.id)) return false;
-        if (r.type === "check-in-quickpick" && elevatedContactTypes.has(`${r.contactId}:checkin`)) return false;
-        if (r.type === "hangout-quickpick" && elevatedContactTypes.has(`${r.contactId}:hangout`)) return false;
+        if (r.type === "check-in-quickpick" && r.contactId && elevatedContactTypes.has(`${r.contactId}:checkin`)) return false;
+        if (r.type === "hangout-quickpick" && r.contactId && elevatedContactTypes.has(`${r.contactId}:hangout`)) return false;
         return true;
       })
       .slice(0, MAX_REMINDERS),
@@ -247,7 +247,12 @@ export default function HomeScreen() {
   const handleReminderComplete = useCallback(
     async (reminder: Reminder) => {
       setDismissedReminders((prev) => new Set(prev).add(reminder.id));
-      if (reminder.type === "birthday" || reminder.type === "custom-reminder") return;
+      if (
+        reminder.type === "birthday" ||
+        reminder.type === "custom-reminder" ||
+        reminder.type.startsWith("profile-completion") ||
+        !reminder.contactId
+      ) return;
       if (reminder.type === "hangout-quickpick") {
         await markHangout(reminder.contactId);
       } else {
@@ -260,6 +265,7 @@ export default function HomeScreen() {
   const handleReminderQuickPick = useCallback(
     async (reminder: Reminder, date: Date, label: string) => {
       setDismissedReminders((prev) => new Set(prev).add(reminder.id));
+      if (!reminder.contactId) return;
       const circleLevel = reminder.circleLevel as 1 | 2 | 3;
 
       if (reminder.type === "check-in-quickpick") {
@@ -622,7 +628,6 @@ export default function HomeScreen() {
                   priorityLevel={getPriorityLevel(reminder.priority)}
                   actionType={reminder.actionType}
                   onComplete={() => handleReminderComplete(reminder)}
-                  onSnooze={() => handleReminderSnooze(reminder)}
                 />
               )
             )}

@@ -16,6 +16,7 @@ export const users = pgTable("users", {
   suggestionNotifFrequency: text("suggestion_notif_frequency"),
   suggestionNotifTime: text("suggestion_notif_time"),
   hasPassword: boolean("has_password").notNull().default(true),
+  lastProfilePushAt: timestamp("last_profile_push_at"),
 });
 
 export const contacts = pgTable("contacts", {

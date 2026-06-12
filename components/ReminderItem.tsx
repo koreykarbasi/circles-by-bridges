@@ -19,6 +19,9 @@ const TYPE_ICONS: Record<string, keyof typeof Ionicons.glyphMap> = {
   "check-in-quickpick": "time-outline",
   "hangout-quickpick": "calendar-outline",
   "custom-reminder": "star-outline",
+  "profile-completion-high": "person-circle-outline",
+  "profile-completion-medium": "person-circle-outline",
+  "profile-completion-low": "person-circle-outline",
 };
 
 function getPriorityColor(priority: number): string {
@@ -27,13 +30,24 @@ function getPriorityColor(priority: number): string {
   return Colors.primaryLight;
 }
 
+function getProfileCompletionColor(type: string): string | null {
+  if (type === "profile-completion-high") return Colors.danger;
+  if (type === "profile-completion-medium") return Colors.warning;
+  if (type === "profile-completion-low") return Colors.yellow;
+  return null;
+}
+
 export function ReminderItem({ reminder, onComplete, onQuickPick, onCalendarPress }: ReminderItemProps) {
-  const circleColor = CIRCLE_CONFIG[reminder.circleLevel as 1 | 2 | 3]?.color ?? Colors.primary;
-  const priorityColor = getPriorityColor(reminder.priority);
+  const isProfileCompletion = reminder.type.startsWith("profile-completion");
+  const circleColor = isProfileCompletion
+    ? (getProfileCompletionColor(reminder.type) ?? Colors.primary)
+    : (CIRCLE_CONFIG[reminder.circleLevel as 1 | 2 | 3]?.color ?? Colors.primary);
+  const priorityColor = getProfileCompletionColor(reminder.type) ?? getPriorityColor(reminder.priority);
   const typeIcon = TYPE_ICONS[reminder.type] ?? "alert-circle-outline";
   const isBirthday = reminder.type === "birthday";
   const isQuickPick = (reminder.type === "check-in-quickpick" || reminder.type === "hangout-quickpick") && !!onQuickPick;
   const quickPickVariant: "checkin" | "hangout" = reminder.type === "hangout-quickpick" ? "hangout" : "checkin";
+  const isPersistent = reminder.persistent === true;
 
   const opacity = useSharedValue(1);
   const height = useSharedValue<number | undefined>(undefined);
@@ -87,15 +101,17 @@ export function ReminderItem({ reminder, onComplete, onQuickPick, onCalendarPres
             <Text style={styles.subtitle} numberOfLines={1}>{reminder.subtitle}</Text>
           </View>
         </View>
-        <View style={styles.actions}>
-          <Pressable
-            onPress={handleComplete}
-            hitSlop={6}
-            style={({ pressed }) => [styles.checkBtn, pressed && { opacity: 0.5 }]}
-          >
-            <Ionicons name="checkmark-circle" size={22} color={Colors.success} />
-          </Pressable>
-        </View>
+        {!isPersistent && (
+          <View style={styles.actions}>
+            <Pressable
+              onPress={handleComplete}
+              hitSlop={6}
+              style={({ pressed }) => [styles.checkBtn, pressed && { opacity: 0.5 }]}
+            >
+              <Ionicons name="checkmark-circle" size={22} color={Colors.success} />
+            </Pressable>
+          </View>
+        )}
       </View>
       {isQuickPick && (
         <QuickPickRow

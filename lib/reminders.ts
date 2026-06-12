@@ -1,11 +1,18 @@
 import type { Contact } from "./types";
 import { getDaysSince, getDaysUntilBirthday, formatLastContacted } from "./helpers";
 
-export type ReminderType = "birthday" | "check-in-quickpick" | "hangout-quickpick" | "custom-reminder";
+export type ReminderType =
+  | "birthday"
+  | "check-in-quickpick"
+  | "hangout-quickpick"
+  | "custom-reminder"
+  | "profile-completion-high"
+  | "profile-completion-medium"
+  | "profile-completion-low";
 
 export interface Reminder {
   id: string;
-  contactId: string;
+  contactId?: string;
   contactName: string;
   circleLevel: number;
   type: ReminderType;
@@ -13,6 +20,7 @@ export interface Reminder {
   title: string;
   subtitle: string;
   actionType?: "text" | "call" | "hangout";
+  persistent?: boolean;
 }
 
 export const CHECKIN_THRESHOLDS: Record<1 | 2 | 3, number> = { 1: 14, 2: 45, 3: 75 };
@@ -342,6 +350,71 @@ function generateCircle3Reminders(contact: Contact): Reminder[] {
       priority: 20,
       title: `When did you last hang out with ${contact.name}?`,
       subtitle: `Last hangout: ${formatLastContacted(contact.lastHangout ?? undefined)}`,
+    });
+  }
+
+  return reminders;
+}
+
+export function generateProfileCompletionReminders(contacts: Contact[]): Reminder[] {
+  const reminders: Reminder[] = [];
+
+  const c1NoBirthday = contacts.filter((c) => c.circleLevel === 1 && !c.birthday);
+  if (c1NoBirthday.length > 0) {
+    reminders.push({
+      id: "profile-completion-high",
+      contactName: "",
+      circleLevel: 1,
+      type: "profile-completion-high",
+      priority: 160,
+      title: "Add birthdays to your Core contacts to unlock reminders.",
+      subtitle: `${c1NoBirthday.length} Core contact${c1NoBirthday.length > 1 ? "s" : ""} missing a birthday`,
+    });
+  }
+
+  const c2NoBirthday = contacts.filter((c) => c.circleLevel === 2 && !c.birthday);
+  const c1c2MissingEnrichment = contacts.filter(
+    (c) =>
+      (c.circleLevel === 1 || c.circleLevel === 2) &&
+      (c.labels ?? []).length === 0 &&
+      (c.interests ?? []).length === 0,
+  );
+  if (c2NoBirthday.length > 0 || c1c2MissingEnrichment.length > 0) {
+    reminders.push({
+      id: "profile-completion-medium",
+      contactName: "",
+      circleLevel: 2,
+      type: "profile-completion-medium",
+      priority: 112,
+      title: "Some close contacts are missing birthdays or profile details.",
+      subtitle: [
+        c2NoBirthday.length > 0 ? `${c2NoBirthday.length} missing birthday` : "",
+        c1c2MissingEnrichment.length > 0 ? `${c1c2MissingEnrichment.length} missing labels/interests` : "",
+      ]
+        .filter(Boolean)
+        .join(" · "),
+    });
+  }
+
+  const c3NoBirthday = contacts.filter((c) => c.circleLevel === 3 && !c.birthday);
+  const anyMissingEnrichment = contacts.filter(
+    (c) => (c.labels ?? []).length === 0 && (c.interests ?? []).length === 0,
+  );
+  if (c3NoBirthday.length > 0 || anyMissingEnrichment.length > 0) {
+    reminders.push({
+      id: "profile-completion-low",
+      contactName: "",
+      circleLevel: 3,
+      type: "profile-completion-low",
+      priority: 5,
+      persistent: true,
+      title: "Some contacts are missing birthdays, labels, or interests — find them by the yellow dot.",
+      subtitle: [
+        c3NoBirthday.length > 0 ? `${c3NoBirthday.length} missing birthday` : "",
+        anyMissingEnrichment.length > 0 ? `${anyMissingEnrichment.length} missing labels/interests` : "",
+      ]
+        .filter(Boolean)
+        .join(" · "),
     });
   }
 

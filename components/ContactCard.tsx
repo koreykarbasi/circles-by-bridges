@@ -20,6 +20,10 @@ function isMissingBirthday(contact: Contact): boolean {
   return (contact.circleLevel === 1 || contact.circleLevel === 2) && !contact.birthday;
 }
 
+function isMissingEnrichment(contact: Contact): boolean {
+  return (contact.labels ?? []).length === 0 && (contact.interests ?? []).length === 0;
+}
+
 export function ContactCard({ contact, onPress, onMarkContacted, onPlanHangout, showCircleLabel }: ContactCardProps) {
   const urgency = getContactUrgency(contact.circleLevel as 1 | 2 | 3, contact.lastContacted ?? undefined);
   const circleColor = CIRCLE_CONFIG[contact.circleLevel as 1 | 2 | 3]?.color ?? Colors.primary;
@@ -27,6 +31,8 @@ export function ContactCard({ contact, onPress, onMarkContacted, onPlanHangout, 
 
   const incomplete = isMissingBirthday(contact);
   const badgeColor = contact.circleLevel === 1 ? Colors.danger : Colors.warning;
+
+  const enrichmentMissing = !incomplete && isMissingEnrichment(contact);
 
   const handleMarkContacted = () => {
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
@@ -57,6 +63,11 @@ export function ContactCard({ contact, onPress, onMarkContacted, onPlanHangout, 
         {incomplete && (
           <View style={[styles.incompleteBadge, { backgroundColor: badgeColor }]}>
             <Text style={styles.incompleteBadgeText}>!</Text>
+          </View>
+        )}
+        {enrichmentMissing && (
+          <View style={[styles.incompleteBadge, styles.enrichmentBadge]}>
+            <Text style={styles.enrichmentBadgeText}>!</Text>
           </View>
         )}
       </View>
@@ -99,6 +110,11 @@ export function ContactCard({ contact, onPress, onMarkContacted, onPlanHangout, 
         {incomplete && (
           <Text style={[styles.incompleteHint, { color: badgeColor }]}>
             Add birthday to unlock reminders
+          </Text>
+        )}
+        {enrichmentMissing && (
+          <Text style={[styles.incompleteHint, { color: Colors.yellow }]}>
+            Add labels for curated suggestions
           </Text>
         )}
       </View>
@@ -224,6 +240,16 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontFamily: "Nunito_800ExtraBold",
     color: "#fff",
+    lineHeight: 13,
+  },
+  enrichmentBadge: {
+    backgroundColor: Colors.yellow + "30",
+    borderColor: "transparent",
+  },
+  enrichmentBadgeText: {
+    fontSize: 11,
+    fontFamily: "Nunito_800ExtraBold",
+    color: Colors.yellow,
     lineHeight: 13,
   },
   incompleteHint: {

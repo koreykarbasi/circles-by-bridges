@@ -15,8 +15,9 @@ const Colors = {
   border: "#2A2148",
   borderLight: "#1E1840",
   success: "#4ADE80",
-  warning: "#FFB84D",
+  warning: "#E07818",
   danger: "#FF4757",
+  yellow: "#F5C842",
 
   circle1: "#FF6B8A",
   circle2: "#9B7DFF",

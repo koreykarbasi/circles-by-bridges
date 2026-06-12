@@ -512,6 +512,66 @@ function dedupWindowHours(frequency: string): number {
   return 23;                               // daily
 }
 
+// ─── Profile completion weekly push (Sunday 9am local) ───────────────────────
+
+export async function sendProfileCompletionPushes() {
+  try {
+    const usersWithTokens = await db
+      .select({
+        id: users.id,
+        pushToken: users.pushToken,
+        notificationTimezone: users.notificationTimezone,
+        lastProfilePushAt: users.lastProfilePushAt,
+      })
+      .from(users)
+      .where(isNotNull(users.pushToken));
+
+    let sent = 0;
+    for (const user of usersWithTokens) {
+      if (!user.pushToken) continue;
+
+      const tz = user.notificationTimezone ?? "UTC";
+      if (!isNineAmLocalNow(tz)) continue;
+      if (getLocalDayOfWeek(tz) !== 0) continue; // 0 = Sunday
+
+      // Rate-limit: only send if last_profile_push_at is null or > 6 days ago
+      if (user.lastProfilePushAt) {
+        const daysSinceLastPush = Math.floor(
+          (Date.now() - new Date(user.lastProfilePushAt).getTime()) / (1000 * 60 * 60 * 24),
+        );
+        if (daysSinceLastPush <= 6) continue;
+      }
+
+      // Count C1 contacts missing a birthday
+      const c1NoBirthday = await pool.query<{ count: string }>(
+        `SELECT COUNT(*) AS count FROM contacts WHERE user_id = $1 AND circle_level = 1 AND (birthday IS NULL OR birthday = '')`,
+        [user.id],
+      );
+      const missingCount = parseInt(c1NoBirthday.rows[0]?.count ?? "0", 10);
+      if (missingCount === 0) continue;
+
+      const ok = await sendExpoPush(
+        user.pushToken,
+        "Complete your Bridges profile",
+        "Some of your Core contacts are missing birthdays — add them to unlock reminders.",
+      );
+      if (ok) {
+        await pool.query(
+          `UPDATE users SET last_profile_push_at = NOW() WHERE id = $1`,
+          [user.id],
+        );
+        sent++;
+      }
+    }
+
+    if (sent > 0) {
+      console.log(`[push] Sent ${sent} profile completion pushes.`);
+    }
+  } catch (err) {
+    console.error("[push] Error sending profile completion pushes:", err);
+  }
+}
+
 export async function sendSuggestionNudges() {
   try {
     const result = await pool.query<{
@@ -632,6 +692,7 @@ export function scheduleDailyNotifications() {
   async function runHourly() {
     await sendDailyReminders().catch((err) => console.error("[push] Uncaught:", err));
     await sendSuggestionNudges().catch((err) => console.error("[push] Uncaught:", err));
+    await sendProfileCompletionPushes().catch((err) => console.error("[push] Uncaught:", err));
   }
 
   // First run at the top of the next hour, then every hour after that

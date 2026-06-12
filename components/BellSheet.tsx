@@ -17,7 +17,7 @@ interface BellSheetProps {
 
 interface BellTask {
   id: string;
-  priority: "red" | "yellow";
+  priority: "red" | "orange" | "yellow";
   title: string;
   subtitle: string;
   onPress: () => void;
@@ -30,13 +30,17 @@ export function computeBellDotColor(contacts: Contact[], isComplete: boolean): s
   if (!isComplete) return Colors.warning;
   const c2Missing = contacts.filter((c) => c.circleLevel === 2 && !c.birthday);
   if (c2Missing.length > 0) return Colors.warning;
+  const missingEnrichment = contacts.filter(
+    (c) => (c.labels ?? []).length === 0 && (c.interests ?? []).length === 0,
+  );
+  if (missingEnrichment.length > 0) return Colors.yellow;
   return Colors.success;
 }
 
 export function BellSheet({ visible, onClose, contacts, isComplete }: BellSheetProps) {
   const insets = useSafeAreaInsets();
 
-  const { urgent, recommended } = useMemo(() => {
+  const { urgent, recommended, missingEnrichmentCount } = useMemo(() => {
     const urgent: BellTask[] = [];
     const recommended: BellTask[] = [];
 
@@ -60,7 +64,7 @@ export function BellSheet({ visible, onClose, contacts, isComplete }: BellSheetP
     circle2.filter((c) => !c.birthday).forEach((c) => {
       recommended.push({
         id: `c2-bday-${c.id}`,
-        priority: "yellow",
+        priority: "orange",
         title: `Add ${c.name.split(" ")[0]}'s birthday`,
         subtitle: "Helps with timely birthday reminders",
         onPress: () => {
@@ -76,7 +80,7 @@ export function BellSheet({ visible, onClose, contacts, isComplete }: BellSheetP
       const needed = STAGE1_GOALS.circle1WithBirthday - c1WithBday;
       recommended.push({
         id: "fill-c1",
-        priority: "yellow",
+        priority: "orange",
         title: "Fill your Core Circle",
         subtitle: `${needed} more Core friend${needed !== 1 ? "s" : ""} with birthdays needed`,
         onPress: () => {
@@ -90,7 +94,7 @@ export function BellSheet({ visible, onClose, contacts, isComplete }: BellSheetP
       const needed = STAGE1_GOALS.circle2 - circle2.length;
       recommended.push({
         id: "fill-c2",
-        priority: "yellow",
+        priority: "orange",
         title: "Add Close Friends",
         subtitle: `${needed} more person${needed !== 1 ? "s" : ""} needed`,
         onPress: () => {
@@ -103,7 +107,7 @@ export function BellSheet({ visible, onClose, contacts, isComplete }: BellSheetP
     if (circle3.length < STAGE1_GOALS.circle3) {
       recommended.push({
         id: "fill-c3",
-        priority: "yellow",
+        priority: "orange",
         title: "Add a Friend",
         subtitle: "Start building your outer circle",
         onPress: () => {
@@ -113,11 +117,22 @@ export function BellSheet({ visible, onClose, contacts, isComplete }: BellSheetP
       });
     }
 
-    return { urgent, recommended };
+    const missingEnrichmentCount = contacts.filter(
+      (c) => (c.labels ?? []).length === 0 && (c.interests ?? []).length === 0,
+    ).length;
+
+    return { urgent, recommended, missingEnrichmentCount };
   }, [contacts, onClose]);
 
   const totalTasks = urgent.length + recommended.length;
+  const allDone = totalTasks === 0 && missingEnrichmentCount === 0;
   const dotColor = computeBellDotColor(contacts, isComplete);
+
+  function getPriorityColor(priority: BellTask["priority"]): string {
+    if (priority === "red") return Colors.danger;
+    if (priority === "orange") return Colors.warning;
+    return Colors.yellow;
+  }
 
   function renderTask(task: BellTask) {
     return (
@@ -129,12 +144,7 @@ export function BellSheet({ visible, onClose, contacts, isComplete }: BellSheetP
         }}
         style={({ pressed }) => [styles.taskItem, pressed && { opacity: 0.7 }]}
       >
-        <View
-          style={[
-            styles.taskDot,
-            { backgroundColor: task.priority === "red" ? Colors.danger : Colors.warning },
-          ]}
-        />
+        <View style={[styles.taskDot, { backgroundColor: getPriorityColor(task.priority) }]} />
         <View style={styles.taskContent}>
           <Text style={styles.taskTitle}>{task.title}</Text>
           <Text style={styles.taskSubtitle}>{task.subtitle}</Text>
@@ -151,7 +161,7 @@ export function BellSheet({ visible, onClose, contacts, isComplete }: BellSheetP
         <View style={styles.handle} />
         <View style={styles.sheetHeader}>
           {dotColor ? (
-            <View style={[styles.dotIndicator, { backgroundColor: totalTasks === 0 ? Colors.success : dotColor }]} />
+            <View style={[styles.dotIndicator, { backgroundColor: allDone ? Colors.success : dotColor }]} />
           ) : null}
           <Text style={styles.sheetTitle}>Profile Completion</Text>
           <Pressable
@@ -163,7 +173,7 @@ export function BellSheet({ visible, onClose, contacts, isComplete }: BellSheetP
           </Pressable>
         </View>
 
-        {totalTasks === 0 ? (
+        {allDone ? (
           <View style={styles.allDoneContainer}>
             <Ionicons name="checkmark-circle" size={40} color={Colors.success} />
             <Text style={styles.allDoneTitle}>Your circles are complete</Text>
@@ -181,6 +191,27 @@ export function BellSheet({ visible, onClose, contacts, isComplete }: BellSheetP
               <>
                 <Text style={[styles.groupLabel, urgent.length > 0 && { marginTop: 16 }]}>Recommended</Text>
                 {recommended.map(renderTask)}
+              </>
+            )}
+            {missingEnrichmentCount > 0 && (
+              <>
+                <Text style={[styles.groupLabel, (urgent.length > 0 || recommended.length > 0) && { marginTop: 16 }]}>
+                  For Better Suggestions
+                </Text>
+                <View style={styles.infoItem}>
+                  <View style={[styles.infoIcon, { backgroundColor: Colors.yellow + "22" }]}>
+                    <Text style={styles.infoIconText}>!</Text>
+                  </View>
+                  <View style={styles.taskContent}>
+                    <Text style={styles.taskTitle}>
+                      {missingEnrichmentCount} contact{missingEnrichmentCount !== 1 ? "s" : ""} tagged with{" "}
+                      <Text style={{ color: Colors.yellow }}>!</Text>
+                    </Text>
+                    <Text style={styles.taskSubtitle}>
+                      Missing labels and shared activities. Complete profiles for more curated suggestions.
+                    </Text>
+                  </View>
+                </View>
               </>
             )}
           </ScrollView>
@@ -285,5 +316,26 @@ const styles = StyleSheet.create({
     fontFamily: "Nunito_400Regular",
     color: Colors.textSecondary,
     marginTop: 2,
+  },
+  infoItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingVertical: 14,
+    borderBottomWidth: 1,
+    borderBottomColor: Colors.border,
+    gap: 12,
+  },
+  infoIcon: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    alignItems: "center",
+    justifyContent: "center",
+    flexShrink: 0,
+  },
+  infoIconText: {
+    fontSize: 14,
+    fontFamily: "Nunito_800ExtraBold",
+    color: Colors.yellow,
   },
 });

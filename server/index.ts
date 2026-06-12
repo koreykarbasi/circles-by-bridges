@@ -307,6 +307,14 @@ async function ensureHasPasswordColumn() {
   }
 }
 
+async function ensureLastProfilePushAtColumn() {
+  try {
+    await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS last_profile_push_at TIMESTAMP`);
+  } catch (err) {
+    console.error("[startup] Failed to add last_profile_push_at column:", err);
+  }
+}
+
 async function ensurePasswordResetTokensTable() {
   try {
     await pool.query(`
@@ -339,6 +347,7 @@ async function ensurePasswordResetTokensTable() {
   await ensureNotificationLogTable();
   await ensureUserNotifPreferenceColumns();
   await ensureHasPasswordColumn();
+  await ensureLastProfilePushAtColumn();
   await ensurePasswordResetTokensTable();
 
   const server = await registerRoutes(app);

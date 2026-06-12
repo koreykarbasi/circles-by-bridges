@@ -168,9 +168,9 @@ export default function SuggestionsScreen() {
       : allReminders;
     return filtered.filter((r) => {
       if (completedReminderIds.has(r.id)) return false;
-      if (r.type === "check-in-quickpick" && elevatedContactTypes.has(`${r.contactId}:checkin`)) return false;
-      if (r.type === "hangout-quickpick" && elevatedContactTypes.has(`${r.contactId}:hangout`)) return false;
-      if ((r.type === "check-in-quickpick" || r.type === "hangout-quickpick") && snoozedContacts.has(r.contactId)) return false;
+      if (r.type === "check-in-quickpick" && r.contactId && elevatedContactTypes.has(`${r.contactId}:checkin`)) return false;
+      if (r.type === "hangout-quickpick" && r.contactId && elevatedContactTypes.has(`${r.contactId}:hangout`)) return false;
+      if ((r.type === "check-in-quickpick" || r.type === "hangout-quickpick") && r.contactId && snoozedContacts.has(r.contactId)) return false;
       return true;
     });
   }, [contacts, filterCircle, completedReminderIds, elevatedContactTypes, snoozedContacts]);
@@ -353,7 +353,12 @@ export default function SuggestionsScreen() {
   const handleReminderComplete = useCallback(
     async (reminder: Reminder) => {
       setCompletedReminderIds((prev) => new Set(prev).add(reminder.id));
-      if (reminder.type === "birthday" || reminder.type === "custom-reminder") return;
+      if (
+        reminder.type === "birthday" ||
+        reminder.type === "custom-reminder" ||
+        reminder.type.startsWith("profile-completion") ||
+        !reminder.contactId
+      ) return;
       if (reminder.type === "hangout-quickpick") {
         await markHangout(reminder.contactId);
       } else {
@@ -366,6 +371,7 @@ export default function SuggestionsScreen() {
   const handleReminderQuickPick = useCallback(
     async (reminder: Reminder, date: Date, label: string) => {
       setCompletedReminderIds((prev) => new Set(prev).add(reminder.id));
+      if (!reminder.contactId) return;
       const circleLevel = reminder.circleLevel as 1 | 2 | 3;
 
       if (reminder.type === "check-in-quickpick") {
