@@ -19,6 +19,7 @@ import {
 import { View, ActivityIndicator, Platform } from "react-native";
 import Colors from "@/constants/colors";
 import * as Notifications from "expo-notifications";
+import Constants from "expo-constants";
 import { apiRequest } from "@/lib/query-client";
 
 SplashScreen.preventAutoHideAsync();
@@ -45,12 +46,23 @@ async function registerForPushNotifications(): Promise<string | null> {
     finalStatus = status;
   }
 
-  if (finalStatus !== "granted") return null;
+  if (finalStatus !== "granted") {
+    console.log("[push] Permission not granted:", finalStatus);
+    return null;
+  }
 
   try {
-    const token = (await Notifications.getExpoPushTokenAsync()).data;
+    const projectId =
+      Constants.expoConfig?.extra?.eas?.projectId ??
+      Constants.easConfig?.projectId;
+    console.log("[push] Registering with projectId:", projectId ?? "(none — Expo Go)");
+    const token = (await Notifications.getExpoPushTokenAsync(
+      projectId ? { projectId } : undefined
+    )).data;
+    console.log("[push] Got token:", token?.slice(0, 30) + "...");
     return token;
-  } catch {
+  } catch (err) {
+    console.error("[push] getExpoPushTokenAsync failed:", err);
     return null;
   }
 }
@@ -59,8 +71,9 @@ async function savePushToken(token: string) {
   try {
     const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
     await apiRequest("PUT", "/api/notifications/token", { token, timezone });
-  } catch {
-    // Non-fatal — token registration is best-effort
+    console.log("[push] Token saved to server.");
+  } catch (err) {
+    console.error("[push] Failed to save token to server:", err);
   }
 }
 
