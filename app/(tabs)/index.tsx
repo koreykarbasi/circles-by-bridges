@@ -1,5 +1,5 @@
 import React, { useState, useCallback, useMemo, useEffect, useRef } from "react";
-import { View, Text, StyleSheet, ScrollView, Platform, RefreshControl, Pressable, Image, Animated, Linking, ActivityIndicator } from "react-native";
+import { View, Text, StyleSheet, ScrollView, Platform, RefreshControl, Pressable, Image, Animated, Linking, ActivityIndicator, PanResponder } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import Colors from "@/constants/colors";
@@ -62,6 +62,54 @@ interface Suggestion {
   circleLevel: 1 | 2 | 3;
   prompt: string;
   actionType: "call" | "text" | "hangout";
+}
+
+function SwipableSuggestionRow({ children, onSwipeDismiss }: { children: React.ReactNode; onSwipeDismiss?: () => void }) {
+  const translateX = useRef(new Animated.Value(0)).current;
+  const cardOpacity = useRef(new Animated.Value(1)).current;
+  const onDismissRef = useRef<(() => void) | undefined>(onSwipeDismiss);
+  useEffect(() => { onDismissRef.current = onSwipeDismiss; }, [onSwipeDismiss]);
+  const animating = useRef(false);
+
+  const panResponder = useRef(
+    PanResponder.create({
+      onStartShouldSetPanResponder: () => false,
+      onMoveShouldSetPanResponder: (_, gs) =>
+        !animating.current && Math.abs(gs.dx) > 8 && Math.abs(gs.dx) > Math.abs(gs.dy) * 1.5,
+      onPanResponderMove: (_, gs) => {
+        translateX.setValue(gs.dx);
+        cardOpacity.setValue(Math.max(0.3, 1 - Math.abs(gs.dx) / 250));
+      },
+      onPanResponderRelease: (_, gs) => {
+        const dismissFn = onDismissRef.current;
+        if (Math.abs(gs.dx) > 80 || Math.abs(gs.vx) > 0.5) {
+          animating.current = true;
+          const dir = gs.dx > 0 ? 1 : -1;
+          Animated.parallel([
+            Animated.timing(translateX, { toValue: dir * 500, duration: 250, useNativeDriver: true }),
+            Animated.timing(cardOpacity, { toValue: 0, duration: 200, useNativeDriver: true }),
+          ]).start(() => { dismissFn?.(); });
+        } else {
+          Animated.parallel([
+            Animated.spring(translateX, { toValue: 0, useNativeDriver: true }),
+            Animated.timing(cardOpacity, { toValue: 1, duration: 200, useNativeDriver: true }),
+          ]).start();
+        }
+      },
+      onPanResponderTerminate: () => {
+        Animated.parallel([
+          Animated.spring(translateX, { toValue: 0, useNativeDriver: true }),
+          Animated.timing(cardOpacity, { toValue: 1, duration: 200, useNativeDriver: true }),
+        ]).start();
+      },
+    })
+  ).current;
+
+  return (
+    <Animated.View style={{ transform: [{ translateX }], opacity: cardOpacity }} {...panResponder.panHandlers}>
+      {children}
+    </Animated.View>
+  );
 }
 
 export default function HomeScreen() {
@@ -328,6 +376,11 @@ export default function HomeScreen() {
     },
     [markContacted, markHangout],
   );
+
+  const handleSuggestionSwipeDismiss = useCallback((suggestion: Suggestion) => {
+    dismissSuggestion(suggestion.contactId);
+    markContactSuggested(suggestion.contactId).catch(() => {});
+  }, []);
 
   const handleSuggestionRefresh = useCallback(
     (suggestion: Suggestion) => {
@@ -666,7 +719,11 @@ export default function HomeScreen() {
               const circleLabel = CIRCLE_CONFIG[suggestion.circleLevel]?.label ?? "Circle";
 
               return (
-                <View key={suggestion.contactId} style={styles.suggestionCard}>
+                <SwipableSuggestionRow
+                  key={suggestion.contactId}
+                  onSwipeDismiss={() => handleSuggestionSwipeDismiss(suggestion)}
+                >
+                <View style={styles.suggestionCard}>
                   <View style={styles.suggestionHeader}>
                     <View style={[styles.suggestionDot, { backgroundColor: circleColor }]} />
                     <Text style={styles.suggestionName} numberOfLines={1}>{suggestion.contactName}</Text>
@@ -730,6 +787,7 @@ export default function HomeScreen() {
                     </Pressable>
                   </View>
                 </View>
+                </SwipableSuggestionRow>
               );
             })}
           </View>

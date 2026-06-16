@@ -326,6 +326,11 @@ export default function SuggestionsScreen() {
     [markContacted],
   );
 
+  const handleSwipeDismiss = useCallback((contactId: string) => {
+    dismissSuggestion(contactId);
+    markContactSuggested(contactId).catch(() => {});
+  }, []);
+
   useEffect(() => {
     return () => {
       if (copiedToastTimer.current) clearTimeout(copiedToastTimer.current);
@@ -619,6 +624,7 @@ export default function SuggestionsScreen() {
               daysSinceContact={daysSinceContact}
               hasBirthdaySoon={hasBirthdaySoon}
               onDone={() => handleDone(s.contact.id)}
+              onSwipeDismiss={() => handleSwipeDismiss(s.contact.id)}
               onRefresh={() => handleRefreshSingle(s.contact.id, s.prompt)}
               onCopyText={s.type === "text" ? () => handleCopyText(s.contact.id) : undefined}
               onCopied={s.type === "text" ? showCopiedToast : undefined}

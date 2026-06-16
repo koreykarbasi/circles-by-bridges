@@ -1,5 +1,5 @@
-import React, { useCallback, useState, useMemo } from "react";
-import { View, Text, StyleSheet, Pressable, Platform, Linking } from "react-native";
+import React, { useCallback, useState, useMemo, useRef, useEffect } from "react";
+import { View, Text, StyleSheet, Pressable, Platform, Linking, PanResponder } from "react-native";
 import { router } from "expo-router";
 import Animated, { useSharedValue, useAnimatedStyle, withTiming, withSequence, runOnJS, Easing } from "react-native-reanimated";
 import { Ionicons } from "@expo/vector-icons";
@@ -33,6 +33,7 @@ interface SuggestionCardProps {
   onCopied?: () => void;
   onPlanHangout?: () => void;
   onSaveContactData?: (data: { phone: string; birthday?: string; photoUri?: string }) => Promise<void> | void;
+  onSwipeDismiss?: () => void;
 }
 
 const TYPE_CONFIG = {
@@ -76,6 +77,7 @@ export function SuggestionCard({
   onCopied,
   onPlanHangout,
   onSaveContactData,
+  onSwipeDismiss,
 }: SuggestionCardProps) {
   const circleColor = circleLevel === 1 ? Colors.circle1 : circleLevel === 2 ? Colors.circle2 : Colors.circle3;
   const typeConfig = TYPE_CONFIG[type];
@@ -106,6 +108,45 @@ export function SuggestionCard({
   const refreshStyle = useAnimatedStyle(() => ({
     transform: [{ scale: refreshScale.value }],
   }));
+
+  const onSwipeDismissRef = useRef<(() => void) | undefined>(onSwipeDismiss);
+  useEffect(() => { onSwipeDismissRef.current = onSwipeDismiss; }, [onSwipeDismiss]);
+  const swipeAnimating = useRef(false);
+
+  const panResponder = useRef(
+    PanResponder.create({
+      onStartShouldSetPanResponder: () => false,
+      onMoveShouldSetPanResponder: (_, gs) =>
+        !swipeAnimating.current &&
+        Math.abs(gs.dx) > 8 &&
+        Math.abs(gs.dx) > Math.abs(gs.dy) * 1.5,
+      onPanResponderMove: (_, gs) => {
+        translateX.value = gs.dx;
+        opacity.value = Math.max(0.3, 1 - Math.abs(gs.dx) / 250);
+      },
+      onPanResponderRelease: (_, gs) => {
+        const dismissFn = onSwipeDismissRef.current;
+        if (Math.abs(gs.dx) > 80 || Math.abs(gs.vx) > 0.5) {
+          swipeAnimating.current = true;
+          const dir = gs.dx > 0 ? 1 : -1;
+          opacity.value = withTiming(0, { duration: 200 });
+          translateX.value = withTiming(dir * 500, { duration: 250 }, () => {
+            height.value = withTiming(0, { duration: 180 });
+            marginBottom.value = withTiming(0, { duration: 180 }, () => {
+              if (dismissFn) runOnJS(dismissFn)();
+            });
+          });
+        } else {
+          translateX.value = withTiming(0, { duration: 250 });
+          opacity.value = withTiming(1, { duration: 250 });
+        }
+      },
+      onPanResponderTerminate: () => {
+        translateX.value = withTiming(0, { duration: 250 });
+        opacity.value = withTiming(1, { duration: 250 });
+      },
+    })
+  ).current;
 
   const handleDone = useCallback(() => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
@@ -208,7 +249,7 @@ export function SuggestionCard({
 
   return (
     <>
-      <Animated.View style={[styles.container, animatedStyle]}>
+      <Animated.View style={[styles.container, animatedStyle]} {...panResponder.panHandlers}>
         <View style={styles.header}>
           <Pressable
             onPress={() => router.push({ pathname: "/edit-contact", params: { id: contactId } })}
