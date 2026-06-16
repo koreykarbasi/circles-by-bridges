@@ -75,7 +75,10 @@
       "expo-apple-authentication"
     ],
     "extra": {
-      "apiUrl": "https://circles-bridges.replit.app"
+      "apiUrl": "https://circles-bridges.replit.app",
+      "eas": {
+        "projectId": "603f7533-c3a7-487e-b378-d076df17514a"
+      }
     },
     "experiments": {
       "typedRoutes": true
