@@ -9,7 +9,7 @@ import crypto from "crypto";
 import { pool } from "./db";
 import { getPrompts, syncFromSheet } from "./prompts-sync";
 import { sendHangoutFinalizedNotifications } from "./push-notifications";
-import { sendPasswordResetEmail } from "./email";
+import { sendPasswordResetEmail, sendHangoutCalendarInvite } from "./email";
 import type { InsertContact } from "@shared/schema";
 import * as chrono from "chrono-node";
 
@@ -103,28 +103,35 @@ function computeBestRecommendation(optionsWithScores: any[], votes: any[], inclu
   };
 }
 
+function formatLocalDateTime(d: Date): string {
+  const pad = (n: number) => n.toString().padStart(2, "0");
+  return `${d.getFullYear()}${pad(d.getMonth() + 1)}${pad(d.getDate())}T${pad(d.getHours())}${pad(d.getMinutes())}${pad(d.getSeconds())}`;
+}
+
 function generateIcs(title: string, timeLabel: string, locationLabel: string | null): string {
   const now = new Date();
+  // DTSTAMP must be UTC per RFC 5545
   const dtStamp = now.toISOString().replace(/[-:]/g, "").split(".")[0] + "Z";
   const uid = `bridges-${Date.now()}@bridges.app`;
 
-  // Try to parse a natural-language date from the time label, fallback to 1 week from now
+  // Try to parse a natural-language date from the time label, fallback to 1 week from now.
+  // Use floating datetime (no Z suffix) so calendar apps honour the device's local timezone.
   let dtStart = "";
   let dtEnd = "";
   try {
     const parsed = chrono.parseDate(timeLabel, new Date(), { forwardDate: true });
     if (parsed && !isNaN(parsed.getTime())) {
-      dtStart = parsed.toISOString().replace(/[-:]/g, "").split(".")[0] + "Z";
+      dtStart = formatLocalDateTime(parsed);
       const end = new Date(parsed.getTime() + 2 * 60 * 60 * 1000);
-      dtEnd = end.toISOString().replace(/[-:]/g, "").split(".")[0] + "Z";
+      dtEnd = formatLocalDateTime(end);
     }
   } catch (_) {}
 
   if (!dtStart) {
     const future = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
-    dtStart = future.toISOString().replace(/[-:]/g, "").split(".")[0] + "Z";
+    dtStart = formatLocalDateTime(future);
     const end = new Date(future.getTime() + 2 * 60 * 60 * 1000);
-    dtEnd = end.toISOString().replace(/[-:]/g, "").split(".")[0] + "Z";
+    dtEnd = formatLocalDateTime(end);
   }
 
   const location = locationLabel ? `LOCATION:${locationLabel}\r\n` : "";
@@ -1097,6 +1104,73 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (err) {
       console.error("Error generating calendar:", err);
       res.status(500).json({ message: "Failed to generate calendar invite" });
+    }
+  });
+
+  // Send calendar invite emails to invitees who have emails on file
+  app.post("/api/hangouts/:id/email-invites", requireAuth, async (req, res) => {
+    try {
+      const { id } = req.params as { id: string };
+      const userId = req.session.userId!;
+      const plan = await storage.getHangoutPlan(id);
+      if (!plan || plan.userId !== userId) {
+        return res.status(404).json({ message: "Hangout not found" });
+      }
+      if (plan.status !== "finalized") {
+        return res.status(400).json({ message: "Hangout is not finalized yet" });
+      }
+
+      // Resolve time/location labels (same logic as calendar download)
+      const options = await storage.getOptionsByPlanId(plan.id);
+      const calVotes = await storage.getVotesByPlanId(plan.id);
+      const calBorda = (optId: string, total: number) => {
+        const votes = calVotes.filter((v) => v.optionId === optId && v.rank && v.rank > 0);
+        return votes.reduce((s, v) => s + Math.max(0, total - (v.rank || 0) + 1), 0);
+      };
+      const timeOptions = options.filter((o) => o.questionType === "time");
+      const timeOption = options.find((o) => o.id === plan.finalizedTimeOptionId)
+        || [...timeOptions].sort((a, b) => calBorda(b.id, timeOptions.length) - calBorda(a.id, timeOptions.length))[0];
+      const locationOptionsForEmail = options.filter((o) => o.questionType === "location");
+      const locationOption = [...locationOptionsForEmail]
+        .sort((a, b) => calBorda(b.id, locationOptionsForEmail.length) - calBorda(a.id, locationOptionsForEmail.length))[0] || null;
+
+      const timeLabel = timeOption?.label || "TBD";
+      const locationLabel = locationOption?.label || null;
+      const icsContent = generateIcs(plan.title, timeLabel, locationLabel);
+
+      // Look up invitees in the user's contacts (case-insensitive name match)
+      const contacts = await storage.getContactsByUserId(userId);
+      const contactsByName = new Map(contacts.map((c) => [c.name.toLowerCase().trim(), c]));
+
+      const sent: string[] = [];
+      const missing: string[] = [];
+
+      for (const inviteeName of plan.inviteeNames) {
+        const contact = contactsByName.get(inviteeName.toLowerCase().trim());
+        if (contact?.email) {
+          try {
+            await sendHangoutCalendarInvite(
+              contact.email,
+              contact.name,
+              plan.title,
+              timeLabel,
+              locationLabel,
+              icsContent,
+            );
+            sent.push(inviteeName);
+          } catch (err) {
+            console.error(`Failed to send invite to ${inviteeName}:`, err);
+            missing.push(inviteeName);
+          }
+        } else {
+          missing.push(inviteeName);
+        }
+      }
+
+      res.json({ sent, missing });
+    } catch (err) {
+      console.error("Error sending email invites:", err);
+      res.status(500).json({ message: "Failed to send email invites" });
     }
   });
 

@@ -200,6 +200,32 @@ export default function HangoutDetailScreen() {
     },
   });
 
+  const emailInvitesMutation = useMutation({
+    mutationFn: async (): Promise<{ sent: string[]; missing: string[] }> => {
+      const res = await apiRequest("POST", `/api/hangouts/${id}/email-invites`, {});
+      return res.json();
+    },
+    onSuccess: (result) => {
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      const sentLine = result.sent.length > 0 ? `Sent to: ${result.sent.join(", ")}` : null;
+      const missingLine = result.missing.length > 0
+        ? `No email on file: ${result.missing.join(", ")}`
+        : null;
+      const parts = [sentLine, missingLine].filter(Boolean).join("\n\n");
+      if (result.sent.length === 0 && result.missing.length > 0) {
+        Alert.alert(
+          "No emails found",
+          `None of your invitees have an email address on file.\n\nNeed to follow up manually: ${result.missing.join(", ")}`,
+        );
+      } else {
+        Alert.alert("Invites sent", parts || "Done.");
+      }
+    },
+    onError: () => {
+      Alert.alert("Error", "Could not send email invites. Please try again.");
+    },
+  });
+
   const getVoteUrl = useCallback(() => {
     const base = getApiUrl();
     return `${base}vote/${plan?.shareCode}`;
@@ -382,6 +408,16 @@ export default function HangoutDetailScreen() {
                 <Text style={styles.shareGuestsBtnText}>{guestsCopied ? "Copied!" : "Share with guests"}</Text>
               </Pressable>
             </View>
+            <Pressable
+              onPress={() => emailInvitesMutation.mutate()}
+              disabled={emailInvitesMutation.isPending}
+              style={({ pressed }) => [styles.emailInviteBtn, (pressed || emailInvitesMutation.isPending) && { opacity: 0.7 }]}
+            >
+              <Ionicons name="mail-outline" size={16} color={Colors.primaryLight} />
+              <Text style={styles.emailInviteBtnText}>
+                {emailInvitesMutation.isPending ? "Sending..." : "Email calendar invite to guests"}
+              </Text>
+            </Pressable>
           </View>
         )}
 
@@ -605,6 +641,13 @@ const styles = StyleSheet.create({
     borderWidth: 1, borderColor: Colors.primary + "40",
   },
   shareGuestsBtnText: { fontSize: 13, fontFamily: "Nunito_700Bold", color: Colors.primaryLight },
+  emailInviteBtn: {
+    flexDirection: "row", alignItems: "center", justifyContent: "center",
+    gap: 6, paddingVertical: 10, borderRadius: 10, marginTop: 8,
+    backgroundColor: Colors.primary + "15",
+    borderWidth: 1, borderColor: Colors.primary + "40",
+  },
+  emailInviteBtnText: { fontSize: 13, fontFamily: "Nunito_700Bold", color: Colors.primaryLight },
   description: {
     fontSize: 15, fontFamily: "Nunito_400Regular",
     color: Colors.textSecondary, lineHeight: 22, marginBottom: 14,
