@@ -581,11 +581,12 @@ export async function sendSuggestionNudges() {
       suggestion_notif_frequency: string;
       suggestion_notif_time: string | null;
     }>(
-      `SELECT id, push_token, notification_timezone, suggestion_notif_frequency, suggestion_notif_time
+      `SELECT id, push_token, notification_timezone,
+              COALESCE(suggestion_notif_frequency, 'daily') AS suggestion_notif_frequency,
+              suggestion_notif_time
        FROM users
        WHERE push_token IS NOT NULL
-         AND suggestion_notif_frequency IS NOT NULL
-         AND suggestion_notif_frequency != 'off'`,
+         AND COALESCE(suggestion_notif_frequency, 'daily') != 'off'`,
     );
 
     let sent = 0;
