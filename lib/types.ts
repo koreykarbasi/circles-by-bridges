@@ -22,6 +22,7 @@ export interface Contact {
   photoUri?: string | null;
   createdAt?: string | null;
   customReminders?: CustomReminder[] | null;
+  sortOrder?: number | null;
 }
 
 export interface AuthUser {

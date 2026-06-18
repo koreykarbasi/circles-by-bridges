@@ -270,6 +270,9 @@ export default function CreateHangoutScreen() {
   const sortedContacts = useMemo(() =>
     [...contacts].sort((a, b) => {
       if (a.circleLevel !== b.circleLevel) return a.circleLevel - b.circleLevel;
+      const aOrder = a.sortOrder ?? Infinity;
+      const bOrder = b.sortOrder ?? Infinity;
+      if (aOrder !== bOrder) return aOrder - bOrder;
       return a.name.localeCompare(b.name);
     }),
     [contacts]

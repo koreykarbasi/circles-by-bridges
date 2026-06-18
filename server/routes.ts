@@ -694,6 +694,29 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  app.put("/api/contacts/reorder", requireAuth, async (req, res) => {
+    try {
+      const { contactIds } = req.body;
+      if (!Array.isArray(contactIds) || contactIds.length === 0) {
+        return bad(res, "contactIds must be a non-empty array");
+      }
+      if (!contactIds.every((id) => typeof id === "string" && id.trim().length > 0)) {
+        return bad(res, "All contactIds must be non-empty strings");
+      }
+      const userContacts = await storage.getContactsByUserId(req.session.userId!);
+      const userContactIds = new Set(userContacts.map((c) => c.id));
+      const invalid = contactIds.filter((id) => !userContactIds.has(id));
+      if (invalid.length > 0) {
+        return res.status(403).json({ message: "One or more contacts do not belong to this user" });
+      }
+      await storage.reorderContacts(req.session.userId!, contactIds);
+      res.status(204).end();
+    } catch (err) {
+      console.error("Error reordering contacts:", err);
+      res.status(500).json({ message: "Failed to reorder contacts" });
+    }
+  });
+
   app.get("/api/contacts/:id", requireAuth, async (req, res) => {
     try {
       const { id } = req.params as { id: string };

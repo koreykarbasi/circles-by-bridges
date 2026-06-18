@@ -22,6 +22,7 @@ interface ContactsContextValue {
   getCircleContacts: (level: 1 | 2 | 3) => Contact[];
   getOverdueContacts: () => Contact[];
   getUpcomingBirthdays: () => Contact[];
+  reorderCircleContacts: (circleLevel: 1 | 2 | 3, orderedIds: string[]) => Promise<void>;
 }
 
 const ContactsContext = createContext<ContactsContextValue | null>(null);
@@ -169,6 +170,26 @@ export function ContactsProvider({ children }: { children: ReactNode }) {
       .then(fetchContacts);
   }, [fetchContacts]);
 
+  const reorderCircleContactsFn = useCallback(async (circleLevel: 1 | 2 | 3, orderedIds: string[]) => {
+    const previous = [...contacts];
+    setContacts((prev) => {
+      const others = prev.filter((c) => c.circleLevel !== circleLevel);
+      const reordered = orderedIds
+        .map((id) => prev.find((c) => c.id === id))
+        .filter((c): c is Contact => !!c);
+      return [...others, ...reordered].sort((a, b) => {
+        if (a.circleLevel !== b.circleLevel) return a.circleLevel - b.circleLevel;
+        return 0;
+      });
+    });
+    try {
+      await apiRequest("PUT", "/api/contacts/reorder", { contactIds: orderedIds });
+    } catch (err) {
+      setContacts(previous);
+      throw err;
+    }
+  }, [contacts]);
+
   const getCircleContacts = useCallback(
     (level: 1 | 2 | 3) => contacts.filter((c) => c.circleLevel === level),
     [contacts],
@@ -230,8 +251,9 @@ export function ContactsProvider({ children }: { children: ReactNode }) {
       getCircleContacts,
       getOverdueContacts,
       getUpcomingBirthdays,
+      reorderCircleContacts: reorderCircleContactsFn,
     }),
-    [contacts, isLoading, fetchContacts, addContactFn, updateContactFn, deleteContactFn, markContactedFn, markHangoutFn, savePhoneNumberFn, getCircleContacts, getOverdueContacts, getUpcomingBirthdays],
+    [contacts, isLoading, fetchContacts, addContactFn, updateContactFn, deleteContactFn, markContactedFn, markHangoutFn, savePhoneNumberFn, getCircleContacts, getOverdueContacts, getUpcomingBirthdays, reorderCircleContactsFn],
   );
 
   return <ContactsContext.Provider value={value}>{children}</ContactsContext.Provider>;

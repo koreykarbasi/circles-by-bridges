@@ -7,7 +7,7 @@ import type {
   HangoutVote, InsertHangoutVote,
   PasswordResetToken,
 } from "@shared/schema";
-import { eq, and } from "drizzle-orm";
+import { eq, and, asc, sql as drizzleSql } from "drizzle-orm";
 
 export interface IStorage {
   getUser(id: string): Promise<User | undefined>;
@@ -19,6 +19,7 @@ export interface IStorage {
   createContact(contact: InsertContact): Promise<Contact>;
   updateContact(id: string, data: Partial<InsertContact>): Promise<Contact | undefined>;
   deleteContact(id: string): Promise<boolean>;
+  reorderContacts(userId: string, contactIds: string[]): Promise<void>;
   getHangoutPlansByUserId(userId: string): Promise<HangoutPlan[]>;
   getHangoutPlan(id: string): Promise<HangoutPlan | undefined>;
   getHangoutPlanByShareCode(shareCode: string): Promise<HangoutPlan | undefined>;
@@ -66,7 +67,15 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getContactsByUserId(userId: string): Promise<Contact[]> {
-    return db.select().from(contacts).where(eq(contacts.userId, userId));
+    return db
+      .select()
+      .from(contacts)
+      .where(eq(contacts.userId, userId))
+      .orderBy(
+        asc(drizzleSql`CASE WHEN ${contacts.sortOrder} IS NULL THEN 1 ELSE 0 END`),
+        asc(contacts.sortOrder),
+        asc(contacts.createdAt),
+      );
   }
 
   async getContact(id: string): Promise<Contact | undefined> {
@@ -91,6 +100,17 @@ export class DatabaseStorage implements IStorage {
   async deleteContact(id: string): Promise<boolean> {
     const result = await db.delete(contacts).where(eq(contacts.id, id)).returning();
     return result.length > 0;
+  }
+
+  async reorderContacts(userId: string, contactIds: string[]): Promise<void> {
+    await db.transaction(async (tx) => {
+      for (let i = 0; i < contactIds.length; i++) {
+        await tx
+          .update(contacts)
+          .set({ sortOrder: i })
+          .where(and(eq(contacts.id, contactIds[i]), eq(contacts.userId, userId)));
+      }
+    });
   }
 
   async getHangoutPlansByUserId(userId: string): Promise<HangoutPlan[]> {

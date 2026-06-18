@@ -14,6 +14,7 @@ interface ContactCardProps {
   onMarkContacted?: () => void;
   onPlanHangout?: () => void;
   showCircleLabel?: boolean;
+  onLongPress?: () => void;
 }
 
 function isMissingBirthday(contact: Contact): boolean {
@@ -24,7 +25,7 @@ function isMissingEnrichment(contact: Contact): boolean {
   return (contact.labels ?? []).length === 0 && (contact.interests ?? []).length === 0;
 }
 
-export function ContactCard({ contact, onPress, onMarkContacted, onPlanHangout, showCircleLabel }: ContactCardProps) {
+export function ContactCard({ contact, onPress, onMarkContacted, onPlanHangout, showCircleLabel, onLongPress }: ContactCardProps) {
   const urgency = getContactUrgency(contact.circleLevel as 1 | 2 | 3, contact.lastContacted ?? undefined);
   const circleColor = CIRCLE_CONFIG[contact.circleLevel as 1 | 2 | 3]?.color ?? Colors.primary;
   const flashAnim = useRef(new Animated.Value(0)).current;
@@ -51,6 +52,8 @@ export function ContactCard({ contact, onPress, onMarkContacted, onPlanHangout, 
   return (
     <Pressable
       onPress={onPress}
+      onLongPress={onLongPress}
+      delayLongPress={250}
       style={({ pressed }) => [
         styles.container,
         incomplete && { borderColor: badgeColor + "55", borderWidth: 1.5 },

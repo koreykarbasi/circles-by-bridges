@@ -39,6 +39,7 @@ export const contacts = pgTable("contacts", {
   lastContactedLabel: text("last_contacted_label"),
   lastHangoutLabel: text("last_hangout_label"),
   customReminders: jsonb("custom_reminders").default([]),
+  sortOrder: integer("sort_order"),
   createdAt: timestamp("created_at").defaultNow(),
 });
 
