@@ -8,7 +8,7 @@ import rateLimit from "express-rate-limit";
 import crypto from "crypto";
 import { pool } from "./db";
 import { getPrompts, syncFromSheet } from "./prompts-sync";
-import { sendHangoutFinalizedNotifications } from "./push-notifications";
+import { sendHangoutFinalizedNotifications, sendSuggestionNudges, sendDailyReminders } from "./push-notifications";
 import { sendPasswordResetEmail, sendHangoutCalendarInvite } from "./email";
 import type { InsertContact } from "@shared/schema";
 import * as chrono from "chrono-node";
@@ -1332,6 +1332,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.status(500).json({ message: "Failed to sync prompts" });
     }
   });
+
+  // Dev-only: manually trigger suggestion nudges or daily reminders without waiting for 9am
+  if (process.env.NODE_ENV !== "production") {
+    app.post("/api/dev/test-nudges", requireAuth, async (_req, res) => {
+      console.log("[push] Manual test-nudges triggered by dev endpoint");
+      await sendSuggestionNudges();
+      res.json({ ok: true, message: "sendSuggestionNudges() fired — check server logs" });
+    });
+
+    app.post("/api/dev/test-reminders", requireAuth, async (_req, res) => {
+      console.log("[push] Manual test-reminders triggered by dev endpoint");
+      await sendDailyReminders();
+      res.json({ ok: true, message: "sendDailyReminders() fired — check server logs" });
+    });
+  }
 
   const httpServer = createServer(app);
   return httpServer;

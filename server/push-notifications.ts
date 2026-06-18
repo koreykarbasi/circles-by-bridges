@@ -573,6 +573,8 @@ export async function sendProfileCompletionPushes() {
 }
 
 export async function sendSuggestionNudges() {
+  const nowUtc = new Date().toISOString();
+  console.log(`[push] sendSuggestionNudges running at ${nowUtc}`);
   try {
     const result = await pool.query<{
       id: string;
@@ -589,17 +591,29 @@ export async function sendSuggestionNudges() {
          AND COALESCE(suggestion_notif_frequency, 'daily') != 'off'`,
     );
 
+    console.log(`[push] Suggestion nudge candidates: ${result.rows.length} user(s) with token + freq != off`);
+
     let sent = 0;
     for (const user of result.rows) {
       const tz = user.notification_timezone ?? "UTC";
       const localHour = getLocalHour(tz);
       const preferredHour = user.suggestion_notif_time === "afternoon" ? 17 : 9;
-      if (localHour !== preferredHour) continue;
+      console.log(`[push]   user ${user.id.slice(0, 8)} tz=${tz} localHour=${localHour} preferredHour=${preferredHour} freq=${user.suggestion_notif_frequency}`);
+      if (localHour !== preferredHour) {
+        console.log(`[push]   → skip: hour mismatch (${localHour} != ${preferredHour})`);
+        continue;
+      }
 
       const freq = user.suggestion_notif_frequency;
       const localDayOfWeek = getLocalDayOfWeek(tz);
-      if (freq === "3x_week" && ![1, 3, 6].includes(localDayOfWeek)) continue; // Mon, Wed, Sat
-      if (freq === "weekly" && localDayOfWeek !== 3) continue; // Wednesday
+      if (freq === "3x_week" && ![1, 3, 6].includes(localDayOfWeek)) {
+        console.log(`[push]   → skip: 3x_week day mismatch (day ${localDayOfWeek})`);
+        continue;
+      }
+      if (freq === "weekly" && localDayOfWeek !== 3) {
+        console.log(`[push]   → skip: weekly day mismatch (day ${localDayOfWeek})`);
+        continue;
+      }
 
       // Frequency-matched dedup window — also covers elevated contacts whose
       // local notifications were registered via /api/notifications/local-log
@@ -620,7 +634,10 @@ export async function sendSuggestionNudges() {
         `SELECT id, name, circle_level, last_contacted FROM contacts WHERE user_id = $1`,
         [user.id],
       );
-      if (contactsResult.rows.length === 0) continue;
+      if (contactsResult.rows.length === 0) {
+        console.log(`[push]   → skip: no contacts`);
+        continue;
+      }
 
       // Days since each contact was last pushed (server-side cooldown equivalent)
       const lastPushedResult = await pool.query<{ contact_id: string; last_sent: string }>(
@@ -655,7 +672,12 @@ export async function sendSuggestionNudges() {
         }
       }
 
-      if (!bestContact) continue;
+      if (!bestContact) {
+        console.log(`[push]   → skip: all ${contactsResult.rows.length} contacts in dedup window`);
+        continue;
+      }
+
+      console.log(`[push]   → sending to user ${user.id.slice(0, 8)} for contact "${bestContact.id.slice(0, 8)}" score=${bestScore}`);
 
       // Only log as notified if the push actually delivered (fix 404 burn bug)
       const ok = await sendExpoPush(
@@ -667,12 +689,13 @@ export async function sendSuggestionNudges() {
       if (ok) {
         await logNotifiedContacts(user.id, new Set([bestContact.id]));
         sent++;
+        console.log(`[push]   → delivered OK`);
+      } else {
+        console.log(`[push]   → delivery failed (Expo push service error)`);
       }
     }
 
-    if (sent > 0) {
-      console.log(`[push] Sent ${sent} suggestion nudges.`);
-    }
+    console.log(`[push] Suggestion nudge run complete: ${sent} sent`);
   } catch (err) {
     console.error("[push] Error sending suggestion nudges:", err);
   }
