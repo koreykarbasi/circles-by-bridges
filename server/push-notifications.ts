@@ -185,11 +185,14 @@ function buildCustomReminderMessages(
 
 // ─── 24-hour per-contact deduplication ───────────────────────────────────────
 
-async function getRecentlySentContactIds(userId: string): Promise<Set<string>> {
+async function getRecentlySentContactIds(userId: string, types: string[]): Promise<Set<string>> {
   try {
+    const placeholders = types.map((_, i) => `$${i + 3}`).join(", ");
     const result = await pool.query<{ contact_id: string }>(
-      `SELECT DISTINCT contact_id FROM notification_log WHERE user_id = $1 AND sent_at > NOW() - INTERVAL '24 hours'`,
-      [userId],
+      `SELECT DISTINCT contact_id FROM notification_log
+       WHERE user_id = $1 AND sent_at > NOW() - INTERVAL '24 hours'
+         AND (notif_type IS NULL OR notif_type IN (${placeholders}))`,
+      [userId, null, ...types],
     );
     return new Set(result.rows.map((r) => r.contact_id));
   } catch {
@@ -197,12 +200,12 @@ async function getRecentlySentContactIds(userId: string): Promise<Set<string>> {
   }
 }
 
-async function logNotifiedContacts(userId: string, contactIds: Set<string>): Promise<void> {
+async function logNotifiedContacts(userId: string, contactIds: Set<string>, notifType: string): Promise<void> {
   for (const contactId of contactIds) {
     try {
       await pool.query(
-        `INSERT INTO notification_log (user_id, contact_id) VALUES ($1, $2)`,
-        [userId, contactId],
+        `INSERT INTO notification_log (user_id, contact_id, notif_type) VALUES ($1, $2, $3)`,
+        [userId, contactId, notifType],
       );
     } catch {
       // Non-fatal: dedup is best-effort
@@ -337,9 +340,9 @@ export async function sendDailyReminders() {
         return true;
       });
 
-      // Deduplicate: skip messages for contacts already notified in the last 24h
-      // (covers both previous server sends AND locally-scheduled elevation pushes)
-      const recentContactIds = await getRecentlySentContactIds(user.id);
+      // Deduplicate: skip contacts already notified via reminder or elevation in last 24h.
+      // Does NOT filter out suggestion-type entries so the two paths don't suppress each other.
+      const recentContactIds = await getRecentlySentContactIds(user.id, ["reminder", "elevation"]);
       const filtered = deduped.filter(
         (msg) => !msg.contactId || !recentContactIds.has(msg.contactId),
       );
@@ -359,9 +362,9 @@ export async function sendDailyReminders() {
         }
       }
 
-      // Log newly notified contacts for future deduplication
+      // Log newly notified contacts for future deduplication (type: reminder)
       if (notifiedContactIds.size > 0) {
-        await logNotifiedContacts(user.id, notifiedContactIds);
+        await logNotifiedContacts(user.id, notifiedContactIds, "reminder");
       }
     }
     if (sent > 0) {
@@ -615,12 +618,14 @@ export async function sendSuggestionNudges() {
         continue;
       }
 
-      // Frequency-matched dedup window — also covers elevated contacts whose
-      // local notifications were registered via /api/notifications/local-log
+      // Frequency-matched dedup window — filters suggestion + elevation types only.
+      // Reminder-type entries are intentionally excluded so daily reminders at 9am
+      // do not suppress the suggestion nudge that fires immediately after.
       const windowHours = dedupWindowHours(freq);
       const recentResult = await pool.query<{ contact_id: string }>(
         `SELECT DISTINCT contact_id FROM notification_log
-         WHERE user_id = $1 AND sent_at > NOW() - make_interval(hours => $2)`,
+         WHERE user_id = $1 AND sent_at > NOW() - make_interval(hours => $2)
+           AND (notif_type IS NULL OR notif_type IN ('suggestion', 'elevation'))`,
         [user.id, windowHours],
       );
       const recentContactIds = new Set(recentResult.rows.map((r) => r.contact_id));
@@ -687,7 +692,7 @@ export async function sendSuggestionNudges() {
         { contactId: bestContact.id },
       );
       if (ok) {
-        await logNotifiedContacts(user.id, new Set([bestContact.id]));
+        await logNotifiedContacts(user.id, new Set([bestContact.id]), "suggestion");
         sent++;
         console.log(`[push]   → delivered OK`);
       } else {

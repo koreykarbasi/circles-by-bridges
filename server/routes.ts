@@ -607,8 +607,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return bad(res, "contactId is required");
       }
       await pool.query(
-        `INSERT INTO notification_log (user_id, contact_id) VALUES ($1, $2)`,
-        [req.session.userId!, contactId.trim()],
+        `INSERT INTO notification_log (user_id, contact_id, notif_type) VALUES ($1, $2, $3)`,
+        [req.session.userId!, contactId.trim(), "elevation"],
       );
       res.json({ ok: true });
     } catch (err) {

@@ -285,6 +285,7 @@ async function ensureNotificationLogTable() {
         sent_at TIMESTAMP NOT NULL DEFAULT NOW()
       )
     `);
+    await pool.query(`ALTER TABLE notification_log ADD COLUMN IF NOT EXISTS notif_type TEXT`);
   } catch (err) {
     console.error("[startup] Failed to create notification_log table:", err);
   }

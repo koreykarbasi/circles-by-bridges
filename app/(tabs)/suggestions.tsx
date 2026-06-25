@@ -15,6 +15,7 @@ import { setElevation, getElevations, getExpiredElevations, clearElevation, ELEV
 import { snoozeContact, getSnoozedContacts, SNOOZE_DAYS } from "@/lib/reminder-snooze";
 import { getDaysSinceLastSuggestedSync, scoreSuggestion, isInCooldown } from "@/lib/suggestion-scheduler";
 import { useDismissedSuggestions, dismissSuggestion, clearDismissedSuggestions, useSchedulerDates, markContactSuggested, getCachedPrompt, setCachedPrompt, clearPromptCache } from "@/lib/suggestions-store";
+import { useDismissedReminders, dismissReminder, clearDismissedReminders } from "@/lib/dismissed-reminders-store";
 import type { Contact } from "@/lib/types";
 import type { Reminder } from "@/lib/reminders";
 import { router, useFocusEffect } from "expo-router";
@@ -81,7 +82,7 @@ export default function SuggestionsScreen() {
   const [shuffleJitter, setShuffleJitter] = useState<Record<string, number>>({});
   const completedIds = useDismissedSuggestions();
   const lastSuggestedDates = useSchedulerDates();
-  const [completedReminderIds, setCompletedReminderIds] = useState<Set<string>>(new Set());
+  const completedReminderIds = useDismissedReminders();
   const [cardPrompts, setCardPrompts] = useState<Record<string, GeneratedSuggestion>>({});
   const [remindersCollapsed, setRemindersCollapsed] = useState(false);
   const [elevationMap, setElevationMap] = useState<Record<string, number>>({});
@@ -190,26 +191,31 @@ export default function SuggestionsScreen() {
 
     const base = filtered.filter((c) => !isSessionSkipped(c));
     const eligible = base.filter((c) => !inCooldown(c));
-    const pool = eligible.length >= 1 ? eligible : base;
 
-    return [...pool]
-      .map((c) => {
-        const daysSinceLastSug = getDaysSinceLastSuggestedSync(c.id, lastSuggestedDates);
-        const daysSinceContact = getDaysSince(c.lastContacted ?? undefined);
-        const daysUntilBday = getDaysUntilBirthday(c.birthday ?? undefined);
-        return {
-          contact: c,
-          score: scoreSuggestion(
-            c.circleLevel as 1 | 2 | 3,
-            daysSinceLastSug,
-            daysSinceContact,
-            daysUntilBday,
-            elevationMap[c.id],
-          ),
-        };
-      })
-      .sort((a, b) => b.score - a.score)
-      .slice(0, 6)
+    const rankContact = (c: typeof contacts[0]) => {
+      const daysSinceLastSug = getDaysSinceLastSuggestedSync(c.id, lastSuggestedDates);
+      const daysSinceContact = getDaysSince(c.lastContacted ?? undefined);
+      const daysUntilBday = getDaysUntilBirthday(c.birthday ?? undefined);
+      return {
+        contact: c,
+        score: scoreSuggestion(
+          c.circleLevel as 1 | 2 | 3,
+          daysSinceLastSug,
+          daysSinceContact,
+          daysUntilBday,
+          elevationMap[c.id],
+        ),
+      };
+    };
+
+    const SUGGESTION_MAX = 6;
+    const rankedEligible = eligible.map(rankContact).sort((a, b) => b.score - a.score);
+    const eligibleIds = new Set(eligible.map((c) => c.id));
+    const cooldownPool = base.filter((c) => !eligibleIds.has(c.id));
+    const rankedCooldown = cooldownPool.map(rankContact).sort((a, b) => b.score - a.score);
+
+    return [...rankedEligible, ...rankedCooldown]
+      .slice(0, SUGGESTION_MAX)
       .map((x) => x.contact);
   }, [contacts, filterCircle, lastSuggestedDates, elevationMap, sessionSkippedIds]);
 
@@ -321,9 +327,12 @@ export default function SuggestionsScreen() {
   const handleDone = useCallback(
     (contactId: string) => {
       markContacted(contactId);
+      if (cardPrompts[contactId]?.type === "hangout") {
+        markHangout(contactId);
+      }
       dismissSuggestion(contactId);
     },
-    [markContacted],
+    [markContacted, markHangout, cardPrompts],
   );
 
   const handleSwipeDismiss = useCallback((contactId: string) => {
@@ -357,7 +366,7 @@ export default function SuggestionsScreen() {
 
   const handleReminderComplete = useCallback(
     async (reminder: Reminder) => {
-      setCompletedReminderIds((prev) => new Set(prev).add(reminder.id));
+      dismissReminder(reminder.id);
       if (
         reminder.type === "birthday" ||
         reminder.type === "custom-reminder" ||
@@ -375,7 +384,7 @@ export default function SuggestionsScreen() {
 
   const handleReminderQuickPick = useCallback(
     async (reminder: Reminder, date: Date, label: string) => {
-      setCompletedReminderIds((prev) => new Set(prev).add(reminder.id));
+      dismissReminder(reminder.id);
       if (!reminder.contactId) return;
       const circleLevel = reminder.circleLevel as 1 | 2 | 3;
 
@@ -417,7 +426,7 @@ export default function SuggestionsScreen() {
   );
 
   const handleHangoutCalendarPress = useCallback((reminder: Reminder) => {
-    setCompletedReminderIds((prev) => new Set(prev).add(reminder.id));
+    dismissReminder(reminder.id);
     router.push({
       pathname: "/create-hangout",
       params: { contactName: reminder.contactName },
@@ -449,7 +458,7 @@ export default function SuggestionsScreen() {
     setShuffleJitter({});
     setRefreshKey((k) => k + 1);
     clearDismissedSuggestions();
-    setCompletedReminderIds(new Set());
+    clearDismissedReminders();
   }, []);
 
   const webTopInset = Platform.OS === "web" ? 67 : 0;
@@ -483,7 +492,7 @@ export default function SuggestionsScreen() {
             Haptics.selectionAsync();
             setFilterCircle(null);
             clearDismissedSuggestions();
-            setCompletedReminderIds(new Set());
+            clearDismissedReminders();
             setCardPrompts({});
           }}
           style={[
@@ -510,7 +519,7 @@ export default function SuggestionsScreen() {
                 Haptics.selectionAsync();
                 setFilterCircle(level);
                 clearDismissedSuggestions();
-                setCompletedReminderIds(new Set());
+                clearDismissedReminders();
                 setCardPrompts({});
               }}
               style={[

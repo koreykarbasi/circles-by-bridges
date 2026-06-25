@@ -228,7 +228,7 @@ function generateCircle1Reminders(contact: Contact): Reminder[] {
       circleLevel: 1,
       type: "hangout-quickpick",
       priority: 60 + severity,
-      title: `When was the last time you intentionally set up a hangout with ${contact.name}?`,
+      title: `When did you last hang out with ${contact.name}?`,
       subtitle: `Last hangout: ${formatLastContacted(contact.lastHangout ?? undefined)}`,
     });
   }

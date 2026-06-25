@@ -21,6 +21,7 @@ import { snoozeContact, getSnoozedContacts, SNOOZE_DAYS } from "@/lib/reminder-s
 import { getSmartPrompt, getActionType, getNextPrompt, loadSyncedPrompts } from "@/lib/prompts";
 import { getDaysSinceLastSuggestedSync, scoreSuggestion, isInCooldown } from "@/lib/suggestion-scheduler";
 import { useDismissedSuggestions, dismissSuggestion, clearDismissedSuggestions, getCachedPrompt, setCachedPrompt, clearPromptCache, useSchedulerDates, markContactSuggested } from "@/lib/suggestions-store";
+import { useDismissedReminders, dismissReminder, clearDismissedReminders } from "@/lib/dismissed-reminders-store";
 import { getTextCopyMessage } from "@/components/SuggestionCard";
 import * as Clipboard from "expo-clipboard";
 import { router, useFocusEffect } from "expo-router";
@@ -117,7 +118,7 @@ export default function HomeScreen() {
   const { user } = useAuth();
   const { contacts, markContacted, markHangout, refreshContacts, savePhoneNumber, isLoading } = useContacts();
   const [refreshing, setRefreshing] = useState(false);
-  const [dismissedReminders, setDismissedReminders] = useState<Set<string>>(new Set());
+  const dismissedReminders = useDismissedReminders();
   const dismissedSuggestions = useDismissedSuggestions();
   const lastSuggestedDates = useSchedulerDates();
   const [suggestionPrompts, setSuggestionPrompts] = useState<Map<string, string>>(new Map());
@@ -192,17 +193,22 @@ export default function HomeScreen() {
     });
   }, [contacts, snoozedContacts]);
 
-  const visibleReminders = useMemo(
-    () => allReminders
-      .filter((r) => {
-        if (dismissedReminders.has(r.id)) return false;
-        if (r.type === "check-in-quickpick" && r.contactId && elevatedContactTypes.has(`${r.contactId}:checkin`)) return false;
-        if (r.type === "hangout-quickpick" && r.contactId && elevatedContactTypes.has(`${r.contactId}:hangout`)) return false;
-        return true;
-      })
-      .slice(0, MAX_REMINDERS),
-    [allReminders, dismissedReminders, elevatedContactTypes],
-  );
+  const visibleReminders = useMemo(() => {
+    const passesFilter = (r: Reminder) => {
+      if (dismissedReminders.has(r.id)) return false;
+      if (r.type === "check-in-quickpick" && r.contactId && elevatedContactTypes.has(`${r.contactId}:checkin`)) return false;
+      if (r.type === "hangout-quickpick" && r.contactId && elevatedContactTypes.has(`${r.contactId}:hangout`)) return false;
+      return true;
+    };
+    const actionable = allReminders
+      .filter((r) => !r.type.startsWith("profile-completion"))
+      .filter(passesFilter)
+      .slice(0, MAX_REMINDERS);
+    const profileCompletion = allReminders
+      .filter((r) => r.type.startsWith("profile-completion"))
+      .filter(passesFilter);
+    return [...actionable, ...profileCompletion];
+  }, [allReminders, dismissedReminders, elevatedContactTypes]);
 
   const getSuggestionForContact = useCallback(
     (contact: typeof contacts[0]): Suggestion => {
@@ -256,26 +262,32 @@ export default function HomeScreen() {
       return true;
     });
 
-    const pool = eligible.length > 0
-      ? eligible
-      : contacts.filter((c) => !reminderContactIds.has(c.id));
+    const rankContact = (c: typeof contacts[0]) => {
+      const daysSinceLastSug = getDaysSinceLastSuggestedSync(c.id, lastSuggestedDates);
+      const daysSinceContact = getDaysSince(c.lastContacted ?? undefined);
+      const daysUntilBday = getDaysUntilBirthday(c.birthday ?? undefined);
+      return {
+        contact: c,
+        score: scoreSuggestion(c.circleLevel as 1 | 2 | 3, daysSinceLastSug, daysSinceContact, daysUntilBday, elevationMap[c.id]),
+        elevated: !!elevationMap[c.id],
+      };
+    };
 
-    const ranked = pool
-      .map((c) => {
-        const daysSinceLastSug = getDaysSinceLastSuggestedSync(c.id, lastSuggestedDates);
-        const daysSinceContact = getDaysSince(c.lastContacted ?? undefined);
-        const daysUntilBday = getDaysUntilBirthday(c.birthday ?? undefined);
-        return {
-          contact: c,
-          score: scoreSuggestion(c.circleLevel as 1 | 2 | 3, daysSinceLastSug, daysSinceContact, daysUntilBday, elevationMap[c.id]),
-          elevated: !!elevationMap[c.id],
-        };
-      })
-      .sort((a, b) => {
-        // Elevated contacts always appear first regardless of score
-        if (a.elevated !== b.elevated) return a.elevated ? -1 : 1;
-        return b.score - a.score;
-      })
+    const rankedEligible = eligible.map(rankContact).sort((a, b) => {
+      if (a.elevated !== b.elevated) return a.elevated ? -1 : 1;
+      return b.score - a.score;
+    });
+
+    const eligibleIds = new Set(eligible.map((c) => c.id));
+    const cooldownPool = contacts.filter(
+      (c) => !reminderContactIds.has(c.id) && !eligibleIds.has(c.id),
+    );
+    const rankedCooldown = cooldownPool.map(rankContact).sort((a, b) => {
+      if (a.elevated !== b.elevated) return a.elevated ? -1 : 1;
+      return b.score - a.score;
+    });
+
+    const ranked = [...rankedEligible, ...rankedCooldown]
       .slice(0, MAX_SUGGESTIONS)
       .map((x) => x.contact);
 
@@ -284,7 +296,7 @@ export default function HomeScreen() {
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
-    setDismissedReminders(new Set());
+    clearDismissedReminders();
     clearDismissedSuggestions();
     clearPromptCache();
     setSuggestionPrompts(new Map());
@@ -294,7 +306,7 @@ export default function HomeScreen() {
 
   const handleReminderComplete = useCallback(
     async (reminder: Reminder) => {
-      setDismissedReminders((prev) => new Set(prev).add(reminder.id));
+      dismissReminder(reminder.id);
       if (
         reminder.type === "birthday" ||
         reminder.type === "custom-reminder" ||
@@ -312,7 +324,7 @@ export default function HomeScreen() {
 
   const handleReminderQuickPick = useCallback(
     async (reminder: Reminder, date: Date, label: string) => {
-      setDismissedReminders((prev) => new Set(prev).add(reminder.id));
+      dismissReminder(reminder.id);
       if (!reminder.contactId) return;
       const circleLevel = reminder.circleLevel as 1 | 2 | 3;
 
@@ -354,11 +366,11 @@ export default function HomeScreen() {
   );
 
   const handleReminderSnooze = useCallback((reminder: Reminder) => {
-    setDismissedReminders((prev) => new Set(prev).add(reminder.id));
+    dismissReminder(reminder.id);
   }, []);
 
   const handleHangoutCalendarPress = useCallback((reminder: Reminder) => {
-    setDismissedReminders((prev) => new Set(prev).add(reminder.id));
+    dismissReminder(reminder.id);
     router.push({
       pathname: "/create-hangout",
       params: { contactName: reminder.contactName },

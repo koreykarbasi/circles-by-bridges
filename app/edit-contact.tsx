@@ -195,9 +195,9 @@ export default function EditContactScreen() {
         {
           text: "Remove",
           style: "destructive",
-          onPress: async () => {
-            await deleteContact(contact.id);
+          onPress: () => {
             router.back();
+            deleteContact(contact.id).catch(() => {});
           },
         },
       ],
