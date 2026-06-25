@@ -169,21 +169,25 @@ export default function EditContactScreen() {
     setSaving(true);
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
 
-    await updateContact({
-      ...contact,
-      name: name.trim(),
-      circleLevel,
-      interests: selectedInterests,
-      labels: selectedLabels,
-      birthday: birthday.trim() || undefined,
-      notes: notes.trim() || undefined,
-      phone: phone.trim() || undefined,
-      email: email.trim() || undefined,
-      photoUri,
-      customReminders,
-    });
-
-    router.back();
+    try {
+      await updateContact({
+        ...contact,
+        name: name.trim(),
+        circleLevel,
+        interests: selectedInterests,
+        labels: selectedLabels,
+        birthday: birthday.trim() || undefined,
+        notes: notes.trim() || undefined,
+        phone: phone.trim() || undefined,
+        email: email.trim() || undefined,
+        photoUri,
+        customReminders,
+      });
+      router.back();
+    } catch (err) {
+      setSaving(false);
+      Alert.alert("Could not save", "Something went wrong. Please try again.");
+    }
   };
 
   const handleDelete = () => {
