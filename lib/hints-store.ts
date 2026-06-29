@@ -5,6 +5,7 @@ import { useState, useEffect, useCallback } from "react";
 const STORAGE_KEY = "bridges_hints_seen_v1";
 
 export type HintId =
+  | "home_profile"
   | "home_reminders"
   | "home_suggestions"
   | "circles_viz"
@@ -17,6 +18,8 @@ export type HintId =
   | "edit_labels";
 
 export const HINT_TEXT: Record<HintId, string> = {
+  home_profile:
+    "Your profile lives up here — add a photo, view your circle stats, or replay the walkthrough anytime.",
   home_reminders:
     "Reminders are your priority to-dos — birthdays, overdue check-ins, and hangout nudges. Tap the checkmark to cross each one off.",
   home_suggestions:

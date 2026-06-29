@@ -129,7 +129,7 @@ export default function HomeScreen() {
   const [copiedToast, setCopiedToast] = useState(false);
   const copiedToastAnim = useRef(new Animated.Value(0)).current;
   const copiedToastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const [activeHint, dismissHint] = useSequentialHints(["home_reminders", "home_suggestions"]);
+  const [activeHint, dismissHint] = useSequentialHints(["home_profile", "home_reminders", "home_suggestions"]);
   const [phoneSheet, setPhoneSheet] = useState<{ suggestion: Suggestion; mode: "sms" | "call" } | null>(null);
 
   const { data: hangouts } = useQuery<HangoutPlan[]>({
@@ -622,7 +622,7 @@ export default function HomeScreen() {
           <ActivityIndicator size="large" color={Colors.primary} />
         </View>
       ) : (
-        <CirclesVisualization contacts={contacts} user={user} />
+        <CirclesVisualization contacts={contacts} user={user} onCenterPress={() => router.push("/profile")} />
       )}
 
       <Pressable
@@ -843,7 +843,20 @@ export default function HomeScreen() {
       visible={!!activeHint}
       text={activeHint ? HINT_TEXT[activeHint] : ""}
       onDismiss={dismissHint}
-      bottomOffset={80}
+      arrowSide={
+        activeHint === "home_profile" ? "top"
+        : activeHint === "home_reminders" ? "top"
+        : "bottom"
+      }
+      anchorTop={
+        activeHint === "home_profile" ? insets.top + 72
+        : activeHint === "home_reminders" ? insets.top + 200
+        : undefined
+      }
+      anchorBottom={
+        activeHint === "home_suggestions" ? 95
+        : undefined
+      }
     />
     </View>
   );

@@ -19,6 +19,7 @@ import type { AuthUser } from "@/lib/types";
 interface CirclesVisualizationProps {
   contacts: Contact[];
   user?: AuthUser | null;
+  onCenterPress?: () => void;
 }
 
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
@@ -129,7 +130,7 @@ function useRingRotation(speed: number) {
   return rotation;
 }
 
-export function CirclesVisualization({ contacts, user }: CirclesVisualizationProps) {
+export function CirclesVisualization({ contacts, user, onCenterPress }: CirclesVisualizationProps) {
   const c1 = contacts.filter((c) => c.circleLevel === 1);
   const c2 = contacts.filter((c) => c.circleLevel === 2);
   const c3All = contacts.filter((c) => c.circleLevel === 3);
@@ -245,7 +246,14 @@ export function CirclesVisualization({ contacts, user }: CirclesVisualizationPro
         ))}
 
         {contacts.length > 0 ? (
-          <View style={[styles.centerIcon, { width: centerSize, height: centerSize, borderRadius: centerSize / 2 }]}>
+          <Pressable
+            onPress={onCenterPress}
+            style={({ pressed }) => [
+              styles.centerIcon,
+              { width: centerSize, height: centerSize, borderRadius: centerSize / 2 },
+              onCenterPress && pressed && { opacity: 0.75 },
+            ]}
+          >
             {user?.profilePhotoUri ? (
               <Animated.Image
                 source={{ uri: user.profilePhotoUri }}
@@ -254,7 +262,7 @@ export function CirclesVisualization({ contacts, user }: CirclesVisualizationPro
             ) : (
               <Ionicons name="person" size={20} color={Colors.primaryLight} />
             )}
-          </View>
+          </Pressable>
         ) : (
           <View style={styles.emptyCenter}>
             <Text style={styles.emptyText}>Add people to your circles</Text>
