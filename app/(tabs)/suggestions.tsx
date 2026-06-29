@@ -189,7 +189,7 @@ export default function SuggestionsScreen() {
       return isInCooldown(c.circleLevel as 1 | 2 | 3, daysSinceLastSug);
     };
 
-    const base = filtered.filter((c) => !isSessionSkipped(c));
+    const base = filtered.filter((c) => !isSessionSkipped(c) && !completedIds.has(c.id));
     const eligible = base.filter((c) => !inCooldown(c));
 
     const rankContact = (c: typeof contacts[0]) => {
@@ -217,7 +217,7 @@ export default function SuggestionsScreen() {
     return [...rankedEligible, ...rankedCooldown]
       .slice(0, SUGGESTION_MAX)
       .map((x) => x.contact);
-  }, [contacts, filterCircle, lastSuggestedDates, elevationMap, sessionSkippedIds]);
+  }, [contacts, filterCircle, lastSuggestedDates, elevationMap, sessionSkippedIds, completedIds]);
 
   useEffect(() => {
     const next: Record<string, number> = {};
@@ -331,6 +331,7 @@ export default function SuggestionsScreen() {
         markHangout(contactId);
       }
       dismissSuggestion(contactId);
+      markContactSuggested(contactId).catch(() => {});
     },
     [markContacted, markHangout, cardPrompts],
   );
