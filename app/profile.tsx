@@ -138,6 +138,44 @@ export default function ProfileScreen() {
     );
   };
 
+  const handleDeleteAccount = () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
+    Alert.alert(
+      "Delete Account",
+      "This will permanently delete your account and all your data — contacts, hangouts, and reminders. This cannot be undone.",
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Delete Account",
+          style: "destructive",
+          onPress: () => {
+            // Second confirmation
+            Alert.alert(
+              "Are you sure?",
+              "All your data will be gone forever.",
+              [
+                { text: "Cancel", style: "cancel" },
+                {
+                  text: "Yes, Delete Everything",
+                  style: "destructive",
+                  onPress: async () => {
+                    try {
+                      await apiRequest("DELETE", "/api/auth/account");
+                      await logout();
+                      router.replace("/auth");
+                    } catch {
+                      Alert.alert("Error", "Failed to delete account. Please try again.");
+                    }
+                  },
+                },
+              ],
+            );
+          },
+        },
+      ],
+    );
+  };
+
   const handleChangePassword = async () => {
     setChangePwError("");
     setChangePwSuccess(false);
@@ -453,6 +491,20 @@ export default function ProfileScreen() {
             <View style={styles.menuContent}>
               <Text style={[styles.menuTitle, { color: Colors.danger }]}>Sign Out</Text>
               <Text style={styles.menuDesc}>{user?.email}</Text>
+            </View>
+            <Ionicons name="chevron-forward" size={18} color={Colors.textTertiary} />
+          </Pressable>
+          <Pressable
+            onPress={handleDeleteAccount}
+            style={({ pressed }) => [styles.menuItem, pressed && { opacity: 0.7 }]}
+            testID="delete-account-button"
+          >
+            <View style={[styles.menuIcon, { backgroundColor: Colors.danger + "10" }]}>
+              <Ionicons name="trash-outline" size={20} color={Colors.danger} />
+            </View>
+            <View style={styles.menuContent}>
+              <Text style={[styles.menuTitle, { color: Colors.danger }]}>Delete Account</Text>
+              <Text style={styles.menuDesc}>Permanently remove your account and all data</Text>
             </View>
             <Ionicons name="chevron-forward" size={18} color={Colors.textTertiary} />
           </Pressable>

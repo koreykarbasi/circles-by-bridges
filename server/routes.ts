@@ -482,6 +482,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
     });
   });
 
+  app.delete("/api/auth/account", requireAuth, async (req, res) => {
+    try {
+      const userId = req.session.userId!;
+      await storage.deleteUser(userId);
+      // Session rows are already wiped inside deleteUser; destroy the in-memory session too.
+      req.session.destroy(() => {
+        res.json({ success: true });
+      });
+    } catch (err) {
+      console.error("Delete account error:", err);
+      res.status(500).json({ message: "Failed to delete account. Please try again." });
+    }
+  });
+
   app.get("/api/auth/me", async (req, res) => {
     if (!req.session.userId) {
       return res.status(401).json({ message: "Not authenticated" });

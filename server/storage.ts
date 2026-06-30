@@ -39,6 +39,7 @@ export interface IStorage {
   getPasswordResetTokenByHash(tokenHash: string): Promise<PasswordResetToken | undefined>;
   markPasswordResetTokenUsed(id: string): Promise<void>;
   deleteExpiredPasswordResetTokens(): Promise<void>;
+  deleteUser(id: string): Promise<boolean>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -232,6 +233,46 @@ export class DatabaseStorage implements IStorage {
           eq(passwordResetTokens.usedAt, null as any)
         )
       );
+  }
+
+  async deleteUser(id: string): Promise<boolean> {
+    // Delete in FK-safe order: child rows first, then the user row.
+    // Use raw SQL so we can do it in a single transaction without needing
+    // Drizzle to know about every implicit dependency.
+    const { pool } = await import("./db");
+    const client = await pool.connect();
+    try {
+      await client.query("BEGIN");
+      // 1. Password reset tokens
+      await client.query("DELETE FROM password_reset_tokens WHERE user_id = $1", [id]);
+      // 2. Notification log
+      await client.query("DELETE FROM notification_log WHERE user_id = $1", [id]);
+      // 3. Hangout votes (via plans belonging to this user)
+      await client.query(
+        "DELETE FROM hangout_votes WHERE plan_id IN (SELECT id FROM hangout_plans WHERE user_id = $1)",
+        [id],
+      );
+      // 4. Hangout options
+      await client.query(
+        "DELETE FROM hangout_options WHERE plan_id IN (SELECT id FROM hangout_plans WHERE user_id = $1)",
+        [id],
+      );
+      // 5. Hangout plans
+      await client.query("DELETE FROM hangout_plans WHERE user_id = $1", [id]);
+      // 6. Contacts
+      await client.query("DELETE FROM contacts WHERE user_id = $1", [id]);
+      // 7. Sessions
+      await client.query("DELETE FROM session WHERE sess->>'userId' = $1", [id]);
+      // 8. User row
+      const result = await client.query("DELETE FROM users WHERE id = $1", [id]);
+      await client.query("COMMIT");
+      return (result.rowCount ?? 0) > 0;
+    } catch (err) {
+      await client.query("ROLLBACK");
+      throw err;
+    } finally {
+      client.release();
+    }
   }
 }
 
