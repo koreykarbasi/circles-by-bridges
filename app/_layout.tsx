@@ -21,6 +21,7 @@ import Colors from "@/constants/colors";
 import * as Notifications from "expo-notifications";
 import Constants from "expo-constants";
 import { apiRequest } from "@/lib/query-client";
+import { scheduleSuggestionNudge } from "@/lib/reminder-notifications";
 
 SplashScreen.preventAutoHideAsync();
 
@@ -90,6 +91,13 @@ function RootLayoutNav() {
   // Using user !== null as a shortcut would redirect authenticated users away from
   // onboarding before they finish adding their contacts.
   const onboardingDone = hasCompletedOnboarding === true && !isReplayRequested;
+
+  // Startup suggestion-nudge guarantee: schedule as soon as auth + onboarding are resolved
+  // so the daily nudge notification is always set on cold start, even before contacts load.
+  useEffect(() => {
+    if (!user || !onboardingDone || Platform.OS === "web") return;
+    scheduleSuggestionNudge(user.suggestionNotifFrequency, user.suggestionNotifTime).catch(() => {});
+  }, [user?.id, user?.suggestionNotifFrequency, user?.suggestionNotifTime, onboardingDone]);
 
   // Push notifications gate: only register after both onboarding and auth are complete.
   useEffect(() => {

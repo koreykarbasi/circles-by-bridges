@@ -150,9 +150,19 @@ export default function HomeScreen() {
   useEffect(() => {
     if (contacts.length === 0 || Platform.OS === "web") return;
     scheduleReminderNotifications(contacts).catch(() => {});
-    scheduleSuggestionNudge(user?.suggestionNotifFrequency, user?.suggestionNotifTime).catch(() => {});
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [contactsScheduleKey, user?.suggestionNotifFrequency, user?.suggestionNotifTime]);
+  }, [contactsScheduleKey]);
+
+  // Startup-once guarantee: run the reminder scheduler after the first contacts fetch
+  // completes (whether it returned data or failed), so stale notifications are always
+  // refreshed on cold start even if the fetch is slow or contacts are temporarily empty.
+  const startupScheduledRef = useRef(false);
+  useEffect(() => {
+    if (Platform.OS === "web" || isLoading || startupScheduledRef.current) return;
+    startupScheduledRef.current = true;
+    scheduleReminderNotifications(contacts).catch(() => {});
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isLoading]);
 
   const appStateRef = useRef<AppStateStatus>(AppState.currentState);
   const contactsRef = useRef(contacts);

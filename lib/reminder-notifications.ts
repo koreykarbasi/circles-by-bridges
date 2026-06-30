@@ -93,15 +93,40 @@ function reminderToNotifMessage(reminder: Reminder): LocalNotifMessage | null {
   };
 }
 
+// Module-level serialization: ensures concurrent callers don't race on the
+// AsyncStorage read-then-write inside scheduleReminderNotifications.
+let reminderScheduleInFlight: Promise<void> | null = null;
+
 /**
  * Schedules local notifications for all active reminders (birthday milestones,
  * custom date reminders, overdue check-ins, overdue hangouts). Derives notifications
  * from the same logic as generateReminders() in lib/reminders.ts so thresholds are
  * always in sync. Mirrors the elevation pattern: deduplicates via AsyncStorage,
  * caps at MAX_REMINDER_NOTIFS, cancels stale entries. No-ops on web.
+ *
+ * Concurrent calls are serialized: if a call is already in progress, the new call
+ * waits for it to finish and then runs itself so it uses the freshest contacts data.
  */
 export async function scheduleReminderNotifications(contacts: Contact[]): Promise<void> {
   if (Platform.OS === "web") return;
+
+  // If there's already a scheduling run in progress, wait for it to finish first,
+  // then run ourselves (do NOT skip — we may carry newer contacts data).
+  if (reminderScheduleInFlight) {
+    await reminderScheduleInFlight;
+  }
+
+  let resolve!: () => void;
+  reminderScheduleInFlight = new Promise<void>((res) => { resolve = res; });
+  try {
+    await _scheduleReminderNotificationsImpl(contacts);
+  } finally {
+    reminderScheduleInFlight = null;
+    resolve();
+  }
+}
+
+async function _scheduleReminderNotificationsImpl(contacts: Contact[]): Promise<void> {
 
   const targetTime = nextNineAm();
   const targetHour = hourKey(targetTime);
