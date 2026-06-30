@@ -1,0 +1,53 @@
+Privacy Policy for Bridges
+
+Last updated: [DATE]
+
+Bridges ("we," "us," "our") helps you maintain and grow your personal relationships.
+This policy explains what information we collect and how we use it.
+
+INFORMATION WE COLLECT
+- Account information: your email address and password (stored as a secure
+  one-way hash, never in plain text).
+- Profile information: your name and profile photo, if you choose to add one.
+- Contact information you enter: names, phone numbers, email addresses, photos,
+  birthdays, notes, interests, and relationship labels for the people you add
+  to your circles. This may include information about people who do not use
+  Bridges themselves.
+- Hangout planning data: titles, descriptions, proposed times/activities, and
+  votes submitted by you or people you invite (including invitees who do not
+  have a Bridges account, identified only by the name they enter).
+- Device information: a push notification token, if you enable notifications,
+  and your device timezone, used only to deliver timely reminders.
+
+HOW WE USE YOUR INFORMATION
+We use your information solely to operate the app: to show you your circles,
+remind you to reach out to people, plan hangouts, and let you log in securely.
+We do not sell your data, and we do not use it for advertising.
+
+THIRD-PARTY SERVICES
+We use the following service providers to operate Bridges:
+- Resend, to deliver transactional emails (such as password resets).
+- Apple, to deliver push notifications and to support Sign in with Apple.
+These providers only receive the minimum information needed to perform their
+function and are not permitted to use your data for their own purposes.
+
+DATA STORAGE & SECURITY
+Your data is stored on secure servers. Passwords are hashed with bcrypt and
+are never stored or transmitted in plain text.
+
+YOUR RIGHTS
+You can edit or delete any contact or hangout you've created at any time within
+the app. You can request deletion of your entire account and all associated
+data by [contacting us at koushyar23@gmail.com / using the Delete Account
+option in Settings]. [Update this line once the in-app delete flow ships.]
+
+CHILDREN'S PRIVACY
+Bridges is not intended for children under 13, and we do not knowingly collect
+information from children under 13.
+
+CHANGES TO THIS POLICY
+We may update this policy from time to time. We'll update the "Last updated"
+date above when we do.
+
+CONTACT US
+Questions about this policy? Email us at koushyar23@gmail.com.

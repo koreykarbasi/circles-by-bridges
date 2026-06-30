@@ -207,6 +207,16 @@ function configureExpoAndLanding(app: express.Application) {
     ? fs.readFileSync(resetPasswordTemplatePath, "utf-8")
     : null;
 
+  const privacyPolicyTemplatePath = path.resolve(
+    process.cwd(),
+    "server",
+    "templates",
+    "privacy-policy.html",
+  );
+  const privacyPolicyTemplate = fs.existsSync(privacyPolicyTemplatePath)
+    ? fs.readFileSync(privacyPolicyTemplatePath, "utf-8")
+    : null;
+
   app.use((req: Request, res: Response, next: NextFunction) => {
     if (req.path.startsWith("/api")) {
       return next();
@@ -215,6 +225,11 @@ function configureExpoAndLanding(app: express.Application) {
     if (req.path === "/reset-password" && resetPasswordTemplate) {
       res.setHeader("Content-Type", "text/html; charset=utf-8");
       return res.status(200).send(resetPasswordTemplate);
+    }
+
+    if (req.path === "/privacy" && privacyPolicyTemplate) {
+      res.setHeader("Content-Type", "text/html; charset=utf-8");
+      return res.status(200).send(privacyPolicyTemplate);
     }
 
     if (req.path.startsWith("/vote/") && votePageTemplate) {
