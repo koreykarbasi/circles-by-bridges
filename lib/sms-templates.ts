@@ -571,6 +571,21 @@ export function getTextCopyMessage(
     if (template) {
       return template.replace(/\[Name\]/g, firstName);
     }
+
+    // If the prompt is already phrased as a direct message to send, use a
+    // generic warm opener rather than falling through to interest-based text
+    // (which can produce completely unrelated content).
+    const lowerPrompt = prompt.toLowerCase();
+    if (
+      lowerPrompt.startsWith("send") &&
+      (lowerPrompt.includes("a message") || lowerPrompt.includes("a text"))
+    ) {
+      return pick([
+        `Hey ${firstName}! Randomly thought of you today — hope things are going well.`,
+        `Hey ${firstName}! Just wanted to reach out and say hi. How have you been?`,
+        `Hey ${firstName}! Thought of you today — would love to catch up sometime.`,
+      ]);
+    }
   }
 
   const opener = pick([

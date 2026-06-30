@@ -39,10 +39,29 @@ export async function loadSyncedPrompts(): Promise<void> {
   return syncFetchPromise;
 }
 
+const NEGATIVE_PROMPT_PATTERNS = [
+  /i know things have been/i,
+  /i['']m here if you want to talk/i,
+  /things have been a lot/i,
+  /been going through a hard time/i,
+  /struggling lately/i,
+  /tough time lately/i,
+  /here for you (if|whenever) (you need|things get)/i,
+  /reach out (if|when) things get heavy/i,
+];
+
+function isNegativePrompt(text: string): boolean {
+  return NEGATIVE_PROMPT_PATTERNS.some((re) => re.test(text));
+}
+
+function filterPrompts(prompts: string[]): string[] {
+  return prompts.filter((p) => !isNegativePrompt(p));
+}
+
 function getSyncedList(key: keyof SyncedPromptsData, fallback: string[]): string[] {
   if (syncedData && Array.isArray(syncedData[key])) {
     const synced = syncedData[key] as string[];
-    if (synced.length > 0) return synced;
+    if (synced.length > 0) return filterPrompts(synced);
   }
   return fallback;
 }
@@ -50,7 +69,13 @@ function getSyncedList(key: keyof SyncedPromptsData, fallback: string[]): string
 function getSyncedRecord(key: "labelPrompts" | "interestPrompts", fallback: Record<string, string[]>): Record<string, string[]> {
   if (syncedData && syncedData[key] && typeof syncedData[key] === "object") {
     const synced = syncedData[key] as Record<string, string[]>;
-    if (Object.keys(synced).length > 0) return synced;
+    if (Object.keys(synced).length > 0) {
+      const filtered: Record<string, string[]> = {};
+      for (const [k, v] of Object.entries(synced)) {
+        filtered[k] = filterPrompts(v);
+      }
+      return filtered;
+    }
   }
   return fallback;
 }

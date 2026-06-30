@@ -5,7 +5,7 @@ const SCHEDULER_KEY = "bridges_suggestion_scheduler_v2";
 
 export const CIRCLE_COOLDOWN_DAYS: Record<1 | 2 | 3, number> = {
   1: 7,
-  2: 7,
+  2: 3,
   3: 15,
 };
 
@@ -114,10 +114,10 @@ export function scoreSuggestion(
 ): number {
   let score = 0;
 
-  // Narrower gaps so Circle 3 can naturally compete after a short cooldown
-  if (circleLevel === 2) score += 1300;
-  else if (circleLevel === 1) score += 1200;
-  else score += 1100;
+  // C1 = highest priority; C2 gets shorter cooldown (3d) so appears more often, not higher base score
+  if (circleLevel === 1) score += 1300;
+  else if (circleLevel === 2) score += 1100;
+  else score += 900;
 
   // Cooldown bonus: rewards contacts not recently surfaced in the suggestions UI.
   // Capped lower so it doesn't dominate over real-world recency.

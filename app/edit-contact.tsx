@@ -70,6 +70,7 @@ export default function EditContactScreen() {
   const [photoUri, setPhotoUri] = useState<string | null>(contact?.photoUri ?? null);
   const [saving, setSaving] = useState(false);
   const [showBirthdayPicker, setShowBirthdayPicker] = useState(focusBirthday === "true");
+  const [selectedChip, setSelectedChip] = useState<string | null>(null);
   const [customReminders, setCustomReminders] = useState<CustomReminder[]>(
     (contact?.customReminders ?? []).filter((r) => r && r.label && r.date)
   );
@@ -215,14 +216,14 @@ export default function EditContactScreen() {
     { label: "Earlier this year", daysAgo: 120 },
   ];
 
-  const handleQuickContact = useCallback(async (label: string, daysAgo: number) => {
+  const handleQuickContact = useCallback((label: string, daysAgo: number) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    setSelectedChip(label);
     const date = new Date(Date.now() - daysAgo * 24 * 60 * 60 * 1000);
-    try {
-      await markContacted(contact.id, date, label);
-    } catch {
+    markContacted(contact.id, date, label).catch(() => {
+      setSelectedChip(null);
       Alert.alert("Could not save", "Failed to update last contacted. Please try again.");
-    }
+    });
   }, [contact.id, markContacted]);
 
   const webTopInset = Platform.OS === "web" ? 67 : 0;
@@ -283,12 +284,12 @@ export default function EditContactScreen() {
           <View style={styles.contactMetaHeader}>
             <Text style={styles.lastContactLabel}>Last contacted</Text>
             <Text style={styles.lastContactValue}>
-              {contact.lastContactedLabel ?? formatLastContacted(contact.lastContacted ?? undefined)}
+              {selectedChip ?? (contact.lastContactedLabel ?? formatLastContacted(contact.lastContacted ?? undefined))}
             </Text>
           </View>
           <View style={styles.quickContactRow}>
             {QUICK_CONTACT_CHIPS.map(({ label, daysAgo }) => {
-              const currentLabel = contact.lastContactedLabel ?? formatLastContacted(contact.lastContacted ?? undefined);
+              const currentLabel = selectedChip ?? (contact.lastContactedLabel ?? formatLastContacted(contact.lastContacted ?? undefined));
               const isSelected = currentLabel === label;
               return (
                 <Pressable
