@@ -128,12 +128,17 @@ export function scoreSuggestion(
     score += Math.min(daysSinceLastSuggested * 12, 150);
   }
 
+  // Fresh-contact penalty: contacts spoken to very recently don't need attention.
+  // Kicks in only within a circle-appropriate window; tapers linearly to zero at
+  // the window edge so there's no cliff. C2 contacted today loses 250pts — a C3
+  // not spoken to in 10+ days will rank above them.
+  const FRESH_THRESHOLD: Record<1 | 2 | 3, number> = { 1: 2, 2: 5, 3: 10 };
+  const freshThreshold = FRESH_THRESHOLD[circleLevel];
+  if (daysSinceContact !== null && daysSinceContact < freshThreshold) {
+    score -= (freshThreshold - daysSinceContact) * 50;
+  }
+
   // Recency bonus: primary signal — how long since you actually spoke to this person.
-  // Weighted 6× so neglected contacts decisively outrank recently-contacted ones
-  // across circle boundaries. Math: C2 base gap over C3 is 150pts; at ×6 a C3
-  // contacted 26+ days ago scores higher than a C2 contacted today (0 days).
-  // C2 contacted 7 days ago (score +42) still edges C3 at 26 days (+156) — so
-  // the "last week C2 > last month C3" preference is preserved.
   if (daysSinceContact !== null) {
     score += Math.min(daysSinceContact * 6, 450);
   } else {

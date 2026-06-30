@@ -609,7 +609,7 @@ export function getActionType(circleLevel: 1 | 2 | 3, prompt: string): "call" | 
   }
   if (
     lower.includes("hangout") || lower.includes("hang out") ||
-    lower.includes("plan") || lower.includes("together") ||
+    lower.includes("plan") ||
     lower.includes("invite") || lower.includes("date") ||
     lower.includes("trip") || lower.includes("concert") ||
     lower.includes("game night") || lower.includes("hike") ||

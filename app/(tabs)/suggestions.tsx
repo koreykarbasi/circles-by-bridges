@@ -50,7 +50,16 @@ function buildSuggestion(contact: Contact): GeneratedSuggestion {
   );
 
   let type = getActionType(contact.circleLevel as 1 | 2 | 3, prompt);
-  if (contact.circleLevel === 3 && (type === "call" || type === "hangout")) type = "text";
+  if (contact.circleLevel === 3 && type === "call") type = "text";
+  // Hangout button only when lastHangout threshold is exceeded — mirrors the
+  // hangout-quickpick reminder logic so both surfaces fire at the same threshold.
+  if (type === "hangout") {
+    const daysSinceHangout = getDaysSince(contact.lastHangout ?? undefined);
+    const hangoutThreshold = HANGOUT_THRESHOLDS[contact.circleLevel as 1 | 2 | 3];
+    if (daysSinceHangout !== null && daysSinceHangout < hangoutThreshold) {
+      type = "text";
+    }
+  }
 
   return {
     contact,
