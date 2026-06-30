@@ -1,5 +1,5 @@
 import React, { useState, useCallback, useMemo, useEffect, useRef } from "react";
-import { View, Text, StyleSheet, ScrollView, Platform, RefreshControl, Pressable, Image, Animated, Linking, ActivityIndicator, PanResponder } from "react-native";
+import { View, Text, StyleSheet, ScrollView, Platform, RefreshControl, Pressable, Image, Animated, Linking, ActivityIndicator, PanResponder, AppState, AppStateStatus } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import Colors from "@/constants/colors";
@@ -153,6 +153,29 @@ export default function HomeScreen() {
     scheduleSuggestionNudge(user?.suggestionNotifFrequency, user?.suggestionNotifTime).catch(() => {});
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [contactsScheduleKey, user?.suggestionNotifFrequency, user?.suggestionNotifTime]);
+
+  const appStateRef = useRef<AppStateStatus>(AppState.currentState);
+  const contactsRef = useRef(contacts);
+  contactsRef.current = contacts;
+  const userRef = useRef(user);
+  userRef.current = user;
+
+  useEffect(() => {
+    if (Platform.OS === "web") return;
+    const subscription = AppState.addEventListener("change", (nextState: AppStateStatus) => {
+      const prev = appStateRef.current;
+      appStateRef.current = nextState;
+      if (nextState === "active" && (prev === "background" || prev === "inactive")) {
+        const currentContacts = contactsRef.current;
+        const currentUser = userRef.current;
+        if (currentContacts.length > 0) {
+          scheduleReminderNotifications(currentContacts).catch(() => {});
+          scheduleSuggestionNudge(currentUser?.suggestionNotifFrequency, currentUser?.suggestionNotifTime).catch(() => {});
+        }
+      }
+    });
+    return () => subscription.remove();
+  }, []);
 
   useFocusEffect(
     useCallback(() => {
