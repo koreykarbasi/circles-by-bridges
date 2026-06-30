@@ -129,9 +129,13 @@ export function scoreSuggestion(
   }
 
   // Recency bonus: primary signal — how long since you actually spoke to this person.
-  // Weighted 2× with a higher cap so neglected contacts rise naturally.
+  // Weighted 6× so neglected contacts decisively outrank recently-contacted ones
+  // across circle boundaries. Math: C2 base gap over C3 is 150pts; at ×6 a C3
+  // contacted 26+ days ago scores higher than a C2 contacted today (0 days).
+  // C2 contacted 7 days ago (score +42) still edges C3 at 26 days (+156) — so
+  // the "last week C2 > last month C3" preference is preserved.
   if (daysSinceContact !== null) {
-    score += Math.min(daysSinceContact * 2, 250);
+    score += Math.min(daysSinceContact * 6, 450);
   } else {
     score += 40;
   }

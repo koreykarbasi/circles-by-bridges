@@ -345,6 +345,7 @@ export default function SuggestionsScreen() {
         markHangout(contactId);
       }
       dismissSuggestion(contactId);
+      setSessionSkippedIds((prev) => new Set(prev).add(contactId));
       markContactSuggested(contactId).catch(() => {});
     },
     [markContacted, markHangout, cardPrompts],
