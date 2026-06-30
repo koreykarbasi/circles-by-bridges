@@ -530,7 +530,9 @@ export default function HomeScreen() {
       const { suggestion, mode } = phoneSheet;
       setPhoneSheet(null);
       if (shouldSave) {
-        savePhoneNumber(suggestion.contactId, phone, extra).catch(() => {});
+        try {
+          await savePhoneNumber(suggestion.contactId, phone, extra);
+        } catch {}
       }
       if (mode === "sms") {
         await openSmsForSuggestion(suggestion, phone);

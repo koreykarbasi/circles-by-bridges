@@ -120,42 +120,28 @@ export function ContactsProvider({ children }: { children: ReactNode }) {
   }, [contacts, fetchContacts]);
 
   const savePhoneNumberFn = useCallback(async (id: string, phone: string, extra?: { birthday?: string; photoUri?: string }) => {
-    const existing = contacts.find((c) => c.id === id);
-    if (!existing) return;
-    const previous = { phone: existing.phone, birthday: existing.birthday, photoUri: existing.photoUri };
-    const newBirthday = extra?.birthday && !existing.birthday ? extra.birthday : existing.birthday;
-    const newPhotoUri = extra?.photoUri && !existing.photoUri ? extra.photoUri : existing.photoUri;
+    const previousPhone = contacts.find((c) => c.id === id)?.phone ?? null;
     setContacts((prev) =>
-      prev.map((c) => (c.id === id ? { ...c, phone, birthday: newBirthday ?? null, photoUri: newPhotoUri ?? null } : c)),
+      prev.map((c) => (c.id === id ? { ...c, phone } : c)),
     );
     try {
-      await apiRequest("PUT", `/api/contacts/${id}`, {
-        name: existing.name,
-        circleLevel: existing.circleLevel,
-        interests: existing.interests,
-        labels: existing.labels,
-        birthday: newBirthday,
-        lastContacted: existing.lastContacted,
-        lastHangout: existing.lastHangout,
-        notes: existing.notes,
+      const res = await apiRequest("PUT", `/api/contacts/${id}/phone`, {
         phone,
-        email: existing.email,
-        avatarColor: existing.avatarColor,
-        photoUri: newPhotoUri,
-        customReminders: existing.customReminders ?? [],
+        birthday: extra?.birthday,
+        photoUri: extra?.photoUri,
       });
-      fetchContacts();
-    } catch (err) {
+      const updated = await res.json() as Contact;
       setContacts((prev) =>
-        prev.map((c) =>
-          c.id === id
-            ? { ...c, phone: previous.phone ?? null, birthday: previous.birthday ?? null, photoUri: previous.photoUri ?? null }
-            : c,
-        ),
+        prev.map((c) => (c.id === id ? { ...c, ...updated } : c)),
+      );
+    } catch (err) {
+      console.error("Failed to save phone number:", err);
+      setContacts((prev) =>
+        prev.map((c) => (c.id === id ? { ...c, phone: previousPhone } : c)),
       );
       throw err;
     }
-  }, [contacts, fetchContacts]);
+  }, [contacts]);
 
   const markHangoutFn = useCallback(async (id: string, date?: Date, label?: string) => {
     const ts = (date ?? new Date()).toISOString();

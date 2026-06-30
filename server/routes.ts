@@ -810,6 +810,36 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  app.put("/api/contacts/:id/phone", requireAuth, async (req, res) => {
+    try {
+      const { id } = req.params as { id: string };
+      const existing = await storage.getContact(id);
+      if (!existing || existing.userId !== req.session.userId) {
+        return res.status(404).json({ message: "Contact not found" });
+      }
+      const body = req.body as Record<string, unknown>;
+      const phone = body.phone;
+      if (!phone || typeof phone !== "string" || !phone.trim()) {
+        return bad(res, "Phone number is required");
+      }
+      const updates: Record<string, unknown> = { phone: phone.trim() };
+      const incomingBirthday = typeof body.birthday === "string" ? body.birthday.trim() || null : null;
+      if (incomingBirthday && !existing.birthday) {
+        updates.birthday = incomingBirthday;
+      }
+      if (typeof body.photoUri === "string" && body.photoUri && !existing.photoUri) {
+        if (body.photoUri.length <= MAX_PHOTO_CHARS) {
+          updates.photoUri = body.photoUri;
+        }
+      }
+      const contact = await storage.updateContact(id, updates as Partial<InsertContact>);
+      res.json(contact);
+    } catch (err) {
+      console.error("Error saving phone number:", err);
+      res.status(500).json({ message: "Failed to save phone number" });
+    }
+  });
+
   app.delete("/api/contacts/:id", requireAuth, async (req, res) => {
     try {
       const { id } = req.params as { id: string };
