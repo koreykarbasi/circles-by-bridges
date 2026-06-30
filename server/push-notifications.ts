@@ -187,12 +187,12 @@ function buildCustomReminderMessages(
 
 async function getRecentlySentContactIds(userId: string, types: string[]): Promise<Set<string>> {
   try {
-    const placeholders = types.map((_, i) => `$${i + 3}`).join(", ");
+    const placeholders = types.map((_, i) => `$${i + 2}`).join(", ");
     const result = await pool.query<{ contact_id: string }>(
       `SELECT DISTINCT contact_id FROM notification_log
        WHERE user_id = $1 AND sent_at > NOW() - INTERVAL '24 hours'
          AND (notif_type IS NULL OR notif_type IN (${placeholders}))`,
-      [userId, null, ...types],
+      [userId, ...types],
     );
     return new Set(result.rows.map((r) => r.contact_id));
   } catch {
@@ -723,6 +723,13 @@ export function scheduleDailyNotifications() {
     await sendSuggestionNudges().catch((err) => console.error("[push] Uncaught:", err));
     await sendProfileCompletionPushes().catch((err) => console.error("[push] Uncaught:", err));
   }
+
+  // Catch-up run ~15s after startup — fires immediately if a user's 9am/midnight window
+  // is currently open. Guards are inside sendDailyReminders/sendSuggestionNudges so this
+  // is always safe to call; it simply skips users outside their delivery window.
+  setTimeout(() => {
+    runHourly().catch((err) => console.error("[push] Startup catch-up error:", err));
+  }, 15_000);
 
   // First run at the top of the next hour, then every hour after that
   setTimeout(() => {

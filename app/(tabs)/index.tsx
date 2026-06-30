@@ -29,6 +29,7 @@ import { useQuery } from "@tanstack/react-query";
 import { getViewedTimestamps, hasUnreadVotes } from "@/lib/hangout-notifications";
 import { useSequentialHints, HINT_TEXT } from "@/lib/hints-store";
 import { HintTooltip } from "@/components/HintTooltip";
+import { scheduleReminderNotifications, scheduleSuggestionNudge } from "@/lib/reminder-notifications";
 
 const MAX_REMINDERS = 5;
 const MAX_SUGGESTIONS = 3;
@@ -141,6 +142,12 @@ export default function HomeScreen() {
   useEffect(() => {
     loadSyncedPrompts();
   }, []);
+
+  useEffect(() => {
+    if (contacts.length === 0 || Platform.OS === "web") return;
+    scheduleReminderNotifications(contacts).catch(() => {});
+    scheduleSuggestionNudge(user?.suggestionNotifFrequency, user?.suggestionNotifTime).catch(() => {});
+  }, [contacts.length, user?.suggestionNotifFrequency, user?.suggestionNotifTime]);
 
   useFocusEffect(
     useCallback(() => {
