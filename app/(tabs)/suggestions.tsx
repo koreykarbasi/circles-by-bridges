@@ -22,6 +22,8 @@ import { router, useFocusEffect } from "expo-router";
 import * as Haptics from "expo-haptics";
 import { useSequentialHints, HINT_TEXT } from "@/lib/hints-store";
 import { HintTooltip } from "@/components/HintTooltip";
+import { useAuth } from "@/lib/auth-context";
+import { scheduleReminderNotifications, scheduleSuggestionNudge } from "@/lib/reminder-notifications";
 
 interface GeneratedSuggestion {
   contact: Contact;
@@ -76,6 +78,7 @@ function deriveHangoutTitle(contactName: string, prompt: string): string {
 
 export default function SuggestionsScreen() {
   const insets = useSafeAreaInsets();
+  const { user } = useAuth();
   const { contacts, markContacted, markHangout, savePhoneNumber } = useContacts();
   const [filterCircle, setFilterCircle] = useState<1 | 2 | 3 | null>(null);
   const [refreshKey, setRefreshKey] = useState(0);
@@ -111,6 +114,17 @@ export default function SuggestionsScreen() {
       setElevatedContactTypes(suppressed);
     });
   }, []);
+
+  const contactsScheduleKey = contacts
+    .map((c) => `${c.id}:${c.circleLevel}:${c.birthday ?? ""}:${c.lastContacted ?? ""}:${c.lastHangout ?? ""}:${(c.customReminders ?? []).length}`)
+    .join("|");
+
+  useEffect(() => {
+    if (contacts.length === 0 || Platform.OS === "web") return;
+    scheduleReminderNotifications(contacts).catch(() => {});
+    scheduleSuggestionNudge(user?.suggestionNotifFrequency, user?.suggestionNotifTime).catch(() => {});
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [contactsScheduleKey, user?.suggestionNotifFrequency, user?.suggestionNotifTime]);
 
   useFocusEffect(
     useCallback(() => {

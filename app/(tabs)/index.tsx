@@ -143,11 +143,16 @@ export default function HomeScreen() {
     loadSyncedPrompts();
   }, []);
 
+  const contactsScheduleKey = contacts
+    .map((c) => `${c.id}:${c.circleLevel}:${c.birthday ?? ""}:${c.lastContacted ?? ""}:${c.lastHangout ?? ""}:${(c.customReminders ?? []).length}`)
+    .join("|");
+
   useEffect(() => {
     if (contacts.length === 0 || Platform.OS === "web") return;
     scheduleReminderNotifications(contacts).catch(() => {});
     scheduleSuggestionNudge(user?.suggestionNotifFrequency, user?.suggestionNotifTime).catch(() => {});
-  }, [contacts.length, user?.suggestionNotifFrequency, user?.suggestionNotifTime]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [contactsScheduleKey, user?.suggestionNotifFrequency, user?.suggestionNotifTime]);
 
   useFocusEffect(
     useCallback(() => {
