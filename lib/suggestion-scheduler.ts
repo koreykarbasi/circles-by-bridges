@@ -114,10 +114,11 @@ export function scoreSuggestion(
 ): number {
   let score = 0;
 
-  // C1 = highest priority; C2 gets shorter cooldown (3d) so appears more often, not higher base score
-  if (circleLevel === 1) score += 1300;
-  else if (circleLevel === 2) score += 1100;
-  else score += 900;
+  // C2 = most frequent (short 3d cooldown + highest base); C1 slightly above C3
+  // Gaps are narrow so recency/cooldown factors can easily override circle level
+  if (circleLevel === 2) score += 1150;
+  else if (circleLevel === 1) score += 1100;
+  else score += 1000;
 
   // Cooldown bonus: rewards contacts not recently surfaced in the suggestions UI.
   // Capped lower so it doesn't dominate over real-world recency.
