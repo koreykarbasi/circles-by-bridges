@@ -91,13 +91,14 @@ function buildReminderMessages(contact: ContactRow): PushMessage[] {
         });
       }
     }
-    // Check-in overdue: > 14 days
+    // Check-in overdue: > 17 days (in-app card shows at 14d; push fires 3 days later)
     const daysSinceContact = getDaysSince(contact.lastContacted);
-    if (daysSinceContact === null || daysSinceContact > 14) {
-      const body = daysSinceContact === null
-        ? "You haven't reached out yet"
-        : `${daysSinceContact} days since you last connected`;
-      messages.push({ title: `Check in with ${contact.name}`, body, contactId: contact.id });
+    if (daysSinceContact === null || daysSinceContact > 17) {
+      messages.push({
+        title: `Spoken to ${contact.name} lately?`,
+        body: `When was the last time you contacted ${contact.name}? Open the app to submit or get suggestions on what to say.`,
+        contactId: contact.id,
+      });
     }
     // Custom reminders: C1 advance at 30/14/7/day-of
     buildCustomReminderMessages(contact, [30, 14, 7, 0], messages);
@@ -110,10 +111,14 @@ function buildReminderMessages(contact: ContactRow): PushMessage[] {
         contactId: contact.id,
       });
     }
-    // Check-in overdue: > 45 days
+    // Check-in overdue: > 48 days (in-app card shows at 45d; push fires 3 days later)
     const daysSinceContact = getDaysSince(contact.lastContacted);
-    if (daysSinceContact !== null && daysSinceContact > 45) {
-      messages.push({ title: `Check in with ${contact.name}`, body: `${daysSinceContact} days since you last connected`, contactId: contact.id });
+    if (daysSinceContact !== null && daysSinceContact > 48) {
+      messages.push({
+        title: `Spoken to ${contact.name} lately?`,
+        body: `When was the last time you contacted ${contact.name}? Open the app to submit or get suggestions on what to say.`,
+        contactId: contact.id,
+      });
     }
     // Hangout overdue: > 60 days
     const daysSinceHangout = getDaysSince(contact.lastHangout);
@@ -124,10 +129,14 @@ function buildReminderMessages(contact: ContactRow): PushMessage[] {
     // Custom reminders: C2 advance at 7/day-of
     buildCustomReminderMessages(contact, [7, 0], messages);
   } else if (contact.circleLevel === 3) {
-    // Check-in overdue: > 75 days
+    // Check-in overdue: > 78 days (in-app card shows at 75d; push fires 3 days later)
     const daysSinceContact3 = getDaysSince(contact.lastContacted);
-    if (daysSinceContact3 !== null && daysSinceContact3 > 75) {
-      messages.push({ title: `Check in with ${contact.name}`, body: `${daysSinceContact3} days since you last connected`, contactId: contact.id });
+    if (daysSinceContact3 !== null && daysSinceContact3 > 78) {
+      messages.push({
+        title: `Spoken to ${contact.name} lately?`,
+        body: `When was the last time you contacted ${contact.name}? Open the app to submit or get suggestions on what to say.`,
+        contactId: contact.id,
+      });
     }
     // Custom reminders: C3 day-of only
     buildCustomReminderMessages(contact, [0], messages);
