@@ -180,7 +180,7 @@ export default function HomeScreen() {
         const currentUser = userRef.current;
         if (currentContacts.length > 0) {
           scheduleReminderNotifications(currentContacts).catch(() => {});
-          scheduleSuggestionNudge(currentUser?.suggestionNotifFrequency, currentUser?.suggestionNotifTime).catch(() => {});
+          scheduleSuggestionNudge(currentUser?.suggestionNotifFrequency, currentUser?.suggestionNotifTime, currentContacts).catch(() => {});
         }
       }
     });

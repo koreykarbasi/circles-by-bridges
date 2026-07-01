@@ -4,6 +4,8 @@ import * as Notifications from "expo-notifications";
 import type { Contact } from "./types";
 import { generateReminders } from "./reminders";
 import type { Reminder } from "./reminders";
+import { loadSchedulerData, getDaysSinceLastSuggestedSync, scoreSuggestion } from "./suggestion-scheduler";
+import { getDaysSince, getDaysUntilBirthday } from "./helpers";
 
 const REMINDER_NOTIFS_KEY = "bridges_reminder_notifs_v1";
 const SUGGESTION_NUDGE_KEY = "bridges_suggestion_nudge_v1";
@@ -183,17 +185,48 @@ async function _scheduleReminderNotificationsImpl(contacts: Contact[]): Promise<
   await saveReminderEntries(existing);
 }
 
+// Serialization lock for scheduleSuggestionNudge — same pattern as reminder
+// scheduling to prevent duplicate notifications when multiple tabs mount simultaneously.
+let nudgeScheduleInFlight: Promise<void> | null = null;
+
 /**
  * Schedules (or cancels) the daily suggestion nudge local notification.
  * Fires at 9am (morning) or 5pm (afternoon) based on user preference.
+ * Personalized with the top-scored suggestion contact's name when contacts are provided.
  * Skips if already scheduled for the same hour slot. No-ops on web.
+ *
+ * Only call this from ONE place (index.tsx) to avoid duplicate notifications.
+ * Concurrent calls are serialized via nudgeScheduleInFlight.
  */
 export async function scheduleSuggestionNudge(
   frequency: string | null | undefined,
   preferredTime: string | null | undefined,
+  contacts?: Contact[],
 ): Promise<void> {
   if (Platform.OS === "web") return;
 
+  // Serialize concurrent calls — both tabs used to call this simultaneously,
+  // causing a read-before-write race that produced two notifications.
+  if (nudgeScheduleInFlight) {
+    await nudgeScheduleInFlight;
+    return; // Let the first caller do the work; subsequent callers skip.
+  }
+
+  let resolve!: () => void;
+  nudgeScheduleInFlight = new Promise<void>((res) => { resolve = res; });
+  try {
+    await _scheduleSuggestionNudgeImpl(frequency, preferredTime, contacts);
+  } finally {
+    nudgeScheduleInFlight = null;
+    resolve();
+  }
+}
+
+async function _scheduleSuggestionNudgeImpl(
+  frequency: string | null | undefined,
+  preferredTime: string | null | undefined,
+  contacts?: Contact[],
+): Promise<void> {
   if (!frequency || frequency === "off") {
     const raw = await AsyncStorage.getItem(SUGGESTION_NUDGE_KEY);
     if (raw) {
@@ -221,13 +254,39 @@ export async function scheduleSuggestionNudge(
     } catch {}
   }
 
+  // Pick the top-scored contact to personalize the notification.
+  let topContact: Contact | null = null;
+  if (contacts && contacts.length > 0) {
+    const lastSuggestedDates = await loadSchedulerData();
+    let best = -Infinity;
+    for (const c of contacts) {
+      if (!c.circleLevel || c.circleLevel < 1 || c.circleLevel > 3) continue;
+      const cl = c.circleLevel as 1 | 2 | 3;
+      const daysSinceSug = getDaysSinceLastSuggestedSync(c.id, lastSuggestedDates);
+      const daysSinceContact = getDaysSince(c.lastContacted ?? undefined);
+      const daysUntilBday = getDaysUntilBirthday(c.birthday ?? undefined);
+      const score = scoreSuggestion(cl, daysSinceSug, daysSinceContact, daysUntilBday);
+      if (score > best) {
+        best = score;
+        topContact = c;
+      }
+    }
+  }
+
+  const title = topContact
+    ? `Time to reach out to ${topContact.name.split(" ")[0]}`
+    : "Time to reach out";
+  const body = topContact
+    ? `${topContact.name.split(" ")[0]} is your top suggestion today.`
+    : "Open Bridges to see today's suggestion.";
+
   try {
     const notifId = await Notifications.scheduleNotificationAsync({
       content: {
-        title: "Time to reach out",
-        body: "Open Bridges to see today's suggestion.",
+        title,
+        body,
         sound: true,
-        data: {},
+        data: topContact ? { contactId: topContact.id } : {},
       },
       trigger: {
         type: Notifications.SchedulableTriggerInputTypes.DATE,

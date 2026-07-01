@@ -23,7 +23,7 @@ import * as Haptics from "expo-haptics";
 import { useSequentialHints, HINT_TEXT } from "@/lib/hints-store";
 import { HintTooltip } from "@/components/HintTooltip";
 import { useAuth } from "@/lib/auth-context";
-import { scheduleReminderNotifications, scheduleSuggestionNudge } from "@/lib/reminder-notifications";
+import { scheduleReminderNotifications } from "@/lib/reminder-notifications";
 
 interface GeneratedSuggestion {
   contact: Contact;
@@ -131,9 +131,10 @@ export default function SuggestionsScreen() {
   useEffect(() => {
     if (contacts.length === 0 || Platform.OS === "web") return;
     scheduleReminderNotifications(contacts).catch(() => {});
-    scheduleSuggestionNudge(user?.suggestionNotifFrequency, user?.suggestionNotifTime).catch(() => {});
+    // Suggestion nudge is intentionally scheduled only from index.tsx to avoid
+    // duplicate notifications when both tabs mount at the same time.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [contactsScheduleKey, user?.suggestionNotifFrequency, user?.suggestionNotifTime]);
+  }, [contactsScheduleKey]);
 
   useFocusEffect(
     useCallback(() => {
