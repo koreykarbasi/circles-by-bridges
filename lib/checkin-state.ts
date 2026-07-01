@@ -106,11 +106,19 @@ async function rescheduleElevationNotifications(store: ElevationStore): Promise<
 
     nextFireTime = fireAt;
 
-    // Skip if fire time is past or after the elevation expires
-    const cleanupDate = new Date(entry.cleanupDue);
-    if (fireAt <= now || fireAt >= cleanupDate) {
+    // Skip if fire time is already in the past
+    if (fireAt <= now) {
       store[key] = { ...store[key], scheduledNotifId: undefined };
       continue;
+    }
+
+    // If the queue pushes this notification past the original cleanupDue, extend
+    // it so the contact stays active until their turn fires. Cleanup is set to
+    // 2 hours after the scheduled fire time as a grace window for the user to act.
+    const cleanupDate = new Date(entry.cleanupDue);
+    if (fireAt >= cleanupDate) {
+      const extendedCleanup = new Date(fireAt.getTime() + 2 * 60 * 60 * 1000);
+      store[key] = { ...store[key], cleanupDue: extendedCleanup.toISOString() };
     }
 
     const title =
