@@ -6,6 +6,7 @@ import { generateReminders } from "./reminders";
 import type { Reminder } from "./reminders";
 import { loadSchedulerData, getDaysSinceLastSuggestedSync, scoreSuggestion } from "./suggestion-scheduler";
 import { getDaysSince, getDaysUntilBirthday } from "./helpers";
+import { getSmartPrompt, getActionType } from "./prompts";
 
 const REMINDER_NOTIFS_KEY = "bridges_reminder_notifs_v1";
 const SUGGESTION_NUDGE_KEY = "bridges_suggestion_nudge_v1";
@@ -273,12 +274,39 @@ async function _scheduleSuggestionNudgeImpl(
     }
   }
 
-  const title = topContact
-    ? `Time to reach out to ${topContact.name.split(" ")[0]}`
-    : "Time to reach out";
-  const body = topContact
-    ? `${topContact.name.split(" ")[0]} is your top suggestion today.`
-    : "Open Bridges to see today's suggestion.";
+  let title = "Time to reach out";
+  let body = "Open Bridges to see today's suggestion.";
+
+  if (topContact) {
+    const firstName = topContact.name.split(" ")[0];
+    const cl = topContact.circleLevel as 1 | 2 | 3;
+    try {
+      const prompt = getSmartPrompt(
+        topContact.id,
+        topContact.name,
+        cl,
+        topContact.interests ?? [],
+        { labels: topContact.labels ?? [] },
+      );
+      let actionType = getActionType(cl, prompt);
+      // C3 calls → text; hangout doesn't translate well to a notification CTA
+      if (cl === 3 && actionType === "call") actionType = "text";
+      if (actionType === "hangout") actionType = "text";
+
+      title = actionType === "call" ? `Call ${firstName}` : `Text ${firstName}`;
+
+      // Trim prompt to ~130 chars so the suffix fits comfortably in the banner
+      const suffix = " Open Bridges for more suggestions.";
+      const maxPromptLen = 160 - suffix.length;
+      const trimmedPrompt = prompt.length > maxPromptLen
+        ? prompt.slice(0, maxPromptLen - 1).trimEnd() + "…"
+        : prompt;
+      body = `${trimmedPrompt}${suffix}`;
+    } catch {
+      title = `Time to reach out to ${firstName}`;
+      body = `${firstName} is your top suggestion today. Open Bridges for more.`;
+    }
+  }
 
   try {
     const notifId = await Notifications.scheduleNotificationAsync({
