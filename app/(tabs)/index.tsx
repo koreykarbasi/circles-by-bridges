@@ -331,12 +331,13 @@ export default function HomeScreen() {
       return b.score - a.score;
     });
 
-    const ranked = [...rankedEligible, ...rankedCooldown]
-      .slice(0, MAX_SUGGESTIONS * 4)
+    const visible = [...rankedEligible, ...rankedCooldown]
+      .filter((x) => !dismissedSuggestions.has(x.contact.id))
+      .slice(0, MAX_SUGGESTIONS)
       .map((x) => x.contact);
 
-    return ranked.map((c) => getSuggestionForContact(c));
-  }, [contacts, visibleReminders, getSuggestionForContact, lastSuggestedDates, elevationMap]);
+    return visible.map((c) => getSuggestionForContact(c));
+  }, [contacts, dismissedSuggestions, visibleReminders, getSuggestionForContact, lastSuggestedDates, elevationMap]);
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
@@ -767,7 +768,7 @@ export default function HomeScreen() {
               <View style={{ flex: 1 }} />
             </View>
 
-            {suggestions.filter((s) => !dismissedSuggestions.has(s.contactId)).slice(0, MAX_SUGGESTIONS).map((suggestion) => {
+            {suggestions.map((suggestion) => {
               const circleColor =
                 suggestion.circleLevel === 1
                   ? Colors.circle1
