@@ -9,7 +9,7 @@ import { getDaysSince, getDaysUntilBirthday } from "./helpers";
 import { getSmartPrompt, getActionType } from "./prompts";
 
 const REMINDER_NOTIFS_KEY = "bridges_reminder_notifs_v1";
-const SUGGESTION_NUDGE_KEY = "bridges_suggestion_nudge_v1";
+const SUGGESTION_NUDGE_KEY = "bridges_suggestion_nudge_v2";
 const MAX_REMINDER_NOTIFS = 10;
 
 interface ReminderNotifEntry {
@@ -20,6 +20,7 @@ interface ReminderNotifEntry {
 interface SuggestionNudgeEntry {
   notifId: string;
   scheduledFor: string;
+  topContactId: string | null;
 }
 
 // Returns the next 9am. If it's already past 9am today, returns tomorrow at 9am.
@@ -244,18 +245,8 @@ async function _scheduleSuggestionNudgeImpl(
   const targetTime = nextPreferredTime(preferredHour);
   const targetHour = hourKey(targetTime);
 
-  const raw = await AsyncStorage.getItem(SUGGESTION_NUDGE_KEY);
-  if (raw) {
-    try {
-      const entry = JSON.parse(raw) as SuggestionNudgeEntry;
-      if (entry.scheduledFor.slice(0, 13) === targetHour) {
-        return; // Already scheduled for the right slot
-      }
-      await cancelNotif(entry.notifId);
-    } catch {}
-  }
-
   // Pick the top-scored contact to personalize the notification.
+  // Do this BEFORE the dedup check so we can compare against the stored contact.
   let topContact: Contact | null = null;
   if (contacts && contacts.length > 0) {
     const lastSuggestedDates = await loadSchedulerData();
@@ -272,6 +263,22 @@ async function _scheduleSuggestionNudgeImpl(
         topContact = c;
       }
     }
+  }
+
+  // Dedup: skip rescheduling only if the same hour AND the same top contact.
+  // If the stored entry was generic (no topContactId) but we now have a real
+  // contact, or the top contact changed, cancel and reschedule with fresh copy.
+  const raw = await AsyncStorage.getItem(SUGGESTION_NUDGE_KEY);
+  if (raw) {
+    try {
+      const entry = JSON.parse(raw) as SuggestionNudgeEntry;
+      const sameHour = entry.scheduledFor.slice(0, 13) === targetHour;
+      const sameContact = entry.topContactId === (topContact?.id ?? null);
+      if (sameHour && sameContact) {
+        return; // Already scheduled with the right person for the right slot
+      }
+      await cancelNotif(entry.notifId);
+    } catch {}
   }
 
   let title = "Time to reach out";
@@ -321,7 +328,7 @@ async function _scheduleSuggestionNudgeImpl(
         date: targetTime,
       },
     });
-    const entry: SuggestionNudgeEntry = { notifId, scheduledFor: targetTime.toISOString() };
+    const entry: SuggestionNudgeEntry = { notifId, scheduledFor: targetTime.toISOString(), topContactId: topContact?.id ?? null };
     await AsyncStorage.setItem(SUGGESTION_NUDGE_KEY, JSON.stringify(entry));
   } catch {}
 }
