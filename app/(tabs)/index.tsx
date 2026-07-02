@@ -301,7 +301,6 @@ export default function HomeScreen() {
     const eligible = contacts.filter((c) => {
       if (reminderContactIds.has(c.id)) return false;
       if (elevationMap[c.id]) return true;
-      if (dismissedSuggestions.has(c.id)) return false;
       const daysSinceLastSug = getDaysSinceLastSuggestedSync(c.id, lastSuggestedDates);
       if (isInCooldown(c.circleLevel as 1 | 2 | 3, daysSinceLastSug)) return false;
       return true;
@@ -333,11 +332,11 @@ export default function HomeScreen() {
     });
 
     const ranked = [...rankedEligible, ...rankedCooldown]
-      .slice(0, MAX_SUGGESTIONS)
+      .slice(0, MAX_SUGGESTIONS * 4)
       .map((x) => x.contact);
 
     return ranked.map((c) => getSuggestionForContact(c));
-  }, [contacts, dismissedSuggestions, visibleReminders, getSuggestionForContact, lastSuggestedDates, elevationMap]);
+  }, [contacts, visibleReminders, getSuggestionForContact, lastSuggestedDates, elevationMap]);
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
@@ -768,7 +767,7 @@ export default function HomeScreen() {
               <View style={{ flex: 1 }} />
             </View>
 
-            {suggestions.map((suggestion) => {
+            {suggestions.filter((s) => !dismissedSuggestions.has(s.contactId)).slice(0, MAX_SUGGESTIONS).map((suggestion) => {
               const circleColor =
                 suggestion.circleLevel === 1
                   ? Colors.circle1
