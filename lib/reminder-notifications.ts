@@ -6,7 +6,7 @@ import { generateReminders } from "./reminders";
 import type { Reminder } from "./reminders";
 import { loadSchedulerData, getDaysSinceLastSuggestedSync, scoreSuggestion } from "./suggestion-scheduler";
 import { getDaysSince, getDaysUntilBirthday } from "./helpers";
-import { getSmartPrompt, getActionType } from "./prompts";
+import { getSmartPrompt, getNextPrompt, getActionType } from "./prompts";
 
 const REMINDER_NOTIFS_KEY = "bridges_reminder_notifs_v1";
 const SUGGESTION_NUDGE_KEY = "bridges_suggestion_nudge_v2";
@@ -21,6 +21,8 @@ interface SuggestionNudgeEntry {
   notifId: string;
   scheduledFor: string;
   topContactId: string | null;
+  /** Prompt text used in the last scheduled nudge — used to advance the rotation the next day. */
+  prompt?: string;
 }
 
 // Returns the next 9am. If it's already past 9am today, returns tomorrow at 9am.
@@ -48,6 +50,11 @@ function nextPreferredTime(preferredHour: number): Date {
 // "2026-06-30T09" — hour-level granularity for dedup comparisons
 function hourKey(date: Date): string {
   return date.toISOString().slice(0, 13);
+}
+
+// "2026-06-30" — day-level granularity for suggestion nudge dedup
+function dayKey(date: Date): string {
+  return date.toISOString().slice(0, 10);
 }
 
 async function loadReminderEntries(): Promise<Record<string, ReminderNotifEntry>> {
@@ -195,7 +202,11 @@ let nudgeScheduleInFlight: Promise<void> | null = null;
  * Schedules (or cancels) the daily suggestion nudge local notification.
  * Fires at 9am (morning) or 5pm (afternoon) based on user preference.
  * Personalized with the top-scored suggestion contact's name when contacts are provided.
- * Skips if already scheduled for the same hour slot. No-ops on web.
+ * Picks a fresh prompt each day — if the same contact stays top-ranked, getNextPrompt
+ * is used to advance past yesterday's copy so the body text never repeats.
+ * Skips rescheduling only when the same day+hour slot AND the same top contact are
+ * already stored (dedup). Changing preferred time mid-day still triggers a reschedule.
+ * No-ops on web.
  *
  * Only call this from ONE place (index.tsx) to avoid duplicate notifications.
  * Concurrent calls are serialized via nudgeScheduleInFlight.
@@ -243,7 +254,7 @@ async function _scheduleSuggestionNudgeImpl(
 
   const preferredHour = preferredTime === "afternoon" ? 17 : 9;
   const targetTime = nextPreferredTime(preferredHour);
-  const targetHour = hourKey(targetTime);
+  const targetHour = hourKey(targetTime); // "YYYY-MM-DDTHH" — encodes both date and hour
 
   // Pick the top-scored contact to personalize the notification.
   // Do this BEFORE the dedup check so we can compare against the stored contact.
@@ -265,36 +276,55 @@ async function _scheduleSuggestionNudgeImpl(
     }
   }
 
-  // Dedup: skip rescheduling only if the same hour AND the same top contact.
-  // If the stored entry was generic (no topContactId) but we now have a real
-  // contact, or the top contact changed, cancel and reschedule with fresh copy.
+  // Dedup: skip rescheduling only if the same calendar-day+hour slot AND the same
+  // top contact. Using the hour key (which includes the date) means a different day
+  // OR a different preferred time within the same day both trigger a reschedule.
+  // Changing preferred time mid-day therefore still reschedules correctly.
   const raw = await AsyncStorage.getItem(SUGGESTION_NUDGE_KEY);
+  let prevEntry: SuggestionNudgeEntry | null = null;
   if (raw) {
     try {
-      const entry = JSON.parse(raw) as SuggestionNudgeEntry;
-      const sameHour = entry.scheduledFor.slice(0, 13) === targetHour;
-      const sameContact = entry.topContactId === (topContact?.id ?? null);
+      prevEntry = JSON.parse(raw) as SuggestionNudgeEntry;
+      const sameHour = prevEntry.scheduledFor.slice(0, 13) === targetHour;
+      const sameContact = prevEntry.topContactId === (topContact?.id ?? null);
       if (sameHour && sameContact) {
-        return; // Already scheduled with the right person for the right slot
+        return; // Already scheduled for this day+hour slot with the right person
       }
-      await cancelNotif(entry.notifId);
-    } catch {}
+      await cancelNotif(prevEntry.notifId);
+    } catch {
+      prevEntry = null;
+    }
   }
 
   let title = "Time to reach out";
   let body = "Open Bridges to see today's suggestion.";
+  let chosenPrompt: string | undefined;
 
   if (topContact) {
     const firstName = topContact.name.split(" ")[0];
     const cl = topContact.circleLevel as 1 | 2 | 3;
     try {
-      const prompt = getSmartPrompt(
-        topContact.id,
-        topContact.name,
-        cl,
-        topContact.interests ?? [],
-        { labels: topContact.labels ?? [] },
-      );
+      // If this contact was also yesterday's top contact, advance past yesterday's
+      // prompt using getNextPrompt so the body text never repeats day-over-day.
+      const prevPromptText = prevEntry?.topContactId === topContact.id ? prevEntry?.prompt : undefined;
+      const prompt = prevPromptText
+        ? getNextPrompt(
+            topContact.id,
+            prevPromptText,
+            topContact.name,
+            cl,
+            topContact.interests ?? [],
+            { labels: topContact.labels ?? [] },
+          )
+        : getSmartPrompt(
+            topContact.id,
+            topContact.name,
+            cl,
+            topContact.interests ?? [],
+            { labels: topContact.labels ?? [] },
+          );
+
+      chosenPrompt = prompt;
       let actionType = getActionType(cl, prompt);
       // C3 calls → text; hangout doesn't translate well to a notification CTA
       if (cl === 3 && actionType === "call") actionType = "text";
@@ -328,7 +358,12 @@ async function _scheduleSuggestionNudgeImpl(
         date: targetTime,
       },
     });
-    const entry: SuggestionNudgeEntry = { notifId, scheduledFor: targetTime.toISOString(), topContactId: topContact?.id ?? null };
+    const entry: SuggestionNudgeEntry = {
+      notifId,
+      scheduledFor: targetTime.toISOString(),
+      topContactId: topContact?.id ?? null,
+      prompt: chosenPrompt,
+    };
     await AsyncStorage.setItem(SUGGESTION_NUDGE_KEY, JSON.stringify(entry));
   } catch {}
 }
