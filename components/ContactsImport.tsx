@@ -28,6 +28,7 @@ interface ContactsImportProps {
   onSelect: (contact: ImportedContact) => void;
   onDeselect: (name: string) => void;
   maxSelections?: number;
+  isActive?: boolean;
 }
 
 interface DeviceContact {
@@ -38,7 +39,7 @@ interface DeviceContact {
   photoUri?: string;
 }
 
-export function ContactsImport({ selectedContacts, onSelect, onDeselect, maxSelections }: ContactsImportProps) {
+export function ContactsImport({ selectedContacts, onSelect, onDeselect, maxSelections, isActive = true }: ContactsImportProps) {
   const [permission, setPermission] = useState<Contacts.PermissionResponse | null>(null);
   const [deviceContacts, setDeviceContacts] = useState<DeviceContact[]>([]);
   const [search, setSearch] = useState("");
@@ -100,10 +101,10 @@ export function ContactsImport({ selectedContacts, onSelect, onDeselect, maxSele
   }, []);
 
   useEffect(() => {
-    if (Platform.OS !== "web") {
+    if (Platform.OS !== "web" && isActive) {
       requestPermission();
     }
-  }, [requestPermission]);
+  }, [requestPermission, isActive]);
 
   const filteredContacts = deviceContacts.filter((c) =>
     c.name.toLowerCase().includes(search.toLowerCase()),

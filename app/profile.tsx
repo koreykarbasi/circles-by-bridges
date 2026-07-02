@@ -23,6 +23,7 @@ import { resetAllHints } from "@/lib/hints-store";
 import { CIRCLE_CONFIG } from "@/lib/types";
 import * as Haptics from "expo-haptics";
 import { apiRequest } from "@/lib/query-client";
+import { scheduleSuggestionNudge } from "@/lib/reminder-notifications";
 
 export default function ProfileScreen() {
   const insets = useSafeAreaInsets();
@@ -64,6 +65,7 @@ export default function ProfileScreen() {
     setNotifFreq(freq);
     try {
       await updateNotificationPreferences(freq, freq !== "off" ? notifTime : null);
+      scheduleSuggestionNudge(freq, freq !== "off" ? notifTime : null, contacts).catch(() => {});
     } catch {
       // Non-fatal
     }
@@ -73,6 +75,7 @@ export default function ProfileScreen() {
     setNotifTime(t);
     try {
       await updateNotificationPreferences(notifFreq, t);
+      scheduleSuggestionNudge(notifFreq, t, contacts).catch(() => {});
     } catch {
       // Non-fatal
     }

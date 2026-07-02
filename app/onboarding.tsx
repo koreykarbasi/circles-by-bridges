@@ -141,6 +141,7 @@ export default function OnboardingScreen() {
               onDeselect={(name) =>
                 setCircle1Contacts((prev) => prev.filter((c) => c.name !== name))
               }
+              isActive={currentIndex === 4}
             />
           );
         case "circle2":
@@ -788,12 +789,14 @@ function CircleImportPage({
   existingCount,
   onSelect,
   onDeselect,
+  isActive,
 }: {
   circleLevel: 1 | 2 | 3;
   selectedContacts: ImportedContact[];
   existingCount: number;
   onSelect: (c: ImportedContact) => void;
   onDeselect: (name: string) => void;
+  isActive?: boolean;
 }) {
   const cfg = CIRCLE_CONFIG[circleLevel];
   const remainingSlots = Math.max(0, cfg.max - existingCount);
@@ -833,6 +836,7 @@ function CircleImportPage({
             onSelect={onSelect}
             onDeselect={onDeselect}
             maxSelections={remainingSlots}
+            isActive={isActive}
           />
         </Animated.View>
       </ScrollView>
