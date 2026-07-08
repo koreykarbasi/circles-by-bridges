@@ -183,6 +183,15 @@ const voteRateLimiter = rateLimit({
 
 export async function registerRoutes(app: Express): Promise<Server> {
   app.set("trust proxy", 1);
+
+  const sessionSecret = process.env.SESSION_SECRET;
+  if (!sessionSecret && process.env.NODE_ENV === "production") {
+    throw new Error(
+      "SESSION_SECRET environment variable must be set in production. " +
+      "The server will not start without an operator-supplied session secret."
+    );
+  }
+
   const PgSession = connectPgSimple(session);
   app.use(
     session({
@@ -190,7 +199,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         pool: pool as any,
         createTableIfMissing: true,
       }),
-      secret: process.env.SESSION_SECRET || "bridges-dev-secret-change-me",
+      secret: sessionSecret || "bridges-dev-secret-change-me",
       resave: false,
       saveUninitialized: false,
       proxy: true,
@@ -414,6 +423,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
         const updated = await storage.getUser(user.id);
         if (updated) user = updated;
+      } else if (user.hasPassword !== false) {
+        // An account with this email already exists with a password. Refuse the
+        // social login to prevent pre-account takeover: an attacker who registered
+        // this email first should not gain access when the real owner signs in via Apple.
+        return res.status(409).json({ message: "An account with this email already exists. Please sign in with your email and password." });
       }
       req.session.userId = user.id;
       req.session.save((err) => {
@@ -458,6 +472,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
         if (name) await storage.updateUser(user.id, { username: name.trim() });
         const updated = await storage.getUser(user.id);
         if (updated) user = updated;
+      } else if (user.hasPassword !== false) {
+        // An account with this email already exists with a password. Refuse the
+        // social login to prevent pre-account takeover: an attacker who registered
+        // this email first should not gain access when the real owner signs in via Google.
+        return res.status(409).json({ message: "An account with this email already exists. Please sign in with your email and password." });
       }
       req.session.userId = user.id;
       req.session.save((err) => {
@@ -508,40 +527,50 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   app.post("/api/auth/forgot-password", authRateLimiter, async (req, res) => {
+    const UNIFORM_RESPONSE = { message: "If that email is registered, you'll receive a reset link shortly." };
     try {
       const { email } = req.body;
       if (!email || typeof email !== "string") {
-        return res.status(200).json({ message: "If that email is registered, you'll receive a reset link shortly." });
+        return res.status(200).json(UNIFORM_RESPONSE);
       }
 
-      const user = await storage.getUserByEmail(email.toLowerCase().trim());
+      const normalizedEmail = email.toLowerCase().trim();
+
+      // Always perform a bcrypt hash so response timing is uniform regardless of
+      // whether the address belongs to a real account, a social-only account, or
+      // no account at all. The actual token creation and email delivery happen
+      // asynchronously after the response has already been sent.
+      const [user] = await Promise.all([
+        storage.getUserByEmail(normalizedEmail),
+        bcrypt.hash(normalizedEmail, 4),
+      ]);
+
+      res.status(200).json(UNIFORM_RESPONSE);
+
+      // Fire-and-forget: do the real work after responding so the outbound email
+      // API call cannot be observed as a timing difference by the requester.
       if (user && user.hasPassword !== false) {
-        const rawToken = crypto.randomBytes(32).toString("hex");
-        const tokenHash = crypto.createHash("sha256").update(rawToken).digest("hex");
-        const expiresAt = new Date(Date.now() + 15 * 60 * 1000);
-
-        await storage.createPasswordResetToken(user.id, tokenHash, expiresAt);
-
-        const baseUrl = process.env.APP_BASE_URL ||
-          (process.env.EXPO_PUBLIC_DOMAIN ? `https://${process.env.EXPO_PUBLIC_DOMAIN.replace(/:\d+$/, "")}` : null) ||
-          "https://buildmybridges.com";
-        const resetUrl = `${baseUrl}/reset-password?token=${rawToken}`;
-
-        try {
-          await sendPasswordResetEmail(user.email, resetUrl);
-        } catch (emailErr) {
-          console.error("[forgot-password] Email send failed:", emailErr);
-        }
-      } else if (user) {
-        await bcrypt.hash(email, 4);
-      } else {
-        await bcrypt.hash(email, 4);
+        (async () => {
+          try {
+            const rawToken = crypto.randomBytes(32).toString("hex");
+            const tokenHash = crypto.createHash("sha256").update(rawToken).digest("hex");
+            const expiresAt = new Date(Date.now() + 15 * 60 * 1000);
+            await storage.createPasswordResetToken(user.id, tokenHash, expiresAt);
+            const baseUrl = process.env.APP_BASE_URL ||
+              (process.env.EXPO_PUBLIC_DOMAIN ? `https://${process.env.EXPO_PUBLIC_DOMAIN.replace(/:\d+$/, "")}` : null) ||
+              "https://buildmybridges.com";
+            const resetUrl = `${baseUrl}/reset-password?token=${rawToken}`;
+            await sendPasswordResetEmail(user.email, resetUrl);
+          } catch (emailErr) {
+            console.error("[forgot-password] Async token/email error:", emailErr);
+          }
+        })();
       }
-
-      res.status(200).json({ message: "If that email is registered, you'll receive a reset link shortly." });
     } catch (err) {
       console.error("Forgot password error:", err);
-      res.status(200).json({ message: "If that email is registered, you'll receive a reset link shortly." });
+      if (!res.headersSent) {
+        res.status(200).json(UNIFORM_RESPONSE);
+      }
     }
   });
 
