@@ -352,6 +352,16 @@ async function ensurePasswordResetTokensTable() {
   }
 }
 
+async function ensureHangoutInvitesSentAtColumn() {
+  try {
+    await pool.query(
+      `ALTER TABLE hangout_plans ADD COLUMN IF NOT EXISTS invites_sent_at TIMESTAMP`,
+    );
+  } catch (err) {
+    console.error("[startup] Failed to add invites_sent_at column:", err);
+  }
+}
+
 (async () => {
   setupCors(app);
   setupBodyParsing(app);
@@ -365,6 +375,7 @@ async function ensurePasswordResetTokensTable() {
   await ensureHasPasswordColumn();
   await ensureLastProfilePushAtColumn();
   await ensurePasswordResetTokensTable();
+  await ensureHangoutInvitesSentAtColumn();
 
   const server = await registerRoutes(app);
 

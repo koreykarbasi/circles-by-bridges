@@ -35,6 +35,26 @@ const VALID_HANGOUT_STATUSES = ["draft", "active", "finalized"] as const;
 // 5 MB image → ~6.7 MB base64 string; cap at 7 MB of string length
 const MAX_PHOTO_CHARS = 7 * 1024 * 1024;
 
+// ── Outbound-integration abuse guards ──────────────────────────────────────
+// Prompts sync: only allow callers that present the ADMIN_SYNC_SECRET token.
+// The cooldown is a secondary guard; the secret is the primary gate.
+let lastManualSyncAt = 0;
+const MANUAL_SYNC_COOLDOWN_MS = 60 * 60 * 1000; // 1 hour
+
+// Email invites: per-hangout 24 h lock is persisted in the DB
+// (hangout_plans.invites_sent_at column, added at startup by migration).
+// Per-user daily cap: a user may send invite batches for at most this many
+// hangouts in any 24-hour window.
+const MAX_EMAIL_INVITE_BATCHES_PER_USER_PER_DAY = 3;
+const EMAIL_INVITE_COOLDOWN_HOURS = 24;
+
+// Maximum recipients per batch (caps work even without per-user quota).
+const MAX_EMAIL_INVITES_PER_HANGOUT = 20;
+
+// Simple RFC-5321-compatible email pattern used for server-side validation.
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+// ───────────────────────────────────────────────────────────────────────────
+
 const CONTACT_WRITABLE_FIELDS = new Set([
   "name", "circleLevel", "interests", "labels", "birthday",
   "lastContacted", "lastHangout", "notes", "phone", "email", "photoUri",
@@ -1234,19 +1254,104 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const locationLabel = locationOption?.label || null;
       const icsContent = generateIcs(plan.title, timeLabel, locationLabel);
 
+      // ── Serialized quota enforcement via advisory lock + transaction ────────
+      // pg_advisory_xact_lock(namespace, hashtext(userId)) acquires a
+      // transaction-level exclusive lock keyed per user. All concurrent
+      // invite-send requests from the same user (across any hangout) will
+      // queue here, fully serializing the check+stamp sequence and preventing
+      // race-condition bypass of the per-user daily cap.
+      const client = await pool.connect();
+      let sent: string[] = [];
+      let missing: string[] = [];
+      let cappedInviteeNames: string[] = [];
+      try {
+        await client.query("BEGIN");
+
+        // Lock: namespace 0x4272 ("Br" for Bridges) + hashtext of userId.
+        // hashtext() returns int4, matching the two-int overload signature.
+        await client.query(
+          "SELECT pg_advisory_xact_lock(17266, hashtext($1))",
+          [userId],
+        );
+
+        // Per-user daily batch cap — safe to read here because no other
+        // request for this user can be past the lock concurrently.
+        const batchCountRow = await client.query<{ count: string }>(
+          `SELECT COUNT(*) AS count
+           FROM hangout_plans
+           WHERE user_id = $1
+             AND invites_sent_at > NOW() - INTERVAL '${EMAIL_INVITE_COOLDOWN_HOURS} hours'`,
+          [userId],
+        );
+        const batchesToday = parseInt(batchCountRow.rows[0]?.count ?? "0", 10);
+        if (batchesToday >= MAX_EMAIL_INVITE_BATCHES_PER_USER_PER_DAY) {
+          await client.query("ROLLBACK");
+          return res.status(429).json({
+            message: "You have reached the daily limit for sending hangout invites. Please try again tomorrow.",
+          });
+        }
+
+        // Per-hangout cooldown: atomically stamp invites_sent_at only if the
+        // row is eligible (NULL or expired). Under the advisory lock this is
+        // also safe from concurrent same-hangout requests.
+        const stampResult = await client.query<{ id: string }>(
+          `UPDATE hangout_plans
+           SET invites_sent_at = NOW()
+           WHERE id = $1
+             AND user_id = $2
+             AND (invites_sent_at IS NULL
+                  OR invites_sent_at < NOW() - INTERVAL '${EMAIL_INVITE_COOLDOWN_HOURS} hours')
+           RETURNING id`,
+          [id, userId],
+        );
+
+        if (stampResult.rowCount === 0) {
+          await client.query("ROLLBACK");
+          // Read the current value to provide a useful Retry-After.
+          const sentAtRow = await client.query<{ invites_sent_at: Date | null }>(
+            "SELECT invites_sent_at FROM hangout_plans WHERE id = $1",
+            [id],
+          );
+          const sentAt = sentAtRow.rows[0]?.invites_sent_at;
+          const cooldownMs = EMAIL_INVITE_COOLDOWN_HOURS * 60 * 60 * 1000;
+          const retryAfterSec = sentAt
+            ? Math.ceil(Math.max(0, cooldownMs - (Date.now() - sentAt.getTime())) / 1000)
+            : cooldownMs / 1000;
+          res.setHeader("Retry-After", String(retryAfterSec));
+          return res.status(429).json({
+            message: "Invites for this hangout were already sent. Please wait 24 hours before resending.",
+            retryAfterSeconds: retryAfterSec,
+          });
+        }
+
+        await client.query("COMMIT");
+      } catch (lockErr) {
+        await client.query("ROLLBACK").catch(() => {});
+        throw lockErr;
+      } finally {
+        client.release();
+      }
+
+      // ── Cap invitee list ───────────────────────────────────────────────────
+      cappedInviteeNames = plan.inviteeNames.slice(0, MAX_EMAIL_INVITES_PER_HANGOUT);
+
       // Look up invitees in the user's contacts (case-insensitive name match)
       const contacts = await storage.getContactsByUserId(userId);
       const contactsByName = new Map(contacts.map((c) => [c.name.toLowerCase().trim(), c]));
 
-      const sent: string[] = [];
-      const missing: string[] = [];
+      // Deduplicate recipients by email address so the same inbox cannot
+      // receive multiple copies within one batch (e.g. contact name aliases).
+      const seenEmails = new Set<string>();
 
-      for (const inviteeName of plan.inviteeNames) {
+      for (const inviteeName of cappedInviteeNames) {
         const contact = contactsByName.get(inviteeName.toLowerCase().trim());
-        if (contact?.email) {
+        // Validate email format and deduplicate before attempting delivery
+        const email = contact?.email?.toLowerCase().trim() ?? "";
+        if (contact && EMAIL_RE.test(email) && !seenEmails.has(email)) {
+          seenEmails.add(email);
           try {
             await sendHangoutCalendarInvite(
-              contact.email,
+              contact.email!,
               contact.name,
               plan.title,
               timeLabel,
@@ -1396,11 +1501,35 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post("/api/prompts/sync", requireAuth, async (_req, res) => {
+  app.post("/api/prompts/sync", async (req, res) => {
+    // Require a server-held secret token — general authenticated users are not
+    // permitted to trigger privileged Google Sheets work on demand.
+    const adminSecret = process.env.ADMIN_SYNC_SECRET;
+    if (!adminSecret) {
+      return res.status(403).json({ message: "Manual prompt sync is not enabled" });
+    }
+    const provided = req.headers["x-admin-token"];
+    if (!provided || provided !== adminSecret) {
+      return res.status(403).json({ message: "Forbidden" });
+    }
+    // Secondary throttle: at most once per hour even with a valid token.
+    const now = Date.now();
+    const elapsed = now - lastManualSyncAt;
+    if (elapsed < MANUAL_SYNC_COOLDOWN_MS) {
+      const retryAfterSec = Math.ceil((MANUAL_SYNC_COOLDOWN_MS - elapsed) / 1000);
+      res.setHeader("Retry-After", String(retryAfterSec));
+      return res.status(429).json({
+        message: "Sync was triggered recently. Please wait before syncing again.",
+        retryAfterSeconds: retryAfterSec,
+      });
+    }
+    lastManualSyncAt = now;
     try {
       const result = await syncFromSheet();
       res.json(result);
     } catch (err) {
+      // Reset so a transient failure doesn't lock out the operator for an hour.
+      lastManualSyncAt = 0;
       console.error("Error syncing prompts:", err);
       res.status(500).json({ message: "Failed to sync prompts" });
     }
