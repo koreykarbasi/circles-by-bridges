@@ -120,12 +120,8 @@ function buildReminderMessages(contact: ContactRow): PushMessage[] {
         contactId: contact.id,
       });
     }
-    // Hangout overdue: > 60 days
-    const daysSinceHangout = getDaysSince(contact.lastHangout);
-    if (daysSinceHangout !== null && daysSinceHangout > 60) {
-      const weeks = Math.floor(daysSinceHangout / 7);
-      messages.push({ title: `Plan a hangout with ${contact.name}`, body: `${weeks} weeks since your last hangout`, contactId: contact.id });
-    }
+    // Hangout-overdue reminders are intentionally never pushed — they are shown
+    // in-app only (quick-pick card), matching hangout-quickpick reminders on circle 1/3.
     // Custom reminders: C2 advance at 7/day-of
     buildCustomReminderMessages(contact, [7, 0], messages);
   } else if (contact.circleLevel === 3) {
@@ -293,15 +289,10 @@ function isNineAmLocalNow(timezone: string): boolean {
   return getLocalHour(timezone) === 9;
 }
 
-// Returns true if it is currently between 0:00 and 0:59 in the given timezone.
-function isMidnightLocalNow(timezone: string): boolean {
-  return getLocalHour(timezone) === 0;
-}
-
 // ─── Daily reminder dispatch ──────────────────────────────────────────────────
 
 export async function sendDailyReminders() {
-  console.log("[push] Checking per-user reminders (midnight birthday + 9am)…");
+  console.log("[push] Checking per-user reminders (runs hourly; per-contact 24h dedup spreads delivery through the day)…");
   try {
     // Clean up stale dedup log entries at the start of each run
     await pruneOldNotificationLog();
@@ -319,25 +310,20 @@ export async function sendDailyReminders() {
     for (const user of usersWithTokens) {
       if (!user.pushToken) continue;
 
-      const tz = user.notificationTimezone ?? "UTC";
-      const atMidnight = isMidnightLocalNow(tz);
-      const atNineAm = isNineAmLocalNow(tz);
-      if (!atMidnight && !atNineAm) continue;
-
       const userContacts = await db
         .select()
         .from(contacts)
         .where(eq(contacts.userId, user.id));
 
+      // Checked every hour rather than gated to a single fixed slot, so a reminder
+      // that becomes newly active (e.g. a check-in crosses its overdue threshold,
+      // or a birthday milestone hits) is delivered on the very next hourly run
+      // instead of waiting for one bundled daily window. The per-contact 24h
+      // dedup below still prevents repeat spam for the same reminder.
       const messages: PushMessage[] = [];
       for (const contact of userContacts) {
-        if (atMidnight) {
-          // Birthday day-of notifications fire at midnight
-          messages.push(...buildBirthdayDayOfMessages(contact));
-        } else {
-          // Advance birthday milestones + overdue check-ins/hangouts fire at 9am
-          messages.push(...buildReminderMessages(contact));
-        }
+        messages.push(...buildBirthdayDayOfMessages(contact));
+        messages.push(...buildReminderMessages(contact));
       }
 
       // Collapse to one message per contact (first/highest-priority wins)
@@ -663,8 +649,7 @@ export async function sendSuggestionNudges() {
         lastPushedResult.rows.map((r) => [r.contact_id, r.last_sent]),
       );
 
-      let bestContact: { id: string; name: string } | null = null;
-      let bestScore = -1;
+      const scored: { id: string; name: string; score: number; lastPushedAt: number }[] = [];
 
       for (const c of contactsResult.rows) {
         // Skip contacts in dedup window (includes elevated + recently pushed)
@@ -680,24 +665,50 @@ export async function sendSuggestionNudges() {
           : null;
 
         const score = scoreSuggestionServer(c.circle_level, daysSinceLastPushed, daysSinceContact);
-        if (score > bestScore) {
-          bestScore = score;
-          bestContact = { id: c.id, name: c.name };
-        }
+        scored.push({
+          id: c.id,
+          name: c.name,
+          score,
+          lastPushedAt: lastPushed ? new Date(lastPushed).getTime() : 0,
+        });
       }
 
-      if (!bestContact) {
+      if (scored.length === 0) {
         console.log(`[push]   → skip: all ${contactsResult.rows.length} contacts in dedup window`);
         continue;
       }
 
-      console.log(`[push]   → sending to user ${user.id.slice(0, 8)} for contact "${bestContact.id.slice(0, 8)}" score=${bestScore}`);
+      // Rotate among the top-3 scored candidates instead of always picking the
+      // single highest scorer — otherwise the same contact (e.g. the one with the
+      // longest-standing overdue check-in) wins every single day. Among the top-3,
+      // prefer whichever was least-recently pushed (never-pushed contacts first).
+      scored.sort((a, b) => b.score - a.score);
+      const topCandidates = scored.slice(0, 3);
+      topCandidates.sort((a, b) => a.lastPushedAt - b.lastPushedAt);
+      const bestContact = { id: topCandidates[0].id, name: topCandidates[0].name };
+      const bestScore = topCandidates[0].score;
+
+      console.log(`[push]   → sending to user ${user.id.slice(0, 8)} for contact "${bestContact.id.slice(0, 8)}" score=${bestScore} (rotated among top ${topCandidates.length})`);
+
+      // Vary the copy so the same body text doesn't repeat every time a contact is
+      // nudged again — pick a template deterministically from contact id + day so
+      // repeated runs on the same day for the same contact stay consistent.
+      const nudgeTemplates: { title: (n: string) => string; body: (n: string) => string }[] = [
+        { title: (n) => `Time to reach out to ${n}`, body: () => "Open the app to see what to say." },
+        { title: (n) => `${n} is due for a check-in`, body: (n) => `It's been a while since you connected with ${n} — open Bridges for a suggestion.` },
+        { title: () => "A friendly nudge", body: (n) => `Thinking of ${n}? Open Bridges for a quick way to reach out.` },
+        { title: (n) => `Say hi to ${n}`, body: () => "Open Bridges for a suggestion on what to say." },
+      ];
+      const dayKey = new Date().toISOString().slice(0, 10);
+      let hash = 0;
+      for (const ch of `${bestContact.id}${dayKey}`) hash = (hash * 31 + ch.charCodeAt(0)) >>> 0;
+      const template = nudgeTemplates[hash % nudgeTemplates.length];
 
       // Only log as notified if the push actually delivered (fix 404 burn bug)
       const ok = await sendExpoPush(
         user.push_token,
-        `Time to reach out to ${bestContact.name}`,
-        "Open the app to see what to say.",
+        template.title(bestContact.name),
+        template.body(bestContact.name),
         { contactId: bestContact.id },
       );
       if (ok) {
