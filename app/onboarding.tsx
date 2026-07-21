@@ -837,8 +837,13 @@ function CircleImportPage({
             onSelect={onSelect}
             onDeselect={onDeselect}
             maxSelections={remainingSlots}
-            isActive={isActive}
           />
+        </Animated.View>
+
+        <Animated.View entering={FadeIn.delay(400).duration(400)}>
+          <Text style={pageStyles.addLaterHint}>
+            Not ready yet? You can add them later.
+          </Text>
         </Animated.View>
       </ScrollView>
     </View>
@@ -852,27 +857,41 @@ function NotificationsPage({ onNext, isActive }: { onNext: () => void; isActive:
   const [frequency, setFrequency] = useState<string>("daily");
   const [time, setTime] = useState<string>("morning");
   const [saving, setSaving] = useState(false);
-  const [permDenied, setPermDenied] = useState(false);
-  const hasRequestedPerm = useRef(false);
+  const [permStatus, setPermStatus] = useState<"unknown" | "granted" | "denied" | "requesting">("unknown");
   const insets = useSafeAreaInsets();
   const webBottomInset = Platform.OS === "web" ? 34 : 0;
 
-  // Request notification permission when this slide becomes active.
-  // The ref ensures we only prompt once per onboarding flow.
+  // On slide entry, check current permission status without prompting.
+  // This lets us hide the "Enable" button if permission is already granted.
   useEffect(() => {
-    if (!isActive || Platform.OS === "web" || hasRequestedPerm.current) return;
-    hasRequestedPerm.current = true;
+    if (!isActive || Platform.OS === "web") return;
     (async () => {
       try {
-        const { status } = await Notifications.requestPermissionsAsync();
-        if (status !== "granted") {
-          setPermDenied(true);
+        const { status } = await Notifications.getPermissionsAsync();
+        if (status === "granted") {
+          setPermStatus("granted");
         }
+        // If not yet granted, leave as "unknown" — user will tap the button to prompt
       } catch {
         // Non-fatal
       }
     })();
   }, [isActive]);
+
+  const handleEnableNotifications = async () => {
+    if (Platform.OS === "web") return;
+    setPermStatus("requesting");
+    try {
+      const { status } = await Notifications.requestPermissionsAsync();
+      if (status === "granted") {
+        setPermStatus("granted");
+      } else {
+        setPermStatus("denied");
+      }
+    } catch {
+      setPermStatus("denied");
+    }
+  };
 
   const FREQ_OPTIONS = [
     { value: "daily", label: "Once a day" },
@@ -911,10 +930,28 @@ function NotificationsPage({ onNext, isActive }: { onNext: () => void; isActive:
           </Text>
         </Animated.View>
 
-        {permDenied && (
+        {permStatus === "unknown" && Platform.OS !== "web" && (
+          <Animated.View entering={FadeIn.delay(100).duration(400)} style={notifStyles.enableRow}>
+            <Pressable
+              onPress={handleEnableNotifications}
+              style={({ pressed }) => [notifStyles.enableBtn, pressed && { opacity: 0.75 }]}
+            >
+              <Ionicons name="notifications-outline" size={18} color="#fff" />
+              <Text style={notifStyles.enableBtnText}>Enable notifications</Text>
+            </Pressable>
+          </Animated.View>
+        )}
+
+        {permStatus === "requesting" && (
+          <Animated.View entering={FadeIn.duration(200)} style={notifStyles.enableRow}>
+            <ActivityIndicator size="small" color={Colors.primary} />
+          </Animated.View>
+        )}
+
+        {permStatus === "denied" && (
           <Animated.View entering={FadeIn.duration(400)} style={notifStyles.deniedBanner}>
             <Text style={notifStyles.deniedText}>
-              Notifications are currently disabled. To receive nudges, enable them in your device Settings.
+              Notifications are off. You can enable them later in your device Settings.
             </Text>
           </Animated.View>
         )}
@@ -1274,6 +1311,14 @@ const pageStyles = StyleSheet.create({
   importContainer: {
     marginTop: 8,
   },
+  addLaterHint: {
+    fontSize: 13,
+    fontFamily: "Nunito_400Regular",
+    color: Colors.textTertiary,
+    textAlign: "center" as const,
+    marginTop: 16,
+    marginBottom: 4,
+  },
   doneIllustration: {
     alignItems: "center",
     marginBottom: 28,
@@ -1375,6 +1420,24 @@ const notifStyles = StyleSheet.create({
   },
   timeTileSubActive: {
     color: Colors.primary + "cc",
+  },
+  enableRow: {
+    marginTop: 16,
+    alignItems: "center" as const,
+  },
+  enableBtn: {
+    flexDirection: "row" as const,
+    alignItems: "center" as const,
+    gap: 8,
+    paddingVertical: 14,
+    paddingHorizontal: 28,
+    borderRadius: 14,
+    backgroundColor: Colors.primary,
+  },
+  enableBtnText: {
+    fontSize: 15,
+    fontFamily: "Nunito_600SemiBold",
+    color: "#fff",
   },
   deniedBanner: {
     marginTop: 16,

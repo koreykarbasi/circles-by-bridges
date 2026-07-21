@@ -10,9 +10,9 @@ import {
   ActivityIndicator,
   Alert,
   Image,
-  ScrollView,
   Modal,
 } from "react-native";
+import { KeyboardAwareScrollView } from "react-native-keyboard-controller";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import Colors from "@/constants/colors";
@@ -108,14 +108,12 @@ export default function AuthScreen() {
   };
 
   return (
-    <KeyboardAvoidingView
-      style={[styles.container, { paddingTop: insets.top + (Platform.OS === "web" ? 67 : 0) }]}
-      behavior={Platform.OS === "ios" ? "padding" : "height"}
-    >
-      <ScrollView
+    <View style={[styles.container, { paddingTop: insets.top + (Platform.OS === "web" ? 67 : 0) }]}>
+      <KeyboardAwareScrollView
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
+        bottomOffset={24}
       >
         <View style={styles.logoSection}>
           <Image
@@ -263,7 +261,7 @@ export default function AuthScreen() {
             </View>
           )}
         </View>
-      </ScrollView>
+      </KeyboardAwareScrollView>
 
       <Modal
         visible={showForgotModal}
@@ -344,7 +342,7 @@ export default function AuthScreen() {
           </KeyboardAvoidingView>
         </View>
       </Modal>
-    </KeyboardAvoidingView>
+    </View>
   );
 }
 
