@@ -117,6 +117,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     fullName?: { givenName?: string | null; familyName?: string | null }
   ) => {
     const res = await apiRequest("POST", "/api/auth/apple", { identityToken, fullName });
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({})) as { message?: string };
+      throw new Error(body.message ?? "Apple sign in failed");
+    }
     const data = await res.json();
     setUser(data);
     writeAuthCache(data);

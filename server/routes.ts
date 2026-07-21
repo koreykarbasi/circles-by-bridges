@@ -12,6 +12,15 @@ import { sendHangoutFinalizedNotifications, sendSuggestionNudges, sendDailyRemin
 import { sendPasswordResetEmail, sendHangoutCalendarInvite } from "./email";
 import type { InsertContact } from "@shared/schema";
 import * as chrono from "chrono-node";
+import { createRemoteJWKSet, jwtVerify } from "jose";
+
+// Module-level singleton so the JWKS response is cached across requests.
+// Apple's JWKS rotates rarely; 10-minute cache avoids a round-trip on every sign-in.
+const APPLE_JWKS = createRemoteJWKSet(
+  new URL("https://appleid.apple.com/auth/keys"),
+  { cacheMaxAge: 10 * 60 * 1000 }
+);
+const APPLE_BUNDLE_ID = "com.bridges.app";
 
 declare module "express-session" {
   interface SessionData {
@@ -535,38 +544,57 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       // Verify the Apple identity token against Apple's public JWKS.
-      // This validates the signature, issuer, audience, and expiry.
+      // clockTolerance allows up to 30s of clock skew between Replit and Apple.
       let payload: { sub?: string; email?: string };
       try {
-        const { createRemoteJWKSet, jwtVerify } = await import("jose");
-        const APPLE_JWKS = createRemoteJWKSet(
-          new URL("https://appleid.apple.com/auth/keys")
-        );
-        const BUNDLE_ID = "com.bridges.app";
         const { payload: verified } = await jwtVerify(identityToken, APPLE_JWKS, {
           issuer: "https://appleid.apple.com",
-          audience: BUNDLE_ID,
+          audience: APPLE_BUNDLE_ID,
+          clockTolerance: 30,
         });
         payload = verified as { sub?: string; email?: string };
-      } catch (verifyErr) {
-        console.error("Apple token verification failed:", verifyErr);
-        return res.status(401).json({ message: "Apple identity token is invalid or expired" });
+        console.log("[apple-auth] Token verified — sub:", verified.sub, "email:", verified.email ?? "(none)");
+      } catch (verifyErr: unknown) {
+        const errCode = (verifyErr as { code?: string }).code ?? "unknown";
+        const errMsg = verifyErr instanceof Error ? verifyErr.message : String(verifyErr);
+        console.error(`[apple-auth] Token verification failed (${errCode}):`, errMsg);
+        const userMsg =
+          errCode === "ERR_JWT_EXPIRED"
+            ? "Apple sign-in token has expired. Please try again."
+            : errCode === "ERR_JWS_SIGNATURE_VERIFICATION_FAILED"
+            ? "Apple sign-in signature invalid. Please try again."
+            : errCode === "ERR_JWT_CLAIM_VALIDATION_FAILED"
+            ? "Apple sign-in token is not valid for this app."
+            : "Apple sign-in failed. Please try again.";
+        return res.status(401).json({ message: userMsg });
       }
 
-      const { sub: appleSub, email } = payload;
+      const { sub: appleSub, email: jwtEmail } = payload;
       if (!appleSub) {
-        return res.status(400).json({ message: "Invalid Apple token" });
+        return res.status(400).json({ message: "Invalid Apple token: missing subject" });
       }
-      const userEmail = email
-        ? email.toLowerCase().trim()
-        : `apple_${appleSub.replace(/[^a-z0-9]/gi, "")}@bridges.apple`;
-      let user = await storage.getUserByEmail(userEmail);
+
+      // Derive a stable synthetic email from the Apple `sub` so returning users
+      // are always found even when the JWT email changes (e.g. private relay).
+      // Primary lookup: sub-based synthetic email (always stable across sign-ins).
+      // Fallback lookup: JWT email (used for accounts created before this logic).
+      const syntheticEmail = `apple_${appleSub.replace(/[^a-z0-9]/gi, "")}@bridges.apple`;
+      const jwtEmailNorm = jwtEmail ? jwtEmail.toLowerCase().trim() : null;
+
+      let user = await storage.getUserByEmail(syntheticEmail);
+
+      if (!user && jwtEmailNorm) {
+        user = await storage.getUserByEmail(jwtEmailNorm);
+      }
+
       if (!user) {
+        // New Apple user — create account using synthetic email for stability.
+        console.log("[apple-auth] Creating new account for sub:", appleSub);
         const hashedPassword = await bcrypt.hash(
           Math.random().toString(36) + Date.now(),
           10
         );
-        user = await storage.createUser({ email: userEmail, password: hashedPassword });
+        user = await storage.createUser({ email: syntheticEmail, password: hashedPassword });
         await storage.updateUser(user.id, { hasPassword: false });
         if (fullName?.givenName) {
           const name = [fullName.givenName, fullName.familyName]
@@ -577,22 +605,26 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
         const updated = await storage.getUser(user.id);
         if (updated) user = updated;
+        console.log("[apple-auth] Account created:", user.id);
       } else if (user.hasPassword !== false) {
         // An account with this email already exists with a password. Refuse the
-        // social login to prevent pre-account takeover: an attacker who registered
-        // this email first should not gain access when the real owner signs in via Apple.
+        // social login to prevent account takeover.
+        console.warn("[apple-auth] Email conflict — account has password:", user.email);
         return res.status(409).json({ message: "An account with this email already exists. Please sign in with your email and password." });
+      } else {
+        console.log("[apple-auth] Returning user found:", user.id);
       }
+
       req.session.userId = user.id;
       req.session.save((err) => {
         if (err) {
-          console.error("Session save error (apple):", err);
+          console.error("[apple-auth] Session save error:", err);
           return res.status(500).json({ message: "Sign in failed" });
         }
         res.json({ id: user!.id, email: user!.email, name: user!.username, profilePhotoUri: user!.profilePhotoUri, suggestionNotifFrequency: user!.suggestionNotifFrequency, suggestionNotifTime: user!.suggestionNotifTime, hasPassword: user!.hasPassword !== false });
       });
     } catch (err) {
-      console.error("Apple auth error:", err);
+      console.error("[apple-auth] Unexpected error:", err);
       res.status(500).json({ message: "Apple sign in failed" });
     }
   });
