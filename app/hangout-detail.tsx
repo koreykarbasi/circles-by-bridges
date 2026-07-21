@@ -152,6 +152,7 @@ export default function HangoutDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const webTopInset = Platform.OS === "web" ? 67 : 0;
   const [linkCopied, setLinkCopied] = useState(false);
+  const [copiedInviteeName, setCopiedInviteeName] = useState<string | null>(null);
   const [msgCopied, setMsgCopied] = useState(false);
   const [guestsCopied, setGuestsCopied] = useState(false);
 
@@ -231,6 +232,10 @@ export default function HangoutDetailScreen() {
     return `${base}vote/${plan?.shareCode}`;
   }, [plan]);
 
+  const getVoteUrlForToken = useCallback((token: string) => {
+    return `${getVoteUrl()}?token=${encodeURIComponent(token)}`;
+  }, [getVoteUrl]);
+
   const copyToClipboard = useCallback(async (text: string): Promise<boolean> => {
     try {
       await Clipboard.setStringAsync(text);
@@ -262,6 +267,16 @@ export default function HangoutDetailScreen() {
       setTimeout(() => setMsgCopied(false), 2000);
     }
   }, [plan, getVoteUrl, copyToClipboard]);
+
+  const handleCopyInviteeLink = useCallback(async (name: string, token: string) => {
+    const url = getVoteUrlForToken(token);
+    const ok = await copyToClipboard(url);
+    if (ok) {
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+      setCopiedInviteeName(name);
+      setTimeout(() => setCopiedInviteeName((cur) => (cur === name ? null : cur)), 2000);
+    }
+  }, [getVoteUrlForToken, copyToClipboard]);
 
   const handleCalendarInvite = useCallback(() => {
     if (!plan) return;
@@ -516,6 +531,34 @@ export default function HangoutDetailScreen() {
           </View>
         )}
 
+        {/* Personalized per-invitee voting links (prevents impersonation) */}
+        {!isFinalized && plan.voterLinks && plan.voterLinks.length > 0 && (
+          <View style={styles.inviteeLinksSection}>
+            <Text style={styles.inviteeLinksTitle}>Personal invite links</Text>
+            <Text style={styles.inviteeLinksSubtitle}>
+              Each invitee has their own link so votes can&apos;t be faked under their name.
+            </Text>
+            {plan.voterLinks.map((vl) => (
+              <View key={vl.name} style={styles.inviteeLinkRow}>
+                <Text style={styles.inviteeLinkName} numberOfLines={1}>{vl.name}</Text>
+                <Pressable
+                  onPress={() => handleCopyInviteeLink(vl.name, vl.token)}
+                  style={({ pressed }) => [styles.inviteeLinkBtn, pressed && { opacity: 0.7 }]}
+                >
+                  <Ionicons
+                    name={copiedInviteeName === vl.name ? "checkmark" : "copy-outline"}
+                    size={14}
+                    color={Colors.primaryLight}
+                  />
+                  <Text style={styles.inviteeLinkBtnText}>
+                    {copiedInviteeName === vl.name ? "Copied!" : "Copy"}
+                  </Text>
+                </Pressable>
+              </View>
+            ))}
+          </View>
+        )}
+
         {/* Progress hint: activity locked, time still needed */}
         {activityLocked && timeOptions.length > 0 && (
           <View style={styles.progressHint}>
@@ -690,6 +733,24 @@ const styles = StyleSheet.create({
     borderWidth: 1, borderColor: Colors.primary + "40",
   },
   shareBtnText: { fontSize: 14, fontFamily: "Nunito_700Bold", color: "#fff" },
+  inviteeLinksSection: {
+    backgroundColor: Colors.primary + "0D",
+    borderWidth: 1, borderColor: Colors.primary + "25",
+    borderRadius: 14, padding: 14, marginBottom: 20,
+  },
+  inviteeLinksTitle: { fontSize: 14, fontFamily: "Nunito_700Bold", color: Colors.text, marginBottom: 4 },
+  inviteeLinksSubtitle: { fontSize: 12, fontFamily: "Nunito_400Regular", color: Colors.textSecondary, marginBottom: 12 },
+  inviteeLinkRow: {
+    flexDirection: "row", alignItems: "center", justifyContent: "space-between",
+    paddingVertical: 8, borderTopWidth: 1, borderTopColor: Colors.primary + "15",
+  },
+  inviteeLinkName: { flex: 1, fontSize: 14, fontFamily: "Nunito_600SemiBold", color: Colors.text, marginRight: 10 },
+  inviteeLinkBtn: {
+    flexDirection: "row", alignItems: "center", gap: 5,
+    paddingHorizontal: 10, paddingVertical: 6, borderRadius: 8,
+    backgroundColor: Colors.primary + "15",
+  },
+  inviteeLinkBtnText: { fontSize: 12, fontFamily: "Nunito_700Bold", color: Colors.primaryLight },
   progressHint: {
     flexDirection: "row", alignItems: "center", gap: 7,
     backgroundColor: Colors.success + "10", borderRadius: 10,

@@ -55,6 +55,13 @@ export const hangoutPlans = pgTable("hangout_plans", {
   finalizedOptionId: varchar("finalized_option_id"),
   finalizedTimeOptionId: varchar("finalized_time_option_id"),
   inviteeNames: text("invitee_names").array().notNull().default(sql`'{}'::text[]`),
+  // Map of lowercase-trimmed invitee name -> unguessable per-invitee voting
+  // token. Generated at creation time. A personalized voting link
+  // (/vote/:shareCode?token=...) is the only way to cast a ballot under a
+  // given invitee's name — this prevents impersonation/spoofing on the
+  // public voting link, which by itself only proves possession of the
+  // shareCode, not identity.
+  voterTokens: jsonb("voter_tokens").notNull().default({}),
   surveyMode: text("survey_mode").notNull().default("standard"),
   fixedActivity: text("fixed_activity"),
   deadline: text("deadline"),

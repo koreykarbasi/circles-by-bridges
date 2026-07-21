@@ -362,6 +362,16 @@ async function ensureHangoutInvitesSentAtColumn() {
   }
 }
 
+async function ensureHangoutVoterTokensColumn() {
+  try {
+    await pool.query(
+      `ALTER TABLE hangout_plans ADD COLUMN IF NOT EXISTS voter_tokens JSONB NOT NULL DEFAULT '{}'::jsonb`,
+    );
+  } catch (err) {
+    console.error("[startup] Failed to add voter_tokens column:", err);
+  }
+}
+
 (async () => {
   setupCors(app);
   setupBodyParsing(app);
@@ -376,6 +386,7 @@ async function ensureHangoutInvitesSentAtColumn() {
   await ensureLastProfilePushAtColumn();
   await ensurePasswordResetTokensTable();
   await ensureHangoutInvitesSentAtColumn();
+  await ensureHangoutVoterTokensColumn();
 
   const server = await registerRoutes(app);
 

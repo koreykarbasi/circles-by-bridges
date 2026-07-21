@@ -194,8 +194,13 @@ export class DatabaseStorage implements IStorage {
 
   async replaceVotesForVoter(planId: string, voterName: string, newVotes: InsertHangoutVote[]): Promise<HangoutVote[]> {
     return db.transaction(async (tx) => {
+      // Match case-insensitively so a voter can't accumulate multiple stored
+      // ballots via case variants (Alice/alice/ALICE) of the same name.
       await tx.delete(hangoutVotes).where(
-        and(eq(hangoutVotes.planId, planId), eq(hangoutVotes.voterName, voterName))
+        and(
+          eq(hangoutVotes.planId, planId),
+          drizzleSql`lower(${hangoutVotes.voterName}) = lower(${voterName})`,
+        )
       );
       if (newVotes.length === 0) return [];
       return tx.insert(hangoutVotes).values(newVotes).returning();

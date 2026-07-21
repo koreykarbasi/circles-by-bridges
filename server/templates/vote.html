@@ -131,8 +131,11 @@ h1.title{font-size:24px;font-weight:800;text-align:center;margin-bottom:4px;line
 
 <script>
 const shareCode = window.location.pathname.split('/vote/')[1];
+const urlParams = new URLSearchParams(window.location.search);
+const voterToken = urlParams.get('token') || '';
 let planData = null;
 let voterName = '';
+let voterNameLocked = false;
 let submitted = false;
 
 // Per question-type: array of option ids in ranked order (index 0 = rank 1)
@@ -174,16 +177,26 @@ function addDayOfWeek(label) {
 
 async function load() {
   try {
-    const res = await fetch('/api/vote/' + shareCode);
+    const qs = voterToken ? ('?token=' + encodeURIComponent(voterToken)) : '';
+    const res = await fetch('/api/vote/' + shareCode + qs);
     if (!res.ok) throw new Error('Not found');
     planData = await res.json();
+
+    // If the link carried a valid personalized token, lock the voter identity
+    // to the resolved invitee name — this is what proves who is voting.
+    if (planData.resolvedVoterName) {
+      voterName = planData.resolvedVoterName;
+      voterNameLocked = true;
+    }
 
     // If this browser already submitted a vote, show results with change-vote option
     try {
       const storedName = localStorage.getItem('voter_name_' + shareCode);
-      if (storedName) {
+      if (storedName && !voterNameLocked) {
         submitted = true;
         voterName = storedName;
+      } else if (storedName && voterNameLocked && storedName.toLowerCase().trim() === voterName.toLowerCase().trim()) {
+        submitted = true;
       } else if (localStorage.getItem('voted_' + shareCode) === 'true') {
         submitted = true;
       }
@@ -257,12 +270,22 @@ function renderVoteForm() {
   let html = '';
 
   // Name
-  html += `
-    <div class="name-group">
-      <label class="label" for="voterName">Your name</label>
-      <input class="name-input" id="voterName" placeholder="Enter your name" autocomplete="given-name" value="${esc(voterName)}" />
-    </div>
-  `;
+  if (voterNameLocked) {
+    html += `
+      <div class="name-group">
+        <label class="label" for="voterName">Voting as</label>
+        <input class="name-input" id="voterName" value="${esc(voterName)}" readonly disabled />
+      </div>
+    `;
+  } else {
+    html += `
+      <div class="name-group">
+        <label class="label" for="voterName">Your name</label>
+        <input class="name-input" id="voterName" placeholder="Enter your name" autocomplete="given-name" value="${esc(voterName)}" />
+        ${planData.requiresToken ? `<p style="margin:6px 0 0;font-size:12px;color:#5E5580">If you were personally invited, use your own invite link so your vote is counted under your name.</p>` : ''}
+      </div>
+    `;
+  }
 
   // Fixed activity badge
   if (planData.surveyMode === 'fixed-activity' && planData.fixedActivity) {
@@ -665,14 +688,14 @@ function updateSubmitBtn() {
   const btn = document.getElementById('submitBtn');
   if (!btn) return;
   const name = document.getElementById('voterName');
-  const hasName = name && name.value.trim().length > 0;
+  const hasName = voterNameLocked ? voterName.trim().length > 0 : (name && name.value.trim().length > 0);
   const plusOneDone = !planData.includePlusOne || bringsGuests !== null;
   btn.disabled = !hasName || !plusOneDone;
 }
 
 async function submitVotes() {
   const nameEl = document.getElementById('voterName');
-  const name = nameEl ? nameEl.value.trim() : voterName.trim();
+  const name = voterNameLocked ? voterName.trim() : (nameEl ? nameEl.value.trim() : voterName.trim());
   if (!name) return;
 
   const btn = document.getElementById('submitBtn');
@@ -695,6 +718,7 @@ async function submitVotes() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         voterName: name,
+        voterToken: voterToken || undefined,
         votes,
         bringsGuests: planData.includePlusOne ? bringsGuests : null,
         plusOneCount: planData.includePlusOne && bringsGuests ? plusOneCount : null,

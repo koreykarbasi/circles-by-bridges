@@ -53,6 +53,7 @@ export interface HangoutPlan {
   updatedAt?: string | null;
   options?: HangoutOption[];
   bestRecommendation?: BestRecommendation;
+  voterLinks?: { name: string; token: string }[];
 }
 
 export interface HangoutOption {
