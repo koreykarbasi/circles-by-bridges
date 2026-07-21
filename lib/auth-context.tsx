@@ -48,7 +48,7 @@ interface AuthContextValue {
   login: (email: string, password: string) => Promise<void>;
   register: (email: string, password: string, name?: string) => Promise<void>;
   loginWithApple: (identityToken: string, fullName?: { givenName?: string | null; familyName?: string | null }) => Promise<void>;
-  loginWithGoogle: (accessToken: string) => Promise<void>;
+  loginWithGoogle: (idToken: string) => Promise<void>;
   logout: () => Promise<void>;
   updateProfilePhoto: (uri: string) => Promise<void>;
   updateName: (name: string) => Promise<void>;
@@ -122,8 +122,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     writeAuthCache(data);
   }, []);
 
-  const loginWithGoogle = useCallback(async (accessToken: string) => {
-    const res = await apiRequest("POST", "/api/auth/google", { accessToken });
+  const loginWithGoogle = useCallback(async (idToken: string) => {
+    const res = await apiRequest("POST", "/api/auth/google", { idToken });
     const data = await res.json();
     setUser(data);
     writeAuthCache(data);

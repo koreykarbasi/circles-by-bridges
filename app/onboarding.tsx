@@ -596,8 +596,9 @@ function GoogleAuthButton({
 
   useEffect(() => {
     if (response?.type === "success") {
-      const token = response.authentication?.accessToken;
+      const token = response.authentication?.idToken;
       if (token) onToken(token);
+      else onError("Google sign in did not return an ID token. Please try again.");
     } else if (response?.type === "error") {
       onError("Google sign in was cancelled or failed.");
     }

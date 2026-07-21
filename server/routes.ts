@@ -570,18 +570,47 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.post("/api/auth/google", authRateLimiter, async (req, res) => {
     try {
-      const { accessToken } = req.body;
-      if (!accessToken || typeof accessToken !== "string") {
-        return res.status(400).json({ message: "Access token required" });
+      const { idToken } = req.body;
+      if (!idToken || typeof idToken !== "string") {
+        return res.status(400).json({ message: "ID token required" });
       }
-      const googleRes = await fetch(
-        `https://www.googleapis.com/oauth2/v3/userinfo`,
-        { headers: { Authorization: `Bearer ${accessToken}` } }
+
+      // Verify the ID token with Google's tokeninfo endpoint.
+      // This validates the token's signature and expiry server-side, and returns
+      // the `aud` claim so we can confirm the token was issued for Bridges' own
+      // Google OAuth client IDs — not for some other application.
+      const tokenInfoRes = await fetch(
+        `https://oauth2.googleapis.com/tokeninfo?id_token=${encodeURIComponent(idToken)}`
       );
-      if (!googleRes.ok) {
+      if (!tokenInfoRes.ok) {
         return res.status(401).json({ message: "Invalid Google token" });
       }
-      const data = await googleRes.json() as { sub?: string; email?: string; name?: string };
+      const data = await tokenInfoRes.json() as {
+        aud?: string; sub?: string; email?: string; name?: string;
+        email_verified?: string; error?: string;
+      };
+
+      if (data.error) {
+        return res.status(401).json({ message: "Invalid Google token" });
+      }
+
+      // Confirm the token's audience is one of Bridges' own OAuth client IDs.
+      // Tokens minted for any other Google OAuth application are rejected.
+      const allowedClientIds = [
+        process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID,
+        process.env.EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID,
+        process.env.EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID,
+      ].filter((id): id is string => typeof id === "string" && id.length > 0);
+
+      if (allowedClientIds.length === 0) {
+        console.error("Google auth: no Google client IDs configured — cannot verify token audience");
+        return res.status(500).json({ message: "Google sign in is not configured" });
+      }
+
+      if (!data.aud || !allowedClientIds.includes(data.aud)) {
+        return res.status(401).json({ message: "Invalid Google token audience" });
+      }
+
       const { email, name } = data;
       if (!email) {
         return res.status(400).json({ message: "Email not available from Google" });
