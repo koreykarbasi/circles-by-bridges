@@ -15,7 +15,7 @@ import { EmptyState } from "@/components/EmptyState";
 import { NoPhoneSheet } from "@/components/NoPhoneSheet";
 import { formatLastContacted, getDaysSince, getDaysUntilBirthday } from "@/lib/helpers";
 import { CIRCLE_CONFIG, HangoutPlan } from "@/lib/types";
-import { generateReminders, Reminder, CHECKIN_THRESHOLDS, HANGOUT_THRESHOLDS, ELEVATION_PUSH_DELAY_HOURS, ELEVATION_CLEANUP_DAYS } from "@/lib/reminders";
+import { generateReminders, Reminder, CHECKIN_THRESHOLDS, ELEVATION_PUSH_DELAY_HOURS, ELEVATION_CLEANUP_DAYS } from "@/lib/reminders";
 import { setElevation, getElevations, getExpiredElevations, clearElevation, ELEVATION_SCORE_BONUS, invalidateElevationCache } from "@/lib/checkin-state";
 import { snoozeContact, getSnoozedContacts, SNOOZE_DAYS } from "@/lib/reminder-snooze";
 import { getSmartPrompt, getActionType, getNextPrompt, loadSyncedPrompts } from "@/lib/prompts";
@@ -117,7 +117,7 @@ function SwipableSuggestionRow({ children, onSwipeDismiss }: { children: React.R
 export default function HomeScreen() {
   const insets = useSafeAreaInsets();
   const { user } = useAuth();
-  const { contacts, markContacted, markHangout, refreshContacts, savePhoneNumber, isLoading } = useContacts();
+  const { contacts, markContacted, refreshContacts, savePhoneNumber, isLoading } = useContacts();
   const [refreshing, setRefreshing] = useState(false);
   const dismissedReminders = useDismissedReminders();
   const dismissedSuggestions = useDismissedSuggestions();
@@ -358,13 +358,14 @@ export default function HomeScreen() {
         reminder.type.startsWith("profile-completion") ||
         !reminder.contactId
       ) return;
-      if (reminder.type === "hangout-quickpick") {
-        await markHangout(reminder.contactId);
-      } else {
+      // DISABLED: hangout tracking
+      // if (reminder.type === "hangout-quickpick") {
+      //   await markHangout(reminder.contactId);
+      // } else {
         await markContacted(reminder.contactId);
-      }
+      // }
     },
-    [markContacted, markHangout],
+    [markContacted],
   );
 
   const handleReminderQuickPick = useCallback(
@@ -389,25 +390,26 @@ export default function HomeScreen() {
           await invalidateElevationCache();
           setElevatedContactTypes((prev) => new Set(prev).add(`${reminder.contactId}:checkin`));
         }
-      } else if (reminder.type === "hangout-quickpick") {
-        await markHangout(reminder.contactId, date, label);
-        const daysSince = Math.floor((Date.now() - date.getTime()) / (1000 * 60 * 60 * 24));
-        if (daysSince > HANGOUT_THRESHOLDS[circleLevel]) {
-          await setElevation({
-            contactId: reminder.contactId,
-            contactName: reminder.contactName,
-            circleLevel,
-            type: "hangout",
-            elevatedAt: new Date().toISOString(),
-            pushDue: new Date(Date.now() + ELEVATION_PUSH_DELAY_HOURS[circleLevel] * 3600 * 1000).toISOString(),
-            cleanupDue: new Date(Date.now() + ELEVATION_CLEANUP_DAYS[circleLevel].hangout * 24 * 3600 * 1000).toISOString(),
-          });
-          await invalidateElevationCache();
-          setElevatedContactTypes((prev) => new Set(prev).add(`${reminder.contactId}:hangout`));
-        }
+      // DISABLED: hangout tracking
+      // } else if (reminder.type === "hangout-quickpick") {
+      //   await markHangout(reminder.contactId, date, label);
+      //   const daysSince = Math.floor((Date.now() - date.getTime()) / (1000 * 60 * 60 * 24));
+      //   if (daysSince > HANGOUT_THRESHOLDS[circleLevel]) {
+      //     await setElevation({
+      //       contactId: reminder.contactId,
+      //       contactName: reminder.contactName,
+      //       circleLevel,
+      //       type: "hangout",
+      //       elevatedAt: new Date().toISOString(),
+      //       pushDue: new Date(Date.now() + ELEVATION_PUSH_DELAY_HOURS[circleLevel] * 3600 * 1000).toISOString(),
+      //       cleanupDue: new Date(Date.now() + ELEVATION_CLEANUP_DAYS[circleLevel].hangout * 24 * 3600 * 1000).toISOString(),
+      //     });
+      //     await invalidateElevationCache();
+      //     setElevatedContactTypes((prev) => new Set(prev).add(`${reminder.contactId}:hangout`));
+      //   }
       }
     },
-    [markContacted, markHangout],
+    [markContacted],
   );
 
   const handleReminderSnooze = useCallback((reminder: Reminder) => {
@@ -427,11 +429,12 @@ export default function HomeScreen() {
       dismissSuggestion(suggestion.contactId);
       markContactSuggested(suggestion.contactId).catch(() => {});
       await markContacted(suggestion.contactId);
-      if (suggestion.actionType === "hangout") {
-        await markHangout(suggestion.contactId);
-      }
+      // DISABLED: hangout tracking
+      // if (suggestion.actionType === "hangout") {
+      //   await markHangout(suggestion.contactId);
+      // }
     },
-    [markContacted, markHangout],
+    [markContacted],
   );
 
   const handleSuggestionSwipeDismiss = useCallback((suggestion: Suggestion) => {

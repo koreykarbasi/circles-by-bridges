@@ -218,20 +218,21 @@ function generateCircle1Reminders(contact: Contact): Reminder[] {
     });
   }
 
-  const daysSinceHangout = getDaysSince(contact.lastHangout ?? undefined);
-  if (daysSinceHangout !== null && daysSinceHangout > HANGOUT_THRESHOLDS[1]) {
-    const severity = Math.min(60, Math.floor((daysSinceHangout - HANGOUT_THRESHOLDS[1]) * 2));
-    reminders.push({
-      id: `hangout-${contact.id}`,
-      contactId: contact.id,
-      contactName: contact.name,
-      circleLevel: 1,
-      type: "hangout-quickpick",
-      priority: 60 + severity,
-      title: `When did you last hang out with ${contact.name}?`,
-      subtitle: `Last hangout: ${formatLastContacted(contact.lastHangout ?? undefined)}`,
-    });
-  }
+  // DISABLED: hangout tracking
+  // const daysSinceHangout = getDaysSince(contact.lastHangout ?? undefined);
+  // if (daysSinceHangout !== null && daysSinceHangout > HANGOUT_THRESHOLDS[1]) {
+  //   const severity = Math.min(60, Math.floor((daysSinceHangout - HANGOUT_THRESHOLDS[1]) * 2));
+  //   reminders.push({
+  //     id: `hangout-${contact.id}`,
+  //     contactId: contact.id,
+  //     contactName: contact.name,
+  //     circleLevel: 1,
+  //     type: "hangout-quickpick",
+  //     priority: 60 + severity,
+  //     title: `When did you last hang out with ${contact.name}?`,
+  //     subtitle: `Last hangout: ${formatLastContacted(contact.lastHangout ?? undefined)}`,
+  //   });
+  // }
 
   return reminders;
 }
@@ -287,20 +288,21 @@ function generateCircle2Reminders(contact: Contact): Reminder[] {
     });
   }
 
-  const daysSinceHangout = getDaysSince(contact.lastHangout ?? undefined);
-  if (daysSinceHangout !== null && daysSinceHangout > HANGOUT_THRESHOLDS[2]) {
-    const severity = Math.min(50, Math.floor((daysSinceHangout - HANGOUT_THRESHOLDS[2]) * 0.8));
-    reminders.push({
-      id: `hangout-${contact.id}`,
-      contactId: contact.id,
-      contactName: contact.name,
-      circleLevel: 2,
-      type: "hangout-quickpick",
-      priority: 50 + severity,
-      title: `When did you last hang out with ${contact.name}?`,
-      subtitle: `Last hangout: ${formatLastContacted(contact.lastHangout ?? undefined)}`,
-    });
-  }
+  // DISABLED: hangout tracking
+  // const daysSinceHangout = getDaysSince(contact.lastHangout ?? undefined);
+  // if (daysSinceHangout !== null && daysSinceHangout > HANGOUT_THRESHOLDS[2]) {
+  //   const severity = Math.min(50, Math.floor((daysSinceHangout - HANGOUT_THRESHOLDS[2]) * 0.8));
+  //   reminders.push({
+  //     id: `hangout-${contact.id}`,
+  //     contactId: contact.id,
+  //     contactName: contact.name,
+  //     circleLevel: 2,
+  //     type: "hangout-quickpick",
+  //     priority: 50 + severity,
+  //     title: `When did you last hang out with ${contact.name}?`,
+  //     subtitle: `Last hangout: ${formatLastContacted(contact.lastHangout ?? undefined)}`,
+  //   });
+  // }
 
   return reminders;
 }
@@ -339,19 +341,20 @@ function generateCircle3Reminders(contact: Contact): Reminder[] {
     });
   }
 
-  const daysSinceHangout = getDaysSince(contact.lastHangout ?? undefined);
-  if (daysSinceHangout !== null && daysSinceHangout > HANGOUT_THRESHOLDS[3]) {
-    reminders.push({
-      id: `hangout-${contact.id}`,
-      contactId: contact.id,
-      contactName: contact.name,
-      circleLevel: 3,
-      type: "hangout-quickpick",
-      priority: 20,
-      title: `When did you last hang out with ${contact.name}?`,
-      subtitle: `Last hangout: ${formatLastContacted(contact.lastHangout ?? undefined)}`,
-    });
-  }
+  // DISABLED: hangout tracking
+  // const daysSinceHangout = getDaysSince(contact.lastHangout ?? undefined);
+  // if (daysSinceHangout !== null && daysSinceHangout > HANGOUT_THRESHOLDS[3]) {
+  //   reminders.push({
+  //     id: `hangout-${contact.id}`,
+  //     contactId: contact.id,
+  //     contactName: contact.name,
+  //     circleLevel: 3,
+  //     type: "hangout-quickpick",
+  //     priority: 20,
+  //     title: `When did you last hang out with ${contact.name}?`,
+  //     subtitle: `Last hangout: ${formatLastContacted(contact.lastHangout ?? undefined)}`,
+  //   });
+  // }
 
   return reminders;
 }

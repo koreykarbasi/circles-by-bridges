@@ -143,18 +143,20 @@ export function ContactsProvider({ children }: { children: ReactNode }) {
     }
   }, [contacts]);
 
-  const markHangoutFn = useCallback(async (id: string, date?: Date, label?: string) => {
-    const ts = (date ?? new Date()).toISOString();
-    setContacts((prev) =>
-      prev.map((c) => (c.id === id ? { ...c, lastHangout: ts, lastHangoutLabel: label ?? null } : c)),
-    );
-    const body: Record<string, string> = { hangoutAt: ts };
-    if (label) body.label = label;
-    apiRequest("POST", `/api/contacts/${id}/mark-hangout`, body)
-      .then(() => clearElevation(id, "hangout").catch(() => {}))
-      .then(() => invalidateElevationCache().catch(() => {}))
-      .then(fetchContacts);
-  }, [fetchContacts]);
+  // DISABLED: hangout tracking — markHangout is a no-op while hangout logging is disabled
+  const markHangoutFn = useCallback(async (_id: string, _date?: Date, _label?: string) => {
+    // Hangout date logging is currently disabled. Uncomment the block below to re-enable.
+    // const ts = (_date ?? new Date()).toISOString();
+    // setContacts((prev) =>
+    //   prev.map((c) => (c.id === _id ? { ...c, lastHangout: ts, lastHangoutLabel: _label ?? null } : c)),
+    // );
+    // const body: Record<string, string> = { hangoutAt: ts };
+    // if (_label) body.label = _label;
+    // apiRequest("POST", `/api/contacts/${_id}/mark-hangout`, body)
+    //   .then(() => clearElevation(_id, "hangout").catch(() => {}))
+    //   .then(() => invalidateElevationCache().catch(() => {}))
+    //   .then(fetchContacts);
+  }, []);
 
   const reorderCircleContactsFn = useCallback(async (circleLevel: 1 | 2 | 3, orderedIds: string[]) => {
     const previous = [...contacts];

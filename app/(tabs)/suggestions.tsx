@@ -10,7 +10,7 @@ import { EmptyState } from "@/components/EmptyState";
 import { CIRCLE_CONFIG } from "@/lib/types";
 import { getSmartPrompt, getNextPrompt, getActionType, resetSeenPrompts, loadSyncedPrompts } from "@/lib/prompts";
 import { getDaysSince, getDaysUntilBirthday, formatLastContacted, formatBirthdayCountdown, getContactUrgency } from "@/lib/helpers";
-import { generateReminders, CHECKIN_THRESHOLDS, HANGOUT_THRESHOLDS, ELEVATION_PUSH_DELAY_HOURS, ELEVATION_CLEANUP_DAYS } from "@/lib/reminders";
+import { generateReminders, CHECKIN_THRESHOLDS, ELEVATION_PUSH_DELAY_HOURS, ELEVATION_CLEANUP_DAYS } from "@/lib/reminders";
 import { setElevation, getElevations, getExpiredElevations, clearElevation, ELEVATION_SCORE_BONUS, invalidateElevationCache } from "@/lib/checkin-state";
 import { snoozeContact, getSnoozedContacts, SNOOZE_DAYS } from "@/lib/reminder-snooze";
 import { getDaysSinceLastSuggestedSync, scoreSuggestion, isInCooldown } from "@/lib/suggestion-scheduler";
@@ -51,15 +51,14 @@ function buildSuggestion(contact: Contact): GeneratedSuggestion {
 
   let type = getActionType(contact.circleLevel as 1 | 2 | 3, prompt);
   if (contact.circleLevel === 3 && type === "call") type = "text";
-  // Hangout button only when lastHangout threshold is exceeded — mirrors the
-  // hangout-quickpick reminder logic so both surfaces fire at the same threshold.
-  if (type === "hangout") {
-    const daysSinceHangout = getDaysSince(contact.lastHangout ?? undefined);
-    const hangoutThreshold = HANGOUT_THRESHOLDS[contact.circleLevel as 1 | 2 | 3];
-    if (daysSinceHangout !== null && daysSinceHangout < hangoutThreshold) {
-      type = "text";
-    }
-  }
+  // DISABLED: hangout tracking — lastHangout gate removed so hangout suggestions appear freely
+  // if (type === "hangout") {
+  //   const daysSinceHangout = getDaysSince(contact.lastHangout ?? undefined);
+  //   const hangoutThreshold = HANGOUT_THRESHOLDS[contact.circleLevel as 1 | 2 | 3];
+  //   if (daysSinceHangout !== null && daysSinceHangout < hangoutThreshold) {
+  //     type = "text";
+  //   }
+  // }
 
   return {
     contact,
@@ -88,7 +87,7 @@ function deriveHangoutTitle(contactName: string, prompt: string): string {
 export default function SuggestionsScreen() {
   const insets = useSafeAreaInsets();
   const { user } = useAuth();
-  const { contacts, markContacted, markHangout, savePhoneNumber } = useContacts();
+  const { contacts, markContacted, savePhoneNumber } = useContacts();
   const [filterCircle, setFilterCircle] = useState<1 | 2 | 3 | null>(null);
   const [refreshKey, setRefreshKey] = useState(0);
   const [shuffleJitter, setShuffleJitter] = useState<Record<string, number>>({});
@@ -351,14 +350,15 @@ export default function SuggestionsScreen() {
   const handleDone = useCallback(
     (contactId: string) => {
       markContacted(contactId);
-      if (cardPrompts[contactId]?.type === "hangout") {
-        markHangout(contactId);
-      }
+      // DISABLED: hangout tracking
+      // if (cardPrompts[contactId]?.type === "hangout") {
+      //   markHangout(contactId);
+      // }
       dismissSuggestion(contactId);
       setSessionSkippedIds((prev) => new Set(prev).add(contactId));
       markContactSuggested(contactId).catch(() => {});
     },
-    [markContacted, markHangout, cardPrompts],
+    [markContacted, cardPrompts],
   );
 
   const handleSwipeDismiss = useCallback((contactId: string) => {
@@ -399,13 +399,14 @@ export default function SuggestionsScreen() {
         reminder.type.startsWith("profile-completion") ||
         !reminder.contactId
       ) return;
-      if (reminder.type === "hangout-quickpick") {
-        await markHangout(reminder.contactId);
-      } else {
+      // DISABLED: hangout tracking
+      // if (reminder.type === "hangout-quickpick") {
+      //   await markHangout(reminder.contactId);
+      // } else {
         await markContacted(reminder.contactId);
-      }
+      // }
     },
-    [markContacted, markHangout],
+    [markContacted],
   );
 
   const handleReminderQuickPick = useCallback(
@@ -430,25 +431,26 @@ export default function SuggestionsScreen() {
           await invalidateElevationCache();
           setElevatedContactTypes((prev) => new Set(prev).add(`${reminder.contactId}:checkin`));
         }
-      } else if (reminder.type === "hangout-quickpick") {
-        await markHangout(reminder.contactId, date, label);
-        const daysSince = Math.floor((Date.now() - date.getTime()) / (1000 * 60 * 60 * 24));
-        if (daysSince > HANGOUT_THRESHOLDS[circleLevel]) {
-          await setElevation({
-            contactId: reminder.contactId,
-            contactName: reminder.contactName,
-            circleLevel,
-            type: "hangout",
-            elevatedAt: new Date().toISOString(),
-            pushDue: new Date(Date.now() + ELEVATION_PUSH_DELAY_HOURS[circleLevel] * 3600 * 1000).toISOString(),
-            cleanupDue: new Date(Date.now() + ELEVATION_CLEANUP_DAYS[circleLevel].hangout * 24 * 3600 * 1000).toISOString(),
-          });
-          await invalidateElevationCache();
-          setElevatedContactTypes((prev) => new Set(prev).add(`${reminder.contactId}:hangout`));
-        }
+      // DISABLED: hangout tracking
+      // } else if (reminder.type === "hangout-quickpick") {
+      //   await markHangout(reminder.contactId, date, label);
+      //   const daysSince = Math.floor((Date.now() - date.getTime()) / (1000 * 60 * 60 * 24));
+      //   if (daysSince > HANGOUT_THRESHOLDS[circleLevel]) {
+      //     await setElevation({
+      //       contactId: reminder.contactId,
+      //       contactName: reminder.contactName,
+      //       circleLevel,
+      //       type: "hangout",
+      //       elevatedAt: new Date().toISOString(),
+      //       pushDue: new Date(Date.now() + ELEVATION_PUSH_DELAY_HOURS[circleLevel] * 3600 * 1000).toISOString(),
+      //       cleanupDue: new Date(Date.now() + ELEVATION_CLEANUP_DAYS[circleLevel].hangout * 24 * 3600 * 1000).toISOString(),
+      //     });
+      //     await invalidateElevationCache();
+      //     setElevatedContactTypes((prev) => new Set(prev).add(`${reminder.contactId}:hangout`));
+      //   }
       }
     },
-    [markContacted, markHangout],
+    [markContacted],
   );
 
   const handleHangoutCalendarPress = useCallback((reminder: Reminder) => {
