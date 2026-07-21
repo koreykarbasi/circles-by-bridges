@@ -34,15 +34,15 @@ This scan assumes only production-reachable behavior matters. Development-only t
 
 ### Spoofing
 
-The application relies on cookie-backed sessions for all authenticated APIs. Session identifiers must be signed with an unpredictable secret, and production must fail closed if the secret is missing instead of falling back to a known default. Authentication endpoints must also resist credential guessing, and social-login flows must not trust a bare email match to attach a third-party identity to an already-claimed local account.
+The application relies on cookie-backed sessions for all authenticated APIs. Session identifiers must be signed with an unpredictable secret, and production must fail closed if the secret is missing instead of falling back to a known default. Authentication endpoints must also resist credential guessing, and social-login flows must verify that third-party tokens were minted for Bridges' own OAuth client IDs instead of trusting any token that happens to disclose a matching email address.
 
 ### Tampering
 
-Users can mutate contacts, hangouts, votes, prompts sync state, and notification settings. The server must treat all client input as untrusted, validate object ownership on every write, and protect authenticated state-changing routes from cross-site request forgery. Public voting links must preserve ballot integrity and prevent one visitor from submitting unlimited votes for the same survey.
+Users can mutate contacts, hangouts, votes, prompts sync state, and notification settings. The server must treat all client input as untrusted, validate object ownership on every write, and protect authenticated state-changing routes from cross-site request forgery. Public voting links must preserve ballot integrity and prevent one visitor from submitting unlimited votes for the same survey, including integrity-sensitive side fields such as guest counts.
 
 ### Information Disclosure
 
-The backend stores private relationship data and exposes a public voting surface. API responses must only disclose the minimum data required to the current user or public invitee. Logs and error paths must avoid leaking sensitive contact details, integration data, or secrets.
+The backend stores private relationship data and exposes a public voting surface. API responses must only disclose the minimum data required to the current user or public invitee. Notification and email delivery paths must bind recipients to stable identities or delivery endpoints so private plan details and relationship reminders cannot leak to unrelated accounts or later device holders. Logs and error paths must avoid leaking sensitive contact details, integration data, or secrets.
 
 ### Denial of Service
 
