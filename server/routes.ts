@@ -646,13 +646,25 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post("/api/auth/logout", (req, res) => {
-    req.session.destroy((err) => {
-      if (err) {
-        return res.status(500).json({ message: "Logout failed" });
+  app.post("/api/auth/logout", async (req, res) => {
+    try {
+      const userId = req.session.userId;
+      // Clear push token on logout so the device can no longer receive this
+      // user's notifications after they sign out (prevents token staying
+      // attached to old accounts on shared/resold devices).
+      if (userId) {
+        await storage.updateUser(userId, { pushToken: null });
       }
-      res.json({ success: true });
-    });
+      req.session.destroy((err) => {
+        if (err) {
+          return res.status(500).json({ message: "Logout failed" });
+        }
+        res.json({ success: true });
+      });
+    } catch (err) {
+      console.error("Logout error:", err);
+      res.status(500).json({ message: "Logout failed" });
+    }
   });
 
   app.delete("/api/auth/account", requireAuth, async (req, res) => {
@@ -847,8 +859,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (!token || typeof token !== "string" || !token.trim()) {
         return bad(res, "Push token is required");
       }
+      const trimmedToken = token.trim();
+      // Evict this device token from any other user accounts before binding it
+      // to the current session. This prevents a device token from staying
+      // attached to a previous owner's account after the device is passed on
+      // or reused, which would leak that user's private notifications.
+      await storage.clearPushTokenFromOtherUsers(req.session.userId!, trimmedToken);
       const update: { pushToken: string; notificationTimezone?: string } = {
-        pushToken: token.trim(),
+        pushToken: trimmedToken,
       };
       if (timezone && typeof timezone === "string") {
         update.notificationTimezone = timezone.trim();

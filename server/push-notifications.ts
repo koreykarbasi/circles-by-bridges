@@ -412,53 +412,16 @@ export async function sendHangoutFinalizedNotifications(
     const notificationBody =
       bodyParts.join(" — ") + (locationPart ? ` at ${locationPart}` : "");
 
-    // Collect unique voter names
-    const allVotes = await db
-      .select({ voterName: hangoutVotes.voterName })
-      .from(hangoutVotes)
-      .where(eq(hangoutVotes.planId, planId));
-
-    const uniqueVoterNames = [
-      ...new Set(
-        allVotes
-          .map((v) => v.voterName.trim().toLowerCase())
-          .filter((name) => name.length > 0),
-      ),
-    ];
-    if (uniqueVoterNames.length === 0) return;
-
-    // Find registered users whose username matches a voter name (case-insensitive)
-    // and who have a push token and are not the organizer
-    const registeredUsers = await db
-      .select({
-        id: users.id,
-        username: users.username,
-        pushToken: users.pushToken,
-      })
-      .from(users)
-      .where(isNotNull(users.pushToken));
-
-    let sent = 0;
-    for (const user of registeredUsers) {
-      if (user.id === organizerUserId) continue;
-      if (!user.pushToken || !user.username) continue;
-      const normalizedUsername = user.username.trim().toLowerCase();
-      if (!uniqueVoterNames.includes(normalizedUsername)) continue;
-
-      await sendExpoPush(
-        user.pushToken,
-        "Your hangout is confirmed!",
-        notificationBody,
-        { hangoutId: planId },
-      );
-      sent++;
-    }
-
-    if (sent > 0) {
-      console.log(
-        `[push] Sent ${sent} hangout-finalized notifications for plan ${planId}`,
-      );
-    }
+    // Invitee notifications are intentionally omitted here. Matching voters to
+    // registered accounts by username is unsafe because usernames are mutable
+    // and non-unique — an attacker could set their display name to a common
+    // invitee name and intercept private event details. There is no stable,
+    // unforgeable binding between a vote (identified only by a free-text
+    // voterName) and a user account in the current data model. Until per-vote
+    // user-ID binding is added, no push is sent to invitees on finalization.
+    console.log(
+      `[push] Hangout ${planId} finalized — invitee push notifications skipped (no safe voter→account binding).`,
+    );
   } catch (err) {
     console.error("[push] Error sending hangout finalized notifications:", err);
   }

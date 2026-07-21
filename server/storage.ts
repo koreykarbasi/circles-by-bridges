@@ -40,6 +40,7 @@ export interface IStorage {
   markPasswordResetTokenUsed(id: string): Promise<void>;
   deleteExpiredPasswordResetTokens(): Promise<void>;
   deleteUser(id: string): Promise<boolean>;
+  clearPushTokenFromOtherUsers(currentUserId: string, token: string): Promise<void>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -65,6 +66,19 @@ export class DatabaseStorage implements IStorage {
       .where(eq(users.id, id))
       .returning();
     return user;
+  }
+
+  async clearPushTokenFromOtherUsers(currentUserId: string, token: string): Promise<void> {
+    await db
+      .update(users)
+      .set({ pushToken: null })
+      .where(
+        and(
+          eq(users.pushToken, token),
+          // Use drizzleSql to express "id != currentUserId"
+          drizzleSql`${users.id} != ${currentUserId}`,
+        ),
+      );
   }
 
   async getContactsByUserId(userId: string): Promise<Contact[]> {
