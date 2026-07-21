@@ -215,9 +215,19 @@ function computeBestRecommendation(optionsWithScores: any[], votes: any[], inclu
   };
 
   const totalVoters = new Set(votes.map((v: any) => v.voterName)).size;
-  const plusOneTotal = includePlusOne
-    ? votes.reduce((sum: number, v: any) => sum + (v.plusOneCount || 0), 0)
-    : undefined;
+  // Sum plusOneCount once per unique voter (not per vote row) to prevent a
+  // single ballot from inflating the guest total by the number of options.
+  let plusOneTotal: number | undefined;
+  if (includePlusOne) {
+    const seenVoters = new Map<string, number>();
+    for (const v of votes) {
+      const key = (v.voterName ?? "").toLowerCase().trim();
+      if (!seenVoters.has(key) && v.plusOneCount != null) {
+        seenVoters.set(key, v.plusOneCount);
+      }
+    }
+    plusOneTotal = [...seenVoters.values()].reduce((sum, n) => sum + n, 0);
+  }
 
   return {
     bestActivity: best(byType("activity")),
@@ -231,6 +241,23 @@ function computeBestRecommendation(optionsWithScores: any[], votes: any[], inclu
 function formatLocalDateTime(d: Date): string {
   const pad = (n: number) => n.toString().padStart(2, "0");
   return `${d.getFullYear()}${pad(d.getMonth() + 1)}${pad(d.getDate())}T${pad(d.getHours())}${pad(d.getMinutes())}${pad(d.getSeconds())}`;
+}
+
+/**
+ * Sanitize a value for use in an ICS text property.
+ * RFC 5545 requires backslash-escaping of commas, semicolons, and backslashes
+ * in TEXT values. CR and LF characters are stripped outright to prevent
+ * line-injection attacks (an attacker could otherwise inject arbitrary
+ * calendar properties such as URL:, ALARM:, or DESCRIPTION:).
+ */
+function sanitizeIcsValue(value: string): string {
+  // Strip CR/LF to block property-injection via line folding
+  const stripped = value.replace(/[\r\n]/g, " ");
+  // Escape special TEXT characters per RFC 5545 §3.3.11
+  return stripped
+    .replace(/\\/g, "\\\\")
+    .replace(/;/g, "\\;")
+    .replace(/,/g, "\\,");
 }
 
 function generateIcs(title: string, timeLabel: string, locationLabel: string | null): string {
@@ -259,7 +286,9 @@ function generateIcs(title: string, timeLabel: string, locationLabel: string | n
     dtEnd = formatLocalDateTime(end);
   }
 
-  const location = locationLabel ? `LOCATION:${locationLabel}\r\n` : "";
+  const safeTitle = sanitizeIcsValue(title);
+  const safeLocation = locationLabel ? sanitizeIcsValue(locationLabel) : null;
+  const location = safeLocation ? `LOCATION:${safeLocation}` : "";
 
   return [
     "BEGIN:VCALENDAR",
@@ -272,8 +301,8 @@ function generateIcs(title: string, timeLabel: string, locationLabel: string | n
     `DTSTAMP:${dtStamp}`,
     `DTSTART:${dtStart}`,
     `DTEND:${dtEnd}`,
-    `SUMMARY:${title}`,
-    location.trim(),
+    `SUMMARY:${safeTitle}`,
+    location,
     "END:VEVENT",
     "END:VCALENDAR",
   ]
@@ -1620,8 +1649,31 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ message: "This hangout has already been finalized" });
       }
 
-      const { votes, bringsGuests, plusOneCount } = req.body;
+      const { votes } = req.body;
       const rawVoterName: unknown = req.body.voterName;
+      // Validate optional guest-count fields to prevent spoofing via inflated values.
+      // bringsGuests must be a boolean; plusOneCount must be a whole number 1–10.
+      const rawBringsGuests: unknown = req.body.bringsGuests;
+      const rawPlusOneCount: unknown = req.body.plusOneCount;
+      let bringsGuests: boolean | null = null;
+      let plusOneCount: number | null = null;
+      if (rawBringsGuests !== undefined && rawBringsGuests !== null) {
+        if (typeof rawBringsGuests !== "boolean") {
+          return bad(res, "bringsGuests must be a boolean");
+        }
+        bringsGuests = rawBringsGuests;
+      }
+      if (rawPlusOneCount !== undefined && rawPlusOneCount !== null) {
+        if (
+          typeof rawPlusOneCount !== "number" ||
+          !Number.isInteger(rawPlusOneCount) ||
+          rawPlusOneCount < 1 ||
+          rawPlusOneCount > 10
+        ) {
+          return bad(res, "plusOneCount must be an integer between 1 and 10");
+        }
+        plusOneCount = rawPlusOneCount;
+      }
       if (!rawVoterName || typeof rawVoterName !== "string" || !rawVoterName.trim()) {
         return bad(res, "Voter name is required");
       }

@@ -1,5 +1,14 @@
 import { Resend } from "resend";
 
+function escapeHtml(value: string): string {
+  return value
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#x27;");
+}
+
 let resendClient: Resend | null = null;
 
 function getResend(): Resend {
@@ -92,14 +101,25 @@ export async function sendHangoutCalendarInvite(
 ): Promise<void> {
   const resend = getResend();
 
-  const locationRow = locationLabel
-    ? `<tr><td style="padding:4px 0;font-size:13px;color:#9B93B8">Where</td><td style="padding:4px 0 4px 16px;font-size:14px;font-weight:600;color:#F0ECF8">${locationLabel}</td></tr>`
+  // Strip CR/LF from all user-controlled values to prevent header and content injection
+  const cleanContactName = contactName.replace(/[\r\n]/g, " ");
+  const cleanHangoutTitle = hangoutTitle.replace(/[\r\n]/g, " ");
+  const cleanTimeLabel = timeLabel.replace(/[\r\n]/g, " ");
+  const cleanLocationLabel = locationLabel ? locationLabel.replace(/[\r\n]/g, " ") : null;
+
+  const safeContactName = escapeHtml(cleanContactName);
+  const safeHangoutTitle = escapeHtml(cleanHangoutTitle);
+  const safeTimeLabel = escapeHtml(cleanTimeLabel);
+  const safeLocationLabel = cleanLocationLabel ? escapeHtml(cleanLocationLabel) : null;
+
+  const locationRow = safeLocationLabel
+    ? `<tr><td style="padding:4px 0;font-size:13px;color:#9B93B8">Where</td><td style="padding:4px 0 4px 16px;font-size:14px;font-weight:600;color:#F0ECF8">${safeLocationLabel}</td></tr>`
     : "";
 
   const { error } = await resend.emails.send({
     from: "Bridges <onboarding@resend.dev>",
     to,
-    subject: `You're invited: ${hangoutTitle}`,
+    subject: `You're invited: ${cleanHangoutTitle}`,
     html: `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -122,14 +142,14 @@ export async function sendHangoutCalendarInvite(
           <td style="padding:32px 32px 8px">
             <h1 style="margin:0 0 8px;font-size:24px;font-weight:800;color:#F0ECF8">You're invited!</h1>
             <p style="margin:0 0 24px;font-size:15px;line-height:1.6;color:#9B93B8">
-              Hi ${contactName}, you've been invited to:
+              Hi ${safeContactName}, you've been invited to:
             </p>
             <div style="background:#1E1640;border-radius:12px;border:1px solid #2A2148;padding:20px 20px 16px;margin-bottom:24px">
-              <p style="margin:0 0 14px;font-size:20px;font-weight:800;color:#F0ECF8">${hangoutTitle}</p>
+              <p style="margin:0 0 14px;font-size:20px;font-weight:800;color:#F0ECF8">${safeHangoutTitle}</p>
               <table role="presentation" cellpadding="0" cellspacing="0">
                 <tr>
                   <td style="padding:4px 0;font-size:13px;color:#9B93B8">When</td>
-                  <td style="padding:4px 0 4px 16px;font-size:14px;font-weight:600;color:#F0ECF8">${timeLabel}</td>
+                  <td style="padding:4px 0 4px 16px;font-size:14px;font-weight:600;color:#F0ECF8">${safeTimeLabel}</td>
                 </tr>
                 ${locationRow}
               </table>
