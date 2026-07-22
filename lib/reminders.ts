@@ -441,6 +441,8 @@ export function generateReminders(contacts: Contact[]): Reminder[] {
     }
   }
 
+  reminders.push(...generateProfileCompletionReminders(contacts));
+
   reminders.sort((a, b) => b.priority - a.priority);
   return reminders;
 }

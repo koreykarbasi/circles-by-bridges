@@ -49,6 +49,10 @@ args = "Start App"
 task = "workflow.run"
 args = "Start Frontend"
 
+[[workflows.workflow.tasks]]
+task = "workflow.run"
+args = "profile-completion-test"
+
 [[workflows.workflow]]
 name = "Start App"
 author = "agent"
@@ -84,6 +88,17 @@ waitForPort = 8081
 
 [workflows.workflow.metadata]
 outputType = "console"
+
+[[workflows.workflow]]
+name = "profile-completion-test"
+author = "agent"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "npx tsx scripts/test-profile-completion.ts"
+
+[workflows.workflow.metadata]
+isValidation = true
 
 [postMerge]
 path = "scripts/post-merge.sh"
