@@ -37,6 +37,12 @@ export interface IStorage {
   deleteVotesByPlanId(planId: string): Promise<boolean>;
   deleteVotesByPlanIdAndVoterName(planId: string, voterName: string): Promise<void>;
   replaceVotesForVoter(planId: string, voterName: string, newVotes: InsertHangoutVote[]): Promise<HangoutVote[]>;
+  replaceVotesForVoterCapped(
+    planId: string,
+    voterName: string,
+    newVotes: InsertHangoutVote[],
+    guestOpts: { isGuest: boolean; inviteeNames: string[]; guestCap: number } | null,
+  ): Promise<{ capped: true } | { capped: false; votes: HangoutVote[] }>;
   createPasswordResetToken(userId: string, tokenHash: string, expiresAt: Date): Promise<PasswordResetToken>;
   getPasswordResetTokenByHash(tokenHash: string): Promise<PasswordResetToken | undefined>;
   markPasswordResetTokenUsed(id: string): Promise<void>;
@@ -230,6 +236,67 @@ export class DatabaseStorage implements IStorage {
       );
       if (newVotes.length === 0) return [];
       return tx.insert(hangoutVotes).values(newVotes).returning();
+    });
+  }
+
+  async replaceVotesForVoterCapped(
+    planId: string,
+    voterName: string,
+    newVotes: InsertHangoutVote[],
+    guestOpts: { isGuest: boolean; inviteeNames: string[]; guestCap: number } | null,
+  ): Promise<{ capped: true } | { capped: false; votes: HangoutVote[] }> {
+    return db.transaction(async (tx) => {
+      // Acquire a row-level lock on the hangout plan for the duration of this
+      // transaction. This serializes concurrent vote submissions for the same
+      // plan so the guest-count check and the insert are atomic — closing the
+      // race window that allowed concurrent requests to all pass the cap check
+      // before any of them had written to the database.
+      await tx.execute(drizzleSql`SELECT id FROM hangout_plans WHERE id = ${planId} FOR UPDATE`);
+
+      if (guestOpts) {
+        const { isGuest, inviteeNames, guestCap } = guestOpts;
+        const canonicalVoterKey = voterName.toLowerCase().trim();
+
+        // Re-read existing votes inside the transaction (after the lock) so
+        // we see the true current state, not a stale pre-lock snapshot.
+        const existingVotes = await tx.select().from(hangoutVotes).where(eq(hangoutVotes.planId, planId));
+        const voterAlreadySubmitted = existingVotes.some(
+          (v) => v.voterName.toLowerCase().trim() === canonicalVoterKey,
+        );
+
+        if (isGuest) {
+          if (!voterAlreadySubmitted) {
+            const existingGuestKeys = new Set(
+              existingVotes
+                .map((v) => v.voterName.toLowerCase().trim())
+                .filter((n) => !inviteeNames.some((inv) => inv.toLowerCase().trim() === n)),
+            );
+            if (existingGuestKeys.size >= guestCap) {
+              return { capped: true };
+            }
+          }
+        } else if (inviteeNames.length === 0) {
+          // Legacy plans: apply the same cap to total distinct voters.
+          if (!voterAlreadySubmitted) {
+            const totalVoters = new Set(existingVotes.map((v) => v.voterName.toLowerCase().trim())).size;
+            if (totalVoters >= guestCap) {
+              return { capped: true };
+            }
+          }
+        }
+      }
+
+      // Delete any existing ballot from this voter (case-insensitive) and
+      // insert the new one atomically within the same locked transaction.
+      await tx.delete(hangoutVotes).where(
+        and(
+          eq(hangoutVotes.planId, planId),
+          drizzleSql`lower(${hangoutVotes.voterName}) = lower(${voterName})`,
+        ),
+      );
+      if (newVotes.length === 0) return { capped: false, votes: [] };
+      const votes = await tx.insert(hangoutVotes).values(newVotes).returning();
+      return { capped: false, votes };
     });
   }
 

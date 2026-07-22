@@ -1916,29 +1916,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         isGuest = true;
       }
 
-      const existingVotes = await storage.getVotesByPlanId(plan.id);
-      const existingGuestNames = new Set(
-        existingVotes
-          .map((v) => v.voterName.toLowerCase().trim())
-          .filter((n) => !inviteeNames.some((inv) => inv.toLowerCase().trim() === n))
-      );
-      const voterAlreadySubmitted = existingVotes.some(
-        (v) => v.voterName.toLowerCase().trim() === canonicalVoterName.toLowerCase().trim()
-      );
-      const GUEST_VOTER_BUFFER = 3;
-      if (isGuest) {
-        if (!voterAlreadySubmitted && existingGuestNames.size >= GUEST_VOTER_BUFFER) {
-          return res.status(400).json({ message: "This survey has reached its guest voting limit" });
-        }
-      } else if (inviteeNames.length === 0) {
-        // Legacy plans with no recorded invitee list — apply a small fixed cap.
-        const totalVoters = new Set(existingVotes.map((v) => v.voterName.toLowerCase().trim())).size;
-        if (!voterAlreadySubmitted && totalVoters >= GUEST_VOTER_BUFFER) {
-          return res.status(400).json({ message: "This survey has reached its voting limit" });
-        }
-      }
-
-      // Validate all submitted optionIds belong to this plan
+      // Validate all submitted optionIds belong to this plan (before entering
+      // the serialized transaction to keep the lock duration as short as possible).
       const planOptions = await storage.getOptionsByPlanId(plan.id);
       const validOptionIds = new Set(planOptions.map((o) => o.id));
       for (const v of votes) {
@@ -1955,7 +1934,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return bad(res, ballotError);
       }
 
-      // Atomically replace any existing submission from this voter to prevent ballot stuffing
+      const GUEST_VOTER_BUFFER = 3;
       const newVotes = votes.map((v: any) => ({
         optionId: v.optionId,
         planId: plan.id,
@@ -1964,8 +1943,34 @@ export async function registerRoutes(app: Express): Promise<Server> {
         bringsGuests: bringsGuests ?? null,
         plusOneCount: plusOneCount ?? null,
       }));
-      const createdVotes = await storage.replaceVotesForVoter(plan.id, canonicalVoterName, newVotes);
-      res.status(201).json(createdVotes);
+
+      // The guest-count check and the insert are performed inside a single
+      // database transaction that holds a row-level lock on the hangout plan
+      // row (SELECT FOR UPDATE). This serializes concurrent submissions for the
+      // same plan so the cap cannot be bypassed by racing requests that all
+      // read the same pre-write state and each conclude the cap has not been
+      // reached yet.
+      const result = await storage.replaceVotesForVoterCapped(
+        plan.id,
+        canonicalVoterName,
+        newVotes,
+        // Pass guest enforcement context so the storage layer can re-check the
+        // count inside the locked transaction. Pass null for verified invitees
+        // (they are not subject to the guest cap).
+        isGuest || inviteeNames.length === 0
+          ? { isGuest, inviteeNames, guestCap: GUEST_VOTER_BUFFER }
+          : null,
+      );
+
+      if (result.capped) {
+        return res.status(400).json({
+          message: isGuest
+            ? "This survey has reached its guest voting limit"
+            : "This survey has reached its voting limit",
+        });
+      }
+
+      res.status(201).json(result.votes);
     } catch (err) {
       console.error("Error casting votes:", err);
       res.status(500).json({ message: "Failed to cast votes" });

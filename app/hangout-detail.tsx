@@ -155,6 +155,7 @@ export default function HangoutDetailScreen() {
   const [copiedInviteeName, setCopiedInviteeName] = useState<string | null>(null);
   const [msgCopied, setMsgCopied] = useState(false);
   const [guestsCopied, setGuestsCopied] = useState(false);
+  const [showIndividualVotes, setShowIndividualVotes] = useState(false);
 
   const { data: plan, isLoading } = useQuery<HangoutPlan>({
     queryKey: ["/api/hangouts", id],
@@ -589,6 +590,118 @@ export default function HangoutDetailScreen() {
           isFinalized={isFinalized}
           onFinalize={undefined}
         />
+
+        {/* Individual votes — collapsible, creator-only view */}
+        {(() => {
+          const allOptions = plan.options || [];
+          // Collect all votes across every option
+          const allVotes = allOptions.flatMap((opt) =>
+            (opt.votes || []).map((v) => ({
+              voterName: v.voterName,
+              optionLabel: opt.label,
+              questionType: opt.questionType,
+              rank: v.rank ?? null,
+              optionId: opt.id,
+            }))
+          );
+          if (allVotes.length === 0) return null;
+
+          // Build per-voter summaries: { voterName -> sorted votes }
+          const voterMap = new Map<string, typeof allVotes>();
+          for (const v of allVotes) {
+            const key = v.voterName;
+            if (!voterMap.has(key)) voterMap.set(key, []);
+            voterMap.get(key)!.push(v);
+          }
+          const voters = Array.from(voterMap.entries()).sort(([a], [b]) =>
+            a.localeCompare(b)
+          );
+
+          // Label each question type with a readable category name
+          const categoryLabel = (qt: string) =>
+            qt === "activity" ? "Activity" : qt === "time" ? "When" : qt === "location" ? "Where" : qt;
+
+          const ordinal = (n: number) =>
+            n === 1 ? "1st" : n === 2 ? "2nd" : n === 3 ? "3rd" : `${n}th`;
+
+          return (
+            <View style={styles.indvSection}>
+              <Pressable
+                onPress={() => {
+                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                  setShowIndividualVotes((v) => !v);
+                }}
+                style={({ pressed }) => [styles.indvToggle, pressed && { opacity: 0.75 }]}
+              >
+                <Text style={styles.indvToggleText}>
+                  Individual votes ({voters.length})
+                </Text>
+                <Ionicons
+                  name={showIndividualVotes ? "chevron-up" : "chevron-down"}
+                  size={16}
+                  color={Colors.textSecondary}
+                />
+              </Pressable>
+
+              {showIndividualVotes && (
+                <View style={styles.indvBody}>
+                  {voters.map(([voterName, voterVotes], vi) => {
+                    // Group this voter's picks by question type, sorted by rank
+                    const byType = new Map<string, typeof voterVotes>();
+                    for (const v of voterVotes) {
+                      if (!byType.has(v.questionType)) byType.set(v.questionType, []);
+                      byType.get(v.questionType)!.push(v);
+                    }
+                    // Sort each group by rank ascending (null ranks go last)
+                    for (const arr of byType.values()) {
+                      arr.sort((a, b) => {
+                        if (a.rank === null && b.rank === null) return 0;
+                        if (a.rank === null) return 1;
+                        if (b.rank === null) return -1;
+                        return a.rank - b.rank;
+                      });
+                    }
+                    const typeOrder = ["activity", "time", "location"];
+                    const types = typeOrder.filter((t) => byType.has(t));
+
+                    return (
+                      <View
+                        key={voterName}
+                        style={[
+                          styles.indvVoterCard,
+                          vi < voters.length - 1 && styles.indvVoterCardDivider,
+                        ]}
+                      >
+                        <Text style={styles.indvVoterName}>{voterName}</Text>
+                        {types.map((qt) => (
+                          <View key={qt} style={styles.indvTypeBlock}>
+                            <Text style={styles.indvTypeLabel}>{categoryLabel(qt)}</Text>
+                            {byType.get(qt)!.map((v) => (
+                              <View key={v.optionId} style={styles.indvPickRow}>
+                                {v.rank !== null ? (
+                                  <View style={styles.indvRankBadge}>
+                                    <Text style={styles.indvRankText}>{ordinal(v.rank)}</Text>
+                                  </View>
+                                ) : (
+                                  <View style={[styles.indvRankBadge, styles.indvRankBadgeSkipped]}>
+                                    <Text style={[styles.indvRankText, { color: Colors.textTertiary }]}>—</Text>
+                                  </View>
+                                )}
+                                <Text style={styles.indvPickLabel} numberOfLines={1}>
+                                  {v.optionLabel}
+                                </Text>
+                              </View>
+                            ))}
+                          </View>
+                        ))}
+                      </View>
+                    );
+                  })}
+                </View>
+              )}
+            </View>
+          );
+        })()}
       </ScrollView>
     </View>
   );
@@ -759,5 +872,45 @@ const styles = StyleSheet.create({
   },
   progressHintText: {
     fontSize: 13, fontFamily: "Nunito_600SemiBold", color: Colors.success, flex: 1,
+  },
+  indvSection: {
+    marginTop: 8, marginBottom: 32,
+    borderTopWidth: 1, borderTopColor: Colors.border,
+  },
+  indvToggle: {
+    flexDirection: "row", alignItems: "center", justifyContent: "space-between",
+    paddingVertical: 14,
+  },
+  indvToggleText: {
+    fontSize: 13, fontFamily: "Nunito_600SemiBold", color: Colors.textSecondary,
+  },
+  indvBody: {
+    backgroundColor: Colors.surface, borderRadius: 14,
+    borderWidth: 1, borderColor: Colors.border, overflow: "hidden",
+  },
+  indvVoterCard: { paddingHorizontal: 14, paddingVertical: 12 },
+  indvVoterCardDivider: { borderBottomWidth: 1, borderBottomColor: Colors.border },
+  indvVoterName: {
+    fontSize: 14, fontFamily: "Nunito_700Bold", color: Colors.text, marginBottom: 8,
+  },
+  indvTypeBlock: { marginBottom: 8 },
+  indvTypeLabel: {
+    fontSize: 10, fontFamily: "Nunito_700Bold", color: Colors.textTertiary,
+    textTransform: "uppercase", letterSpacing: 0.8, marginBottom: 4,
+  },
+  indvPickRow: {
+    flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 3,
+  },
+  indvRankBadge: {
+    width: 34, height: 20, borderRadius: 5,
+    backgroundColor: Colors.primary + "20",
+    alignItems: "center", justifyContent: "center",
+  },
+  indvRankBadgeSkipped: { backgroundColor: Colors.border },
+  indvRankText: {
+    fontSize: 11, fontFamily: "Nunito_700Bold", color: Colors.primary,
+  },
+  indvPickLabel: {
+    fontSize: 13, fontFamily: "Nunito_400Regular", color: Colors.textSecondary, flex: 1,
   },
 });
