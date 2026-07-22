@@ -23,7 +23,7 @@ import { resetAllHints } from "@/lib/hints-store";
 import { CIRCLE_CONFIG } from "@/lib/types";
 import * as Haptics from "expo-haptics";
 import { apiRequest } from "@/lib/query-client";
-import { scheduleSuggestionNudge } from "@/lib/reminder-notifications";
+import { scheduleSuggestionNudge, sendTestNotification } from "@/lib/reminder-notifications";
 
 export default function ProfileScreen() {
   const insets = useSafeAreaInsets();
@@ -336,6 +336,29 @@ export default function ProfileScreen() {
               </View>
             )}
           </View>
+          {Platform.OS !== "web" && (
+            <Pressable
+              onPress={async () => {
+                try {
+                  await sendTestNotification();
+                  Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+                  Alert.alert("Test sent", "You'll receive a notification in about 5 seconds.");
+                } catch {
+                  Alert.alert("Could not send", "Make sure notification permissions are enabled in your device settings.");
+                }
+              }}
+              style={({ pressed }) => [styles.menuItem, { marginTop: 8 }, pressed && { opacity: 0.7 }]}
+            >
+              <View style={[styles.menuIcon, { backgroundColor: Colors.primary + "18" }]}>
+                <Ionicons name="notifications-outline" size={20} color={Colors.primary} />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.menuTitle}>Test notification</Text>
+                <Text style={styles.menuDesc}>Send a test to confirm notifications are working</Text>
+              </View>
+              <Ionicons name="chevron-forward" size={16} color={Colors.textTertiary} />
+            </Pressable>
+          )}
         </View>
 
         <View style={styles.section}>

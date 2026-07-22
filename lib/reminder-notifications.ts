@@ -77,6 +77,23 @@ export async function scheduleReminderNotifications(contacts: Contact[]): Promis
   }
 }
 
+/**
+ * Schedules a test notification 5 seconds from now so the user can verify
+ * that push notifications are wired up correctly on their device.
+ * No-ops on web.
+ */
+export async function sendTestNotification(): Promise<void> {
+  if (Platform.OS === "web") return;
+  await Notifications.scheduleNotificationAsync({
+    content: {
+      title: "Bridges",
+      body: "Bridges notifications are working",
+      data: { url: "/" },
+    },
+    trigger: { type: Notifications.SchedulableTriggerInputTypes.TIME_INTERVAL, seconds: 5 },
+  });
+}
+
 async function _cancelAllLocalReminderNotifications(): Promise<void> {
   const existing = await loadReminderEntries();
   for (const entry of Object.values(existing)) {
