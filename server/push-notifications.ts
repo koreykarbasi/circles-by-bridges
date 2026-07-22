@@ -1,17 +1,8 @@
 import { db, pool } from "./db";
 import { users, contacts, hangoutVotes, hangoutOptions, hangoutPlans } from "@shared/schema";
 import { isNotNull, eq } from "drizzle-orm";
-import { getDaysUntilBirthday } from "./birthday-utils";
+import { getDaysUntilBirthday, getDaysSince } from "./birthday-utils";
 export { getDaysUntilBirthday };
-
-// ─── Reminder helpers (mirrors lib/helpers.ts + lib/reminders.ts) ─────────────
-
-function getDaysSince(dateStr?: string | null): number | null {
-  if (!dateStr) return null;
-  const now = new Date();
-  const date = new Date(dateStr);
-  return Math.floor((now.getTime() - date.getTime()) / (1000 * 60 * 60 * 24));
-}
 
 interface CustomReminder {
   label: string;

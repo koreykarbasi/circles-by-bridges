@@ -1,4 +1,4 @@
-import { getDaysUntilBirthday } from "../server/birthday-utils";
+import { getDaysUntilBirthday, getDaysSince } from "../server/birthday-utils";
 
 // Pin "today" to a fixed local date for all tests: 2024-03-15 (a Friday)
 const FIXED_TODAY = new Date(2024, 2, 15, 12, 0, 0); // March 15 2024, noon local time
@@ -198,5 +198,89 @@ describe("getDaysUntilBirthday — UTC midnight off-by-one regression", () => {
     const slash = getDaysUntilBirthday("04/14");
     expect(iso).toBe(slash);
     expect(iso).toBe(30);
+  });
+});
+
+// ── getDaysSince ─────────────────────────────────────────────────────────────
+//
+// Fixed today: 2024-03-15 noon local time (same FIXED_TODAY as above).
+
+describe("getDaysSince — null / invalid inputs", () => {
+  test("returns null for undefined", () => {
+    expect(getDaysSince(undefined)).toBeNull();
+  });
+
+  test("returns null for null", () => {
+    expect(getDaysSince(null)).toBeNull();
+  });
+
+  test("returns null for empty string", () => {
+    expect(getDaysSince("")).toBeNull();
+  });
+
+  test("returns null for an unparseable string", () => {
+    expect(getDaysSince("not-a-date")).toBeNull();
+  });
+});
+
+describe("getDaysSince — today = 0", () => {
+  // Fixed today: 2024-03-15
+
+  test("YYYY-MM-DD today returns 0", () => {
+    expect(getDaysSince("2024-03-15")).toBe(0);
+  });
+
+  test("MM/DD/YYYY today returns 0", () => {
+    expect(getDaysSince("03/15/2024")).toBe(0);
+  });
+});
+
+describe("getDaysSince — yesterday = 1", () => {
+  // 2024-03-14 is one calendar day before 2024-03-15
+
+  test("YYYY-MM-DD yesterday returns 1", () => {
+    expect(getDaysSince("2024-03-14")).toBe(1);
+  });
+
+  test("MM/DD/YYYY yesterday returns 1", () => {
+    expect(getDaysSince("03/14/2024")).toBe(1);
+  });
+});
+
+describe("getDaysSince — one week ago = 7", () => {
+  // 2024-03-08 is 7 calendar days before 2024-03-15
+
+  test("YYYY-MM-DD one week ago returns 7", () => {
+    expect(getDaysSince("2024-03-08")).toBe(7);
+  });
+
+  test("MM/DD/YYYY one week ago returns 7", () => {
+    expect(getDaysSince("03/08/2024")).toBe(7);
+  });
+});
+
+describe("getDaysSince — UTC midnight off-by-one regression", () => {
+  // The old bug: `new Date("2024-03-15")` creates a UTC midnight Date.
+  // In any timezone behind UTC (e.g. UTC-5) that resolves to local March 14
+  // 23:00, making the date appear to be 1 day ago instead of 0.
+  // The fixed implementation parses parts and uses new Date(year, month, day)
+  // (local midnight), so today always returns 0 regardless of timezone offset.
+
+  test("YYYY-MM-DD today never returns 1 due to UTC midnight shift", () => {
+    const result = getDaysSince("2024-03-15");
+    expect(result).toBe(0);
+    expect(result).not.toBe(1);
+  });
+
+  test("YYYY-MM-DD and MM/DD/YYYY agree for the same date", () => {
+    // If one used UTC parsing and the other didn't, they'd disagree at day boundaries.
+    const iso = getDaysSince("2024-03-08");
+    const slash = getDaysSince("03/08/2024");
+    expect(iso).toBe(slash);
+    expect(iso).toBe(7);
+  });
+
+  test("YYYY-MM-DD yesterday is exactly 1, not 0 or 2", () => {
+    expect(getDaysSince("2024-03-14")).toBe(1);
   });
 });
