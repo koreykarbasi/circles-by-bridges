@@ -350,8 +350,15 @@ export async function sendDailyReminders() {
           }
         }
         for (const msg of buildReminderMessages(contact)) {
-          if (msg.notifType === "reminder") reminderMessages.push(msg);
-          else milestoneMessages.push(msg);
+          if (msg.notifType === "reminder") {
+            reminderMessages.push(msg);
+          } else if (msg.notifType === "birthday") {
+            // Custom reminder day-of entries (daysUntil===0) use notifType "birthday".
+            // Gate them to the 9am local window, consistent with birthday day-of pushes.
+            if (isNineAm) milestoneMessages.push(msg);
+          } else {
+            milestoneMessages.push(msg);
+          }
         }
       }
 
