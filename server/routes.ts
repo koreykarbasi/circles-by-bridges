@@ -553,7 +553,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           clockTolerance: 30,
         });
         payload = verified as { sub?: string; email?: string };
-        console.log("[apple-auth] Token verified — sub:", verified.sub, "email:", verified.email ?? "(none)");
+        console.log("[apple-auth] Token verified successfully");
       } catch (verifyErr: unknown) {
         const errCode = (verifyErr as { code?: string }).code ?? "unknown";
         const errMsg = verifyErr instanceof Error ? verifyErr.message : String(verifyErr);
@@ -609,7 +609,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       } else if (user.hasPassword !== false) {
         // An account with this email already exists with a password. Refuse the
         // social login to prevent account takeover.
-        console.warn("[apple-auth] Email conflict — account has password:", user.email);
+        console.warn("[apple-auth] Email conflict — account has password set, refusing social login");
         return res.status(409).json({ message: "An account with this email already exists. Please sign in with your email and password." });
       } else {
         console.log("[apple-auth] Returning user found:", user.id);
