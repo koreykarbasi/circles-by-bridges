@@ -19,6 +19,7 @@ export const users = pgTable("users", {
   lastProfilePushAt: timestamp("last_profile_push_at"),
   googleSub: text("google_sub").unique(),
   appleSub: text("apple_sub").unique(),
+  createdAt: timestamp("created_at").defaultNow(),
 });
 
 export const contacts = pgTable("contacts", {

@@ -60,6 +60,13 @@ const EMAIL_INVITE_COOLDOWN_HOURS = 24;
 // Maximum recipients per batch (caps work even without per-user quota).
 const MAX_EMAIL_INVITES_PER_HANGOUT = 20;
 
+// Minimum account age before email invites are permitted.
+// Newly created accounts (created_at IS NOT NULL and < this threshold) are
+// blocked from triggering outbound mail, breaking the low-cost spam relay chain.
+// Accounts created before this column was added have created_at = NULL and are
+// always treated as established (no gate applied).
+const MIN_ACCOUNT_AGE_FOR_INVITES_MS = 48 * 60 * 60 * 1000; // 48 hours
+
 // Simple RFC-5321-compatible email pattern used for server-side validation.
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 // ───────────────────────────────────────────────────────────────────────────
@@ -342,6 +349,17 @@ const voteRateLimiter = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
   message: { message: "Too many voting attempts, please try again later" },
+});
+
+// IP-level cap on email-invite sends across all accounts from the same origin.
+// Even if an attacker creates multiple fresh accounts, this limiter bounds the
+// total number of outbound email batches they can trigger per IP per day.
+const emailInviteRateLimiter = rateLimit({
+  windowMs: 24 * 60 * 60 * 1000,
+  max: 10,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { message: "Too many email invite requests from this network. Please try again tomorrow." },
 });
 
 export async function registerRoutes(app: Express): Promise<Server> {
@@ -1534,10 +1552,32 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Send calendar invite emails to invitees who have emails on file
-  app.post("/api/hangouts/:id/email-invites", requireAuth, async (req, res) => {
+  app.post("/api/hangouts/:id/email-invites", requireAuth, emailInviteRateLimiter, async (req, res) => {
     try {
       const { id } = req.params as { id: string };
       const userId = req.session.userId!;
+
+      // Account age gate: block email delivery from accounts that were created
+      // less than MIN_ACCOUNT_AGE_FOR_INVITES_MS ago.
+      // Fail closed: if the user record cannot be found (e.g. session with a
+      // deleted account), deny the request rather than allowing it through.
+      // Existing accounts backfilled with a historical created_at always pass.
+      const senderUser = await storage.getUser(userId);
+      if (!senderUser) {
+        return res.status(401).json({ message: "Not authenticated" });
+      }
+      if (senderUser.createdAt) {
+        const ageMs = Date.now() - new Date(senderUser.createdAt).getTime();
+        if (ageMs < MIN_ACCOUNT_AGE_FOR_INVITES_MS) {
+          const hoursRemaining = Math.ceil(
+            (MIN_ACCOUNT_AGE_FOR_INVITES_MS - ageMs) / (1000 * 60 * 60),
+          );
+          return res.status(403).json({
+            message: `Email invites are available after your account is 48 hours old. Please try again in ${hoursRemaining} hour${hoursRemaining === 1 ? "" : "s"}.`,
+          });
+        }
+      }
+
       const plan = await storage.getHangoutPlan(id);
       if (!plan || plan.userId !== userId) {
         return res.status(404).json({ message: "Hangout not found" });

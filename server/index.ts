@@ -366,6 +366,26 @@ async function ensureProviderSubColumns() {
   }
 }
 
+async function ensureUserCreatedAtColumn() {
+  try {
+    // Step 1: add the column if absent (no DEFAULT yet so the ALTER is cheap).
+    await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS created_at TIMESTAMP`);
+
+    // Step 2: backfill existing rows that still have NULL.
+    // Use a historical timestamp so pre-existing accounts are always treated as
+    // "established" by the email-invite age gate and are never blocked.
+    await pool.query(
+      `UPDATE users SET created_at = '2020-01-01T00:00:00Z'::timestamp WHERE created_at IS NULL`,
+    );
+
+    // Step 3: set a DB-level DEFAULT so every new row gets a real timestamp.
+    // This is idempotent — setting the default twice is harmless.
+    await pool.query(`ALTER TABLE users ALTER COLUMN created_at SET DEFAULT NOW()`);
+  } catch (err) {
+    console.error("[startup] Failed to add/backfill users.created_at column:", err);
+  }
+}
+
 (async () => {
   setupCors(app);
   setupBodyParsing(app);
@@ -382,6 +402,7 @@ async function ensureProviderSubColumns() {
   await ensureHangoutInvitesSentAtColumn();
   await ensureHangoutVoterTokensColumn();
   await ensureProviderSubColumns();
+  await ensureUserCreatedAtColumn();
 
   const server = await registerRoutes(app);
 
