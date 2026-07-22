@@ -11,14 +11,14 @@ interface CustomReminder {
 
 // notifType drives per-type dedup so birthday logs don't suppress check-in
 // logs and vice versa.
-interface PushMessage {
+export interface PushMessage {
   title: string;
   body: string;
   contactId?: string;
   notifType: "birthday" | "reminder" | "milestone";
 }
 
-type ContactRow = {
+export type ContactRow = {
   id: string;
   name: string;
   circleLevel: number;
@@ -29,7 +29,7 @@ type ContactRow = {
 };
 
 // Birthday day-of messages — delivered when the hourly run fires on the birthday.
-function buildBirthdayDayOfMessages(contact: ContactRow): PushMessage[] {
+export function buildBirthdayDayOfMessages(contact: ContactRow): PushMessage[] {
   const messages: PushMessage[] = [];
   const daysUntil = getDaysUntilBirthday(contact.birthday);
   if (daysUntil !== 0) return messages;
@@ -56,7 +56,7 @@ function buildBirthdayDayOfMessages(contact: ContactRow): PushMessage[] {
 // check-in overdue (notifType='reminder'). Check-in is placed FIRST so the
 // per-contact collapse (one message per contact) favours the actionable reminder
 // over a milestone when both are present.
-function buildReminderMessages(contact: ContactRow): PushMessage[] {
+export function buildReminderMessages(contact: ContactRow): PushMessage[] {
   const messages: PushMessage[] = [];
   const daysUntilBirthday = getDaysUntilBirthday(contact.birthday);
 
@@ -190,6 +190,23 @@ function buildCustomReminderMessages(
 }
 
 // ─── 24-hour per-contact deduplication ───────────────────────────────────────
+
+// Exported for unit testing. Filters a list of push messages so that:
+//   - contacts already in `recentIds` (sent within the last 24 h under the same
+//     notifType namespace) are dropped,
+//   - only the first message per contactId is kept when duplicates appear in one
+//     batch (same-run dedup).
+// Messages without a contactId are always passed through.
+export function dedupMessages(msgs: PushMessage[], recentIds: Set<string>): PushMessage[] {
+  const seen = new Set<string>();
+  return msgs.filter((m) => {
+    if (!m.contactId) return true;
+    if (recentIds.has(m.contactId)) return false;
+    if (seen.has(m.contactId)) return false;
+    seen.add(m.contactId);
+    return true;
+  });
+}
 
 async function getRecentlySentContactIds(userId: string, types: string[]): Promise<Set<string>> {
   try {
@@ -356,18 +373,6 @@ export async function sendDailyReminders() {
       // Separate 24h dedup windows per type
       const recentBirthdayIds = await getRecentlySentContactIds(user.id, ["birthday"]);
       const recentReminderIds = await getRecentlySentContactIds(user.id, ["reminder", "elevation", "milestone"]);
-
-      // Collapse to one per contact within each type group, excluding recently sent.
-      function dedupMessages(msgs: PushMessage[], recentIds: Set<string>): PushMessage[] {
-        const seen = new Set<string>();
-        return msgs.filter((m) => {
-          if (!m.contactId) return true;
-          if (recentIds.has(m.contactId)) return false;
-          if (seen.has(m.contactId)) return false;
-          seen.add(m.contactId);
-          return true;
-        });
-      }
 
       const filteredBirthday = dedupMessages(birthdayMessages, recentBirthdayIds);
       // Check-in reminders come first (more actionable); milestones are lower priority
