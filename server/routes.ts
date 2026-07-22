@@ -515,6 +515,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       const user = await storage.getUserByEmail(email.toLowerCase().trim());
       if (!user) {
+        // Run a dummy bcrypt compare against a valid cost-10 hash to consume
+        // equivalent time and prevent timing-based email enumeration.
+        // The hash value is a pre-generated constant and does not correspond to
+        // any real password (same hardening as registration and forgot-password).
+        await bcrypt.compare(password, "$2b$10$12bD9BpoJMQ2L5QKoupAKeiiqS9qZeN8JBWJhTgRrW8U88QY0n/AO");
         return res.status(401).json({ message: "Invalid email or password" });
       }
       const valid = await bcrypt.compare(password, user.password);
@@ -911,6 +916,25 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       const hashedPassword = await bcrypt.hash(newPassword, 10);
       await storage.updateUser(user.id, { password: hashedPassword });
+
+      // Invalidate all other active sessions so that a stolen or shared session
+      // cookie cannot be used after a password change (mirrors the reset flow).
+      // We regenerate the current session first so the user stays logged in.
+      await new Promise<void>((resolve, reject) => {
+        req.session.regenerate((err) => {
+          if (err) return reject(err);
+          req.session.userId = user.id;
+          req.session.save((saveErr) => {
+            if (saveErr) return reject(saveErr);
+            resolve();
+          });
+        });
+      });
+      // After regenerating, delete every session for this user except the new one.
+      await pool.query(
+        `DELETE FROM session WHERE sess->>'userId' = $1 AND sid != $2`,
+        [String(user.id), req.session.id]
+      );
 
       res.json({ message: "Password updated successfully." });
     } catch (err) {
