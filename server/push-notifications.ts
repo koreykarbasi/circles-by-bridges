@@ -398,9 +398,15 @@ export async function sendDailyReminders() {
       // Check-in reminders come first (more actionable); milestones are lower priority
       const filteredReminders = dedupMessages([...reminderMessages, ...milestoneMessages], recentReminderIds);
 
-      // Priority order: birthday day-of > check-in overdue > milestone
-      // Each group is already ordered correctly. Merge and apply per-user cap.
-      const toSend = [...filteredBirthday, ...filteredReminders].slice(0, 3);
+      // Priority order: birthday day-of > check-in overdue > milestone.
+      // If a contact has BOTH a birthday today AND an overdue check-in, send only
+      // the birthday (same-day collision). The check-in is eligible again tomorrow
+      // because it uses its own dedup namespace ('reminder' not 'birthday').
+      const birthdayContactIds = new Set(filteredBirthday.map((m) => m.contactId).filter(Boolean) as string[]);
+      const filteredRemindersNoConflict = filteredReminders.filter(
+        (m) => !m.contactId || !birthdayContactIds.has(m.contactId),
+      );
+      const toSend = [...filteredBirthday, ...filteredRemindersNoConflict].slice(0, 3);
 
       // Diagnostic logging
       const totalEligible = filteredBirthday.length + filteredReminders.length;
