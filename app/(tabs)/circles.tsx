@@ -16,12 +16,17 @@ import { useSequentialHints, HINT_TEXT } from "@/lib/hints-store";
 import { HintTooltip } from "@/components/HintTooltip";
 import DraggableFlatList, { RenderItemParams, ScaleDecorator } from "react-native-draggable-flatlist";
 
+function isMissingEnrichment(c: Contact): boolean {
+  return (c.labels ?? []).length === 0 && (c.interests ?? []).length === 0;
+}
+
 export default function CirclesScreen() {
   const insets = useSafeAreaInsets();
   const { contacts, getCircleContacts, markContacted, isLoading, reorderCircleContacts } = useContacts();
-  const { circle: circleParam } = useLocalSearchParams<{ circle?: string }>();
+  const { circle: circleParam, filter: filterParam } = useLocalSearchParams<{ circle?: string; filter?: string }>();
   const [activeCircle, setActiveCircle] = useState<1 | 2 | 3>(1);
   const [searchQuery, setSearchQuery] = useState("");
+  const [activeFilter, setActiveFilter] = useState<string | null>(null);
   const [bellSheetOpen, setBellSheetOpen] = useState(false);
   const [addSheetOpen, setAddSheetOpen] = useState(false);
   const searchRef = useRef<TextInput>(null);
@@ -35,15 +40,31 @@ export default function CirclesScreen() {
   }, [circleParam]);
 
   useEffect(() => {
-    setSearchQuery("");
+    if (filterParam) {
+      setActiveFilter(filterParam);
+      setSearchQuery("");
+    }
+  }, [filterParam]);
+
+  useEffect(() => {
+    if (!activeFilter) setSearchQuery("");
   }, [activeCircle]);
 
   const circleContacts = getCircleContacts(activeCircle);
+
   const filteredContacts = useMemo(() => {
+    if (activeFilter === "yellow-dot") {
+      return contacts.filter(isMissingEnrichment);
+    }
+    const base = activeFilter === "missing-birthday-c1"
+      ? circleContacts.filter((c) => !c.birthday)
+      : activeFilter === "missing-birthday-c2"
+        ? circleContacts.filter((c) => !c.birthday || isMissingEnrichment(c))
+        : circleContacts;
     const q = searchQuery.trim().toLowerCase();
-    if (!q) return circleContacts;
-    return circleContacts.filter((c) => c.name.toLowerCase().includes(q));
-  }, [circleContacts, searchQuery]);
+    if (!q) return base;
+    return base.filter((c) => c.name.toLowerCase().includes(q));
+  }, [circleContacts, contacts, searchQuery, activeFilter]);
 
   const config = CIRCLE_CONFIG[activeCircle];
   const isCircleFull = circleContacts.length >= config.max;
@@ -53,7 +74,7 @@ export default function CirclesScreen() {
     [contacts, profileCompletion.isComplete],
   );
   const webTopInset = Platform.OS === "web" ? 67 : 0;
-  const canDrag = Platform.OS !== "web" && !searchQuery;
+  const canDrag = Platform.OS !== "web" && !searchQuery && !activeFilter;
 
   const showAddOptions = () => {
     if (isCircleFull) return;
@@ -85,8 +106,9 @@ export default function CirclesScreen() {
                 router.push({ pathname: "/create-hangout", params: { contactName: contact.name } });
               }}
               onLongPress={canDrag ? drag : undefined}
+              showCircleLabel={activeFilter === "yellow-dot"}
             />
-            {activeCircle === 1 && !contact.birthday && profileCompletion.stage === 1 && (
+            {!activeFilter && activeCircle === 1 && !contact.birthday && profileCompletion.stage === 1 && (
               <Pressable
                 onPress={() => router.push({ pathname: "/edit-contact", params: { id: contact.id, focusBirthday: "true" } })}
                 style={({ pressed }) => [styles.birthdayNudge, pressed && { opacity: 0.7 }]}
@@ -100,8 +122,15 @@ export default function CirclesScreen() {
         </ScaleDecorator>
       );
     },
-    [canDrag, activeCircle, markContacted, profileCompletion.stage],
+    [canDrag, activeCircle, markContacted, profileCompletion.stage, activeFilter],
   );
+
+  const filterBannerLabel = useMemo(() => {
+    if (activeFilter === "missing-birthday-c1") return "Showing Core contacts missing a birthday";
+    if (activeFilter === "missing-birthday-c2") return "Showing Close contacts missing birthday or details";
+    if (activeFilter === "yellow-dot") return "Showing all contacts missing labels or interests";
+    return null;
+  }, [activeFilter]);
 
   const listHeader = useMemo(() => (
     <View style={[styles.headerWrapper, { paddingTop: insets.top + 16 + webTopInset }]}>
@@ -156,6 +185,7 @@ export default function CirclesScreen() {
               onPress={() => {
                 Haptics.selectionAsync();
                 setActiveCircle(level);
+                setActiveFilter(null);
               }}
               style={[
                 styles.tab,
@@ -177,9 +207,20 @@ export default function CirclesScreen() {
         })}
       </View>
 
-      <Text style={styles.circleDescription}>{config.description}</Text>
+      {filterBannerLabel ? (
+        <Pressable
+          onPress={() => setActiveFilter(null)}
+          style={({ pressed }) => [styles.filterBanner, pressed && { opacity: 0.7 }]}
+        >
+          <Ionicons name="funnel" size={13} color={Colors.primary} />
+          <Text style={styles.filterBannerText} numberOfLines={1}>{filterBannerLabel}</Text>
+          <Ionicons name="close-circle" size={16} color={Colors.textTertiary} />
+        </Pressable>
+      ) : (
+        <Text style={styles.circleDescription}>{config.description}</Text>
+      )}
 
-      {circleContacts.length > 0 && (
+      {!activeFilter && circleContacts.length > 0 && (
         <View style={styles.searchRow}>
           <Ionicons name="search-outline" size={16} color={Colors.textTertiary} style={styles.searchIcon} />
           <TextInput
@@ -202,7 +243,7 @@ export default function CirclesScreen() {
 
       {isLoading ? (
         <ActivityIndicator size="large" color={Colors.primary} style={{ marginTop: 48 }} />
-      ) : circleContacts.length === 0 ? (
+      ) : !activeFilter && circleContacts.length === 0 ? (
         <EmptyState
           icon="person-add-outline"
           title={`No one in ${config.label}`}
@@ -210,13 +251,17 @@ export default function CirclesScreen() {
           actionLabel="Add someone"
           onAction={showAddOptions}
         />
-      ) : filteredContacts.length === 0 ? (
+      ) : activeFilter && filteredContacts.length === 0 ? (
+        <View style={styles.noResults}>
+          <Text style={styles.noResultsText}>No contacts to show here</Text>
+        </View>
+      ) : !activeFilter && filteredContacts.length === 0 ? (
         <View style={styles.noResults}>
           <Text style={styles.noResultsText}>No contacts match "{searchQuery}"</Text>
         </View>
       ) : null}
     </View>
-  ), [insets.top, webTopInset, bellDotColor, isCircleFull, activeCircle, config, circleContacts.length, filteredContacts.length, searchQuery, isLoading, getCircleContacts]);
+  ), [insets.top, webTopInset, bellDotColor, isCircleFull, activeCircle, config, circleContacts.length, filteredContacts.length, searchQuery, isLoading, getCircleContacts, activeFilter, filterBannerLabel]);
 
   const listFooter = useMemo(() => (
     !searchQuery && circleContacts.length < config.max && circleContacts.length > 0 ? (
@@ -453,6 +498,24 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontFamily: "Nunito_400Regular",
     color: Colors.textSecondary,
+  },
+  filterBanner: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    backgroundColor: Colors.primary + "12",
+    borderRadius: 10,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: Colors.primary + "25",
+  },
+  filterBannerText: {
+    flex: 1,
+    fontSize: 12,
+    fontFamily: "Nunito_600SemiBold",
+    color: Colors.primaryLight,
   },
   addSomeoneButton: {
     flexDirection: "row",

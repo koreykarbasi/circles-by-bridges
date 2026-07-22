@@ -724,7 +724,7 @@ export default function HomeScreen() {
             )}
 
             {visibleReminders.map((reminder) =>
-              (reminder.type === "check-in-quickpick" || reminder.type === "hangout-quickpick") ? (
+              (reminder.type === "check-in-quickpick" || reminder.type === "hangout-quickpick" || reminder.type.startsWith("profile-completion")) ? (
                 <ReminderItem
                   key={reminder.id}
                   reminder={reminder}

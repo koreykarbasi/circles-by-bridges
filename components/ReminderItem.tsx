@@ -7,6 +7,7 @@ import { CIRCLE_CONFIG } from "@/lib/types";
 import * as Haptics from "expo-haptics";
 import type { Reminder } from "@/lib/reminders";
 import { QuickPickRow } from "./QuickPickRow";
+import { router } from "expo-router";
 
 interface ReminderItemProps {
   reminder: Reminder;
@@ -35,6 +36,12 @@ function getProfileCompletionColor(type: string): string | null {
   if (type === "profile-completion-medium") return Colors.warning;
   if (type === "profile-completion-low") return Colors.yellow;
   return null;
+}
+
+function getProfileCompletionRoute(type: string): { circle?: string; filter: string } {
+  if (type === "profile-completion-high") return { circle: "1", filter: "missing-birthday-c1" };
+  if (type === "profile-completion-medium") return { circle: "2", filter: "missing-birthday-c2" };
+  return { filter: "yellow-dot" };
 }
 
 export function ReminderItem({ reminder, onComplete, onQuickPick, onCalendarPress }: ReminderItemProps) {
@@ -84,35 +91,54 @@ export function ReminderItem({ reminder, onComplete, onQuickPick, onCalendarPres
     });
   }, [onQuickPick, onComplete]);
 
-  return (
-    <Animated.View style={[styles.container, animatedStyle]}>
-      <View style={styles.row}>
-        <View style={[styles.iconContainer, { backgroundColor: priorityColor + "18" }]}>
-          {isBirthday ? (
-            <MaterialCommunityIcons name="cake-variant-outline" size={18} color={priorityColor} />
-          ) : (
-            <Ionicons name={typeIcon} size={18} color={priorityColor} />
-          )}
-        </View>
-        <View style={styles.content}>
-          <Text style={styles.title} numberOfLines={2}>{reminder.title}</Text>
-          <View style={styles.metaRow}>
-            <View style={[styles.circleDot, { backgroundColor: circleColor }]} />
-            <Text style={styles.subtitle} numberOfLines={1}>{reminder.subtitle}</Text>
-          </View>
-        </View>
-        {!isPersistent && (
-          <View style={styles.actions}>
-            <Pressable
-              onPress={handleComplete}
-              hitSlop={6}
-              style={({ pressed }) => [styles.checkBtn, pressed && { opacity: 0.5 }]}
-            >
-              <Ionicons name="checkmark-circle" size={22} color={Colors.success} />
-            </Pressable>
-          </View>
+  const handleProfileCompletionPress = useCallback(() => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    const params = getProfileCompletionRoute(reminder.type);
+    router.push({ pathname: "/(tabs)/circles", params });
+  }, [reminder.type]);
+
+  const cardContent = (
+    <View style={styles.row}>
+      <View style={[styles.iconContainer, { backgroundColor: priorityColor + "18" }]}>
+        {isBirthday ? (
+          <MaterialCommunityIcons name="cake-variant-outline" size={18} color={priorityColor} />
+        ) : (
+          <Ionicons name={typeIcon} size={18} color={priorityColor} />
         )}
       </View>
+      <View style={styles.content}>
+        <Text style={styles.title} numberOfLines={2}>{reminder.title}</Text>
+        <View style={styles.metaRow}>
+          <View style={[styles.circleDot, { backgroundColor: circleColor }]} />
+          <Text style={styles.subtitle} numberOfLines={1}>{reminder.subtitle}</Text>
+        </View>
+      </View>
+      {isProfileCompletion ? (
+        <Ionicons name="chevron-forward" size={16} color={Colors.textTertiary} style={styles.chevron} />
+      ) : !isPersistent ? (
+        <View style={styles.actions}>
+          <Pressable
+            onPress={handleComplete}
+            hitSlop={6}
+            style={({ pressed }) => [styles.checkBtn, pressed && { opacity: 0.5 }]}
+          >
+            <Ionicons name="checkmark-circle" size={22} color={Colors.success} />
+          </Pressable>
+        </View>
+      ) : null}
+    </View>
+  );
+
+  return (
+    <Animated.View style={[styles.container, animatedStyle]}>
+      {isProfileCompletion ? (
+        <Pressable
+          onPress={handleProfileCompletionPress}
+          style={({ pressed }) => pressed && { opacity: 0.7 }}
+        >
+          {cardContent}
+        </Pressable>
+      ) : cardContent}
       {isQuickPick && (
         <QuickPickRow
           circleLevel={reminder.circleLevel as 1 | 2 | 3}
@@ -180,5 +206,8 @@ const styles = StyleSheet.create({
   },
   checkBtn: {
     padding: 4,
+  },
+  chevron: {
+    marginLeft: 8,
   },
 });
