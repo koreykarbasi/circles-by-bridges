@@ -574,18 +574,37 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ message: "Invalid Apple token: missing subject" });
       }
 
-      // Derive a stable synthetic email from the Apple `sub` so returning users
-      // are always found even when the JWT email changes (e.g. private relay).
-      // Primary lookup: sub-based synthetic email (always stable across sign-ins).
-      // Fallback lookup: JWT email (used for accounts created before this logic).
+      // Canonical synthetic email derived from the stable Apple sub.
+      // This is used both for new account creation and as a safe secondary lookup
+      // for accounts that were created before the explicit appleSub column existed.
+      // It is immune to email recycling because it is deterministically derived
+      // from the stable Apple sub, not from the mutable JWT email claim.
       const syntheticEmail = `apple_${appleSub.replace(/[^a-z0-9]/gi, "")}@bridges.apple`;
-      const jwtEmailNorm = jwtEmail ? jwtEmail.toLowerCase().trim() : null;
 
-      let user = await storage.getUserByEmail(syntheticEmail);
+      // Primary lookup: by stable Apple sub stored in the database.
+      let user = await storage.getUserByAppleSub(appleSub);
 
-      if (!user && jwtEmailNorm) {
-        user = await storage.getUserByEmail(jwtEmailNorm);
+      if (!user) {
+        // Secondary lookup: synthetic-email accounts created before the explicit
+        // appleSub column existed. This is safe — syntheticEmail is a deterministic
+        // function of appleSub, so only a holder of the same Apple sub can produce
+        // the same syntheticEmail. Email recycling cannot reach these accounts.
+        user = await storage.getUserByEmail(syntheticEmail);
+        if (user) {
+          // Promote to sub-based lookup so future logins hit the primary path.
+          await storage.updateUser(user.id, { appleSub });
+          const updated = await storage.getUser(user.id);
+          if (updated) user = updated;
+          console.log("[apple-auth] Bound appleSub to existing synthetic-email account:", user.id);
+        }
       }
+
+      // NOTE: There is intentionally NO fallback to the raw JWT email claim.
+      // The JWT email is a mutable, provider-managed value that can be reassigned
+      // to a different person (e.g. Google Workspace domain recycling). Treating it
+      // as proof of account ownership would allow a holder of a recycled email to
+      // claim a previous user's account. Accounts not found by sub or syntheticEmail
+      // are treated as new users.
 
       if (!user) {
         // New Apple user — create account using synthetic email for stability.
@@ -595,7 +614,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           10
         );
         user = await storage.createUser({ email: syntheticEmail, password: hashedPassword });
-        await storage.updateUser(user.id, { hasPassword: false });
+        await storage.updateUser(user.id, { hasPassword: false, appleSub });
         if (fullName?.givenName) {
           const name = [fullName.givenName, fullName.familyName]
             .filter(Boolean)
@@ -672,26 +691,56 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(401).json({ message: "Invalid Google token audience" });
       }
 
-      const { email, name } = data;
+      const { sub: googleSub, email, name } = data;
+      if (!googleSub) {
+        return res.status(400).json({ message: "Google token missing subject (sub)" });
+      }
       if (!email) {
         return res.status(400).json({ message: "Email not available from Google" });
       }
-      let user = await storage.getUserByEmail(email.toLowerCase().trim());
+      const emailNorm = email.toLowerCase().trim();
+
+      // Primary (and only) lookup: by stable Google sub stored in the database.
+      // Email is intentionally NOT used for account lookup. The JWT email claim is
+      // a mutable, provider-managed value that can be reassigned to a different
+      // person (e.g. Google Workspace domain recycling, personal Gmail address
+      // takeover). Treating it as proof of account ownership would allow a holder
+      // of a recycled email to claim a previous user's account. Accounts not found
+      // by googleSub are treated as new users and a fresh account is created.
+      let user = await storage.getUserByGoogleSub(googleSub);
+
       if (!user) {
+        // Before creating a new account, check whether the email is already taken.
+        // This handles two cases:
+        //   a) Password account: another user registered this email with a password.
+        //      Refuse to prevent social-login overlay on a password account.
+        //   b) Legacy social account (hasPassword=false, googleSub=null): this
+        //      account was created by Google login before the googleSub column
+        //      existed. We cannot safely bind it by email (that is the vulnerability
+        //      this patch closes), so we surface a clear error directing the user to
+        //      contact support for account recovery, rather than letting the request
+        //      fall through to a unique-constraint 500.
+        const existingByEmail = await storage.getUserByEmail(emailNorm);
+        if (existingByEmail) {
+          if (existingByEmail.hasPassword !== false) {
+            return res.status(409).json({ message: "An account with this email already exists. Please sign in with your email and password." });
+          }
+          // Legacy social account without a bound googleSub.
+          console.warn("[google-auth] Legacy social account found for email but no googleSub bound — cannot safely authenticate:", existingByEmail.id);
+          return res.status(409).json({ message: "Your account was created before secure identity binding was introduced. Please contact support to recover access." });
+        }
         const hashedPassword = await bcrypt.hash(
           Math.random().toString(36) + Date.now(),
           10
         );
-        user = await storage.createUser({ email: email.toLowerCase().trim(), password: hashedPassword });
-        await storage.updateUser(user.id, { hasPassword: false });
+        user = await storage.createUser({ email: emailNorm, password: hashedPassword });
+        await storage.updateUser(user.id, { hasPassword: false, googleSub });
         if (name) await storage.updateUser(user.id, { username: name.trim() });
         const updated = await storage.getUser(user.id);
         if (updated) user = updated;
-      } else if (user.hasPassword !== false) {
-        // An account with this email already exists with a password. Refuse the
-        // social login to prevent pre-account takeover: an attacker who registered
-        // this email first should not gain access when the real owner signs in via Google.
-        return res.status(409).json({ message: "An account with this email already exists. Please sign in with your email and password." });
+        console.log("[google-auth] Account created:", user.id);
+      } else {
+        console.log("[google-auth] Returning user found:", user.id);
       }
       req.session.userId = user.id;
       req.session.save((err) => {

@@ -355,6 +355,17 @@ async function ensureHangoutVoterTokensColumn() {
   }
 }
 
+async function ensureProviderSubColumns() {
+  try {
+    await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS google_sub TEXT`);
+    await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS apple_sub TEXT`);
+    await pool.query(`CREATE UNIQUE INDEX IF NOT EXISTS users_google_sub_unique ON users (google_sub) WHERE google_sub IS NOT NULL`);
+    await pool.query(`CREATE UNIQUE INDEX IF NOT EXISTS users_apple_sub_unique ON users (apple_sub) WHERE apple_sub IS NOT NULL`);
+  } catch (err) {
+    console.error("[startup] Failed to add provider sub columns:", err);
+  }
+}
+
 (async () => {
   setupCors(app);
   setupBodyParsing(app);
@@ -370,6 +381,7 @@ async function ensureHangoutVoterTokensColumn() {
   await ensurePasswordResetTokensTable();
   await ensureHangoutInvitesSentAtColumn();
   await ensureHangoutVoterTokensColumn();
+  await ensureProviderSubColumns();
 
   const server = await registerRoutes(app);
 

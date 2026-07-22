@@ -1,0 +1,2 @@
+ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "google_sub" text UNIQUE;
+ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "apple_sub" text UNIQUE;

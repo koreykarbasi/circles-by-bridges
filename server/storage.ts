@@ -12,6 +12,8 @@ import { eq, and, asc, sql as drizzleSql } from "drizzle-orm";
 export interface IStorage {
   getUser(id: string): Promise<User | undefined>;
   getUserByEmail(email: string): Promise<User | undefined>;
+  getUserByGoogleSub(sub: string): Promise<User | undefined>;
+  getUserByAppleSub(sub: string): Promise<User | undefined>;
   createUser(user: InsertUser): Promise<User>;
   updateUser(id: string, data: Partial<User>): Promise<User | undefined>;
   getContactsByUserId(userId: string): Promise<Contact[]>;
@@ -51,6 +53,16 @@ export class DatabaseStorage implements IStorage {
 
   async getUserByEmail(email: string): Promise<User | undefined> {
     const [user] = await db.select().from(users).where(eq(users.email, email));
+    return user;
+  }
+
+  async getUserByGoogleSub(sub: string): Promise<User | undefined> {
+    const [user] = await db.select().from(users).where(eq(users.googleSub, sub));
+    return user;
+  }
+
+  async getUserByAppleSub(sub: string): Promise<User | undefined> {
+    const [user] = await db.select().from(users).where(eq(users.appleSub, sub));
     return user;
   }
 

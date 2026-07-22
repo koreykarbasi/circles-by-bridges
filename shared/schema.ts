@@ -17,6 +17,8 @@ export const users = pgTable("users", {
   suggestionNotifTime: text("suggestion_notif_time"),
   hasPassword: boolean("has_password").notNull().default(true),
   lastProfilePushAt: timestamp("last_profile_push_at"),
+  googleSub: text("google_sub").unique(),
+  appleSub: text("apple_sub").unique(),
 });
 
 export const contacts = pgTable("contacts", {
