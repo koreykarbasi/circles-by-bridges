@@ -368,9 +368,16 @@ export async function sendDailyReminders() {
       const reminderMessages: PushMessage[] = []; // check-in overdue
       const milestoneMessages: PushMessage[] = []; // birthday advance notices
 
+      const tz = user.notificationTimezone ?? "UTC";
+      const isNineAm = isNineAmLocalNow(tz);
+
       for (const contact of userContacts) {
-        for (const msg of buildBirthdayDayOfMessages(contact)) {
-          birthdayMessages.push(msg);
+        // Birthday day-of messages are only sent during the 9am local window so
+        // users receive them first thing in the morning, not mid-afternoon.
+        if (isNineAm) {
+          for (const msg of buildBirthdayDayOfMessages(contact)) {
+            birthdayMessages.push(msg);
+          }
         }
         for (const msg of buildReminderMessages(contact)) {
           if (msg.notifType === "reminder") reminderMessages.push(msg);
