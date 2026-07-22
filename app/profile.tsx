@@ -7,6 +7,7 @@ import {
   ScrollView,
   Platform,
   Alert,
+  Linking,
   Image,
   TextInput,
   ActivityIndicator,
@@ -15,6 +16,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import { router } from "expo-router";
 import * as ImagePicker from "expo-image-picker";
+import * as Notifications from "expo-notifications";
 import Colors from "@/constants/colors";
 import { useContacts } from "@/lib/contacts-context";
 import { useOnboarding } from "@/lib/onboarding-context";
@@ -61,8 +63,31 @@ export default function ProfileScreen() {
     { value: "afternoon", label: "Afternoon", sub: "5pm" },
   ];
 
+  const ensureNotificationPermission = async (): Promise<boolean> => {
+    if (Platform.OS === "web") return true;
+    const { status } = await Notifications.getPermissionsAsync();
+    if (status === "granted") return true;
+    if (status === "undetermined") {
+      const { status: requested } = await Notifications.requestPermissionsAsync();
+      return requested === "granted";
+    }
+    // denied — direct to Settings
+    Alert.alert(
+      "Notifications blocked",
+      "To receive nudges, enable notifications for Bridges in your device Settings.",
+      [
+        { text: "Not now", style: "cancel" },
+        { text: "Open Settings", onPress: () => Linking.openSettings() },
+      ],
+    );
+    return false;
+  };
+
   const handleFreqChange = async (freq: string) => {
     setNotifFreq(freq);
+    if (freq !== "off") {
+      await ensureNotificationPermission();
+    }
     try {
       await updateNotificationPreferences(freq, freq !== "off" ? notifTime : null);
       scheduleSuggestionNudge(freq, freq !== "off" ? notifTime : null, contacts).catch(() => {});
@@ -339,6 +364,8 @@ export default function ProfileScreen() {
           {Platform.OS !== "web" && (
             <Pressable
               onPress={async () => {
+                const granted = await ensureNotificationPermission();
+                if (!granted) return;
                 try {
                   await sendTestNotification();
                   Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
