@@ -1620,19 +1620,45 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ message: "Hangout not found" });
       }
       const options = await storage.getOptionsByPlanId(plan.id);
-      const votes = await storage.getVotesByPlanId(plan.id);
-      const scored = computeBordaScores(options, votes);
       const creator = await storage.getUser(plan.userId!);
 
-      // Explicit allowlist of fields safe to expose on the public voting page
-      const publicOptions = scored.map((opt) => ({
-        id: opt.id,
-        label: opt.label,
-        questionType: opt.questionType,
-        dateTime: opt.dateTime,
-        bordaScore: opt.bordaScore,
-        voteCount: opt.voteCount,
-      }));
+      // Tally data (scores, vote counts, attendance) is only safe to reveal
+      // once voting is closed — either the plan is finalized or the deadline
+      // has passed. While voting is open, returning these fields server-side
+      // would let anyone with the share code poll live results without voting.
+      const isFinalized = plan.status === "finalized";
+      const isDeadlinePassed =
+        !!plan.deadline && new Date(plan.deadline) < new Date();
+      const tallyVisible = isFinalized || isDeadlinePassed;
+
+      let publicOptions: object[];
+      let bestRecommendation: object | null = null;
+
+      if (tallyVisible) {
+        const votes = await storage.getVotesByPlanId(plan.id);
+        const scored = computeBordaScores(options, votes);
+        publicOptions = scored.map((opt) => ({
+          id: opt.id,
+          label: opt.label,
+          questionType: opt.questionType,
+          dateTime: opt.dateTime,
+          bordaScore: opt.bordaScore,
+          voteCount: opt.voteCount,
+        }));
+        bestRecommendation = computeBestRecommendation(
+          scored,
+          votes,
+          plan.includePlusOne
+        );
+      } else {
+        // Voting is still open — return only the ballot structure, no tallies.
+        publicOptions = options.map((opt) => ({
+          id: opt.id,
+          label: opt.label,
+          questionType: opt.questionType,
+          dateTime: opt.dateTime,
+        }));
+      }
 
       // If a personalized voting token is present in the query string, resolve
       // it to the invitee's name so the client can prefill/lock the voter
@@ -1661,7 +1687,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         deadline: plan.deadline,
         includePlusOne: plan.includePlusOne,
         options: publicOptions,
-        bestRecommendation: computeBestRecommendation(scored, votes, plan.includePlusOne),
+        bestRecommendation,
         resolvedVoterName,
         requiresToken: (plan.inviteeNames || []).length > 0,
       });
