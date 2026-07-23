@@ -86,7 +86,17 @@ export default function ProfileScreen() {
   const handleFreqChange = async (freq: string) => {
     setNotifFreq(freq);
     if (freq !== "off") {
-      await ensureNotificationPermission();
+      const granted = await ensureNotificationPermission();
+      if (!granted) {
+        setNotifFreq("off");
+        try {
+          await updateNotificationPreferences("off", null);
+          scheduleSuggestionNudge("off", null, contacts).catch(() => {});
+        } catch {
+          // Non-fatal
+        }
+        return;
+      }
     }
     try {
       await updateNotificationPreferences(freq, freq !== "off" ? notifTime : null);
