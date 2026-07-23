@@ -292,14 +292,15 @@ async function sendExpoPush(
 
 // ─── Per-user local-time checks ───────────────────────────────────────────────
 
-function getLocalHour(timezone: string): number {
+export function getLocalHour(timezone: string): number {
   try {
     const formatter = new Intl.DateTimeFormat("en-US", {
       timeZone: timezone,
       hour: "numeric",
       hour12: false,
     });
-    return parseInt(formatter.format(new Date()), 10);
+    const h = parseInt(formatter.format(new Date()), 10);
+    return h === 24 ? 0 : h;
   } catch {
     return new Date().getUTCHours();
   }
@@ -307,7 +308,7 @@ function getLocalHour(timezone: string): number {
 
 // Returns the local day-of-week (0=Sun … 6=Sat) in the given timezone.
 const DAY_SHORT = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"] as const;
-function getLocalDayOfWeek(timezone: string): number {
+export function getLocalDayOfWeek(timezone: string): number {
   try {
     const short = new Intl.DateTimeFormat("en-US", {
       timeZone: timezone,
@@ -321,7 +322,7 @@ function getLocalDayOfWeek(timezone: string): number {
 }
 
 // Returns true if it is currently between 9:00 and 9:59 in the given timezone.
-function isNineAmLocalNow(timezone: string): boolean {
+export function isNineAmLocalNow(timezone: string): boolean {
   return getLocalHour(timezone) === 9;
 }
 
