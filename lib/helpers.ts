@@ -8,32 +8,64 @@ export function getInitials(name: string): string {
 
 export function getDaysSince(dateStr?: string): number | null {
   if (!dateStr) return null;
+
+  let year: number;
+  let month: number;
+  let day: number;
+
+  const slashParts = dateStr.split("/");
+  if (slashParts.length >= 2) {
+    month = parseInt(slashParts[0], 10) - 1;
+    day = parseInt(slashParts[1], 10);
+    year = slashParts.length >= 3 ? parseInt(slashParts[2], 10) : new Date().getFullYear();
+  } else {
+    const dashParts = dateStr.split("-");
+    if (dashParts.length === 3) {
+      year = parseInt(dashParts[0], 10);
+      month = parseInt(dashParts[1], 10) - 1;
+      day = parseInt(dashParts[2], 10);
+    } else {
+      return null;
+    }
+  }
+
+  if (isNaN(year) || isNaN(month) || isNaN(day) || month < 0 || month > 11 || day < 1 || day > 31) return null;
+
   const now = new Date();
-  const date = new Date(dateStr);
-  return Math.floor((now.getTime() - date.getTime()) / (1000 * 60 * 60 * 24));
+  const todayMidnight = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const dateMidnight = new Date(year, month, day);
+  return Math.floor((todayMidnight.getTime() - dateMidnight.getTime()) / (1000 * 60 * 60 * 24));
 }
 
 export function getDaysUntilBirthday(birthday?: string): number | null {
   if (!birthday) return null;
-  const now = new Date();
-  let month: number, day: number;
-  const mmdd = birthday.match(/^(\d{1,2})\/(\d{1,2})$/);
-  if (mmdd) {
-    month = parseInt(mmdd[1], 10) - 1;
-    day = parseInt(mmdd[2], 10);
+
+  let month: number;
+  let day: number;
+
+  const slashParts = birthday.split("/");
+  if (slashParts.length >= 2) {
+    month = parseInt(slashParts[0], 10) - 1;
+    day = parseInt(slashParts[1], 10);
   } else {
-    const bday = new Date(birthday);
-    if (isNaN(bday.getTime())) return null;
-    month = bday.getMonth();
-    day = bday.getDate();
+    const dashParts = birthday.split("-");
+    if (dashParts.length === 3) {
+      month = parseInt(dashParts[1], 10) - 1;
+      day = parseInt(dashParts[2], 10);
+    } else {
+      return null;
+    }
   }
-  if (isNaN(month) || isNaN(day)) return null;
-  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+
+  if (isNaN(month) || isNaN(day) || month < 0 || month > 11 || day < 1 || day > 31) return null;
+
+  const now = new Date();
+  const todayMidnight = new Date(now.getFullYear(), now.getMonth(), now.getDate());
   const thisYear = new Date(now.getFullYear(), month, day);
-  if (thisYear < today) {
+  if (thisYear < todayMidnight) {
     thisYear.setFullYear(thisYear.getFullYear() + 1);
   }
-  return Math.floor((thisYear.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+  return Math.floor((thisYear.getTime() - todayMidnight.getTime()) / (1000 * 60 * 60 * 24));
 }
 
 export function formatLastContacted(dateStr?: string): string {
