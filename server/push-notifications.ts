@@ -65,8 +65,8 @@ export function buildReminderMessages(contact: ContactRow): PushMessage[] {
     const daysSinceContact = getDaysSince(contact.lastContacted);
     if (daysSinceContact === null || daysSinceContact > 17) {
       messages.push({
-        title: `When was the last time you spoke to ${contact.name}?`,
-        body: `Open the app to select an answer.`,
+        title: `Time to check in with ${contact.name}`,
+        body: `It's been a while — open Bridges to log how it's going.`,
         contactId: contact.id,
         notifType: "reminder",
       });
@@ -103,8 +103,8 @@ export function buildReminderMessages(contact: ContactRow): PushMessage[] {
     const daysSinceContact = getDaysSince(contact.lastContacted);
     if (daysSinceContact !== null && daysSinceContact > 48) {
       messages.push({
-        title: `When was the last time you spoke to ${contact.name}?`,
-        body: `Open the app to select an answer.`,
+        title: `Time to check in with ${contact.name}`,
+        body: `It's been a while — open Bridges to log how it's going.`,
         contactId: contact.id,
         notifType: "reminder",
       });
@@ -125,8 +125,8 @@ export function buildReminderMessages(contact: ContactRow): PushMessage[] {
     const daysSinceContact3 = getDaysSince(contact.lastContacted);
     if (daysSinceContact3 !== null && daysSinceContact3 > 78) {
       messages.push({
-        title: `When was the last time you spoke to ${contact.name}?`,
-        body: `Open the app to select an answer.`,
+        title: `Time to check in with ${contact.name}`,
+        body: `It's been a while — open Bridges to log how it's going.`,
         contactId: contact.id,
         notifType: "reminder",
       });
