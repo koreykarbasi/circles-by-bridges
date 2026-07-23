@@ -35,6 +35,25 @@ const DATE_30D = "04/14";       // daysUntil===30 → notifType "milestone" → 
 
 // ── DB mock helpers ───────────────────────────────────────────────────────────
 
+function makeDbMockWithTz(contacts: object[], timezone: string) {
+  let callIdx = 0;
+  const fakeUser = {
+    id: FAKE_USER_ID,
+    pushToken: FAKE_PUSH_TOKEN,
+    notificationTimezone: timezone,
+  };
+
+  const where = jest.fn().mockImplementation(() => {
+    callIdx += 1;
+    if (callIdx === 1) return Promise.resolve([fakeUser]);
+    return Promise.resolve(contacts);
+  });
+  const from = jest.fn().mockReturnValue({ where });
+  const select = jest.fn().mockReturnValue({ from });
+
+  return { select };
+}
+
 function makeDbMock(contacts: object[]) {
   let callIdx = 0;
   const fakeUser = {
@@ -448,5 +467,147 @@ describe("sendDailyReminders — advance milestone custom reminders are NOT gate
       }
     });
     expect(anniversaryCalls).toHaveLength(1);
+  });
+});
+
+// ── Part 4: Non-UTC timezones — the gate must respect the user's local time ──
+//
+// America/New_York (EDT = UTC-4 on March 15, 2024 — DST began March 10):
+//   9am EDT = 13:00 UTC  → push MUST fire
+//   9am UTC = 05:00 EDT  → push must NOT fire (still early morning in NY)
+//
+// Asia/Tokyo (JST = UTC+9, no DST):
+//   9am JST = 00:00 UTC  → push MUST fire
+//   9am UTC = 18:00 JST  → push must NOT fire (evening in Tokyo)
+
+describe("sendDailyReminders — 9am gate respects America/New_York timezone", () => {
+  let mockFetch: jest.Mock;
+
+  const fakeContact = {
+    id: FAKE_CONTACT_ID,
+    userId: FAKE_USER_ID,
+    name: "Alice",
+    circleLevel: 1,
+    birthday: null,
+    lastContacted: "2024-03-14",
+    lastHangout: null,
+    customReminders: [{ label: "Anniversary", date: DATE_TODAY }],
+  };
+
+  beforeEach(() => {
+    jest.useFakeTimers();
+    mockFetch = jest.fn().mockResolvedValue({ ok: true, json: async () => ({}) });
+    global.fetch = mockFetch;
+  });
+
+  afterEach(() => {
+    jest.useRealTimers();
+    jest.restoreAllMocks();
+  });
+
+  test("day-of push IS sent at 13:00 UTC (= 9am EDT, America/New_York)", async () => {
+    // March 15, 2024 13:00 UTC = 09:00 EDT (UTC-4)
+    jest.setSystemTime(new Date(TODAY_YEAR, TODAY_MONTH, TODAY_DAY, 13, 0, 0));
+
+    dbModule.db = makeDbMockWithTz([fakeContact], "America/New_York");
+    dbModule.pool = makePoolMock();
+
+    await sendDailyReminders();
+
+    const anniversaryCalls = mockFetch.mock.calls.filter((call) => {
+      try {
+        const b = JSON.parse(call[1]?.body ?? "{}");
+        return b.title?.includes("Anniversary") || b.body?.includes("Anniversary");
+      } catch {
+        return false;
+      }
+    });
+    expect(anniversaryCalls).toHaveLength(1);
+  });
+
+  test("day-of push is NOT sent at 9:00 UTC (= 5am EDT, too early in America/New_York)", async () => {
+    // March 15, 2024 09:00 UTC = 05:00 EDT (UTC-4) — local hour is 5, not 9
+    jest.setSystemTime(new Date(TODAY_YEAR, TODAY_MONTH, TODAY_DAY, 9, 0, 0));
+
+    dbModule.db = makeDbMockWithTz([fakeContact], "America/New_York");
+    dbModule.pool = makePoolMock();
+
+    await sendDailyReminders();
+
+    const anniversaryCalls = mockFetch.mock.calls.filter((call) => {
+      try {
+        const b = JSON.parse(call[1]?.body ?? "{}");
+        return b.title?.includes("Anniversary") || b.body?.includes("Anniversary");
+      } catch {
+        return false;
+      }
+    });
+    expect(anniversaryCalls).toHaveLength(0);
+  });
+});
+
+describe("sendDailyReminders — 9am gate respects Asia/Tokyo timezone", () => {
+  let mockFetch: jest.Mock;
+
+  const fakeContact = {
+    id: FAKE_CONTACT_ID,
+    userId: FAKE_USER_ID,
+    name: "Alice",
+    circleLevel: 1,
+    birthday: null,
+    lastContacted: "2024-03-14",
+    lastHangout: null,
+    customReminders: [{ label: "Anniversary", date: DATE_TODAY }],
+  };
+
+  beforeEach(() => {
+    jest.useFakeTimers();
+    mockFetch = jest.fn().mockResolvedValue({ ok: true, json: async () => ({}) });
+    global.fetch = mockFetch;
+  });
+
+  afterEach(() => {
+    jest.useRealTimers();
+    jest.restoreAllMocks();
+  });
+
+  test("day-of push IS sent at 00:00 UTC (= 9am JST, Asia/Tokyo)", async () => {
+    // March 15, 2024 00:00 UTC = 09:00 JST (UTC+9)
+    jest.setSystemTime(new Date(TODAY_YEAR, TODAY_MONTH, TODAY_DAY, 0, 0, 0));
+
+    dbModule.db = makeDbMockWithTz([fakeContact], "Asia/Tokyo");
+    dbModule.pool = makePoolMock();
+
+    await sendDailyReminders();
+
+    const anniversaryCalls = mockFetch.mock.calls.filter((call) => {
+      try {
+        const b = JSON.parse(call[1]?.body ?? "{}");
+        return b.title?.includes("Anniversary") || b.body?.includes("Anniversary");
+      } catch {
+        return false;
+      }
+    });
+    expect(anniversaryCalls).toHaveLength(1);
+  });
+
+  test("day-of push is NOT sent at 9:00 UTC (= 6pm JST, too late in Asia/Tokyo)", async () => {
+    // March 15, 2024 09:00 UTC = 18:00 JST (UTC+9) — local hour is 18, not 9
+    jest.setSystemTime(new Date(TODAY_YEAR, TODAY_MONTH, TODAY_DAY, 9, 0, 0));
+
+    dbModule.db = makeDbMockWithTz([fakeContact], "Asia/Tokyo");
+    dbModule.pool = makePoolMock();
+
+    await sendDailyReminders();
+
+    const anniversaryCalls = mockFetch.mock.calls.filter((call) => {
+      try {
+        const b = JSON.parse(call[1]?.body ?? "{}");
+        return b.title?.includes("Anniversary") || b.body?.includes("Anniversary");
+      } catch {
+        return false;
+      }
+    });
+    expect(anniversaryCalls).toHaveLength(0);
   });
 });
