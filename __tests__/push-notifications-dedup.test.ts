@@ -39,6 +39,7 @@ import {
   dedupMessages,
   buildBirthdayDayOfMessages,
   buildReminderMessages,
+  logNotifiedContacts,
   type PushMessage,
   type ContactRow,
 } from "../server/push-notifications";
@@ -403,5 +404,93 @@ describe("Full dedup flow — second run on the same day does not duplicate", ()
     const result = dedupMessages(msgs, recent);
     expect(result).toHaveLength(1);
     expect(result[0].contactId).toBe("c2");
+  });
+});
+
+// ── logNotifiedContacts — retry and structured warning ───────────────────────
+//
+// Verifies that a transient INSERT failure triggers a single retry and, if both
+// attempts fail, emits a console.warn with structured context rather than
+// silently discarding the record.
+
+describe("logNotifiedContacts — retry on transient INSERT failure", () => {
+  let mockQuery: jest.Mock;
+  let warnSpy: jest.SpyInstance;
+
+  beforeEach(() => {
+    // Access the already-mocked pool from the jest.mock at top of file
+    const { pool } = require("../server/db");
+    mockQuery = pool.query as jest.Mock;
+    mockQuery.mockReset();
+    warnSpy = jest.spyOn(console, "warn").mockImplementation(() => {});
+  });
+
+  afterEach(() => {
+    warnSpy.mockRestore();
+  });
+
+  test("succeeds on first attempt — no warning emitted", async () => {
+    mockQuery.mockResolvedValueOnce({ rows: [] });
+
+    await logNotifiedContacts("user-1", new Set(["c1"]), "birthday");
+
+    expect(mockQuery).toHaveBeenCalledTimes(1);
+    expect(warnSpy).not.toHaveBeenCalled();
+  });
+
+  test("retries once after a transient failure and succeeds — no warning emitted", async () => {
+    mockQuery
+      .mockRejectedValueOnce(new Error("transient connection error"))
+      .mockResolvedValueOnce({ rows: [] });
+
+    await logNotifiedContacts("user-1", new Set(["c1"]), "birthday");
+
+    expect(mockQuery).toHaveBeenCalledTimes(2);
+    expect(warnSpy).not.toHaveBeenCalled();
+  });
+
+  test("emits a structured console.warn after both attempts fail", async () => {
+    mockQuery.mockRejectedValue(new Error("DB unavailable"));
+
+    await logNotifiedContacts("user-1", new Set(["c1"]), "birthday");
+
+    expect(mockQuery).toHaveBeenCalledTimes(2);
+    expect(warnSpy).toHaveBeenCalledTimes(1);
+
+    const [warnMsg, warnContext] = warnSpy.mock.calls[0];
+    expect(warnMsg).toMatch(/logNotifiedContacts/);
+    expect(warnContext).toMatchObject({
+      userId: "user-1",
+      contactId: "c1",
+      notifType: "birthday",
+      error: "DB unavailable",
+    });
+  });
+
+  test("processes each contactId independently — failure on one does not skip others", async () => {
+    // c1 fails both attempts; c2 succeeds on first attempt
+    mockQuery
+      .mockRejectedValueOnce(new Error("fail"))
+      .mockRejectedValueOnce(new Error("fail"))
+      .mockResolvedValueOnce({ rows: [] });
+
+    await logNotifiedContacts("user-1", new Set(["c1", "c2"]), "reminder");
+
+    expect(mockQuery).toHaveBeenCalledTimes(3);
+    // One warn for c1, none for c2
+    expect(warnSpy).toHaveBeenCalledTimes(1);
+    expect(warnSpy.mock.calls[0][1]).toMatchObject({ contactId: "c1" });
+  });
+
+  test("warn includes the error message from the second (final) attempt", async () => {
+    mockQuery
+      .mockRejectedValueOnce(new Error("first attempt error"))
+      .mockRejectedValueOnce(new Error("second attempt error"));
+
+    await logNotifiedContacts("user-1", new Set(["c1"]), "milestone");
+
+    expect(warnSpy).toHaveBeenCalledTimes(1);
+    // The warn is triggered on the second (final) failure
+    expect(warnSpy.mock.calls[0][1].error).toBe("second attempt error");
   });
 });

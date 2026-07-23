@@ -223,16 +223,27 @@ async function getRecentlySentContactIds(userId: string, types: string[]): Promi
   }
 }
 
-async function logNotifiedContacts(userId: string, contactIds: Set<string>, notifType: string): Promise<void> {
+export async function logNotifiedContacts(userId: string, contactIds: Set<string>, notifType: string): Promise<void> {
   for (const contactId of contactIds) {
-    try {
-      await pool.query(
-        `INSERT INTO notification_log (user_id, contact_id, notif_type) VALUES ($1, $2, $3)`,
-        [userId, contactId, notifType],
-      );
-    } catch {
-      // Non-fatal: dedup is best-effort
+    let inserted = false;
+    for (let attempt = 1; attempt <= 2; attempt++) {
+      try {
+        await pool.query(
+          `INSERT INTO notification_log (user_id, contact_id, notif_type) VALUES ($1, $2, $3)`,
+          [userId, contactId, notifType],
+        );
+        inserted = true;
+        break;
+      } catch (err) {
+        if (attempt === 2) {
+          console.warn(
+            `[push-notifications] logNotifiedContacts: failed to insert dedup record after 2 attempts`,
+            { userId, contactId, notifType, error: err instanceof Error ? err.message : String(err) },
+          );
+        }
+      }
     }
+    void inserted;
   }
 }
 
