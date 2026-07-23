@@ -27,6 +27,8 @@ import * as Haptics from "expo-haptics";
 import { apiRequest } from "@/lib/query-client";
 import { scheduleSuggestionNudge, sendTestNotification } from "@/lib/reminder-notifications";
 
+let _notifPermissionCache: "granted" | "denied" | null = null;
+
 export default function ProfileScreen() {
   const insets = useSafeAreaInsets();
   const { contacts } = useContacts();
@@ -65,13 +67,30 @@ export default function ProfileScreen() {
 
   const ensureNotificationPermission = async (): Promise<boolean> => {
     if (Platform.OS === "web") return true;
+    if (_notifPermissionCache === "granted") return true;
+    if (_notifPermissionCache === "denied") {
+      Alert.alert(
+        "Notifications blocked",
+        "To receive nudges, enable notifications for Bridges in your device Settings.",
+        [
+          { text: "Not now", style: "cancel" },
+          { text: "Open Settings", onPress: () => Linking.openSettings() },
+        ],
+      );
+      return false;
+    }
     const { status } = await Notifications.getPermissionsAsync();
-    if (status === "granted") return true;
+    if (status === "granted") {
+      _notifPermissionCache = "granted";
+      return true;
+    }
     if (status === "undetermined") {
       const { status: requested } = await Notifications.requestPermissionsAsync();
+      _notifPermissionCache = requested === "granted" ? "granted" : "denied";
       return requested === "granted";
     }
     // denied — direct to Settings
+    _notifPermissionCache = "denied";
     Alert.alert(
       "Notifications blocked",
       "To receive nudges, enable notifications for Bridges in your device Settings.",
