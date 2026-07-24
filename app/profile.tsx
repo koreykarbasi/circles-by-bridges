@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useCallback } from "react";
 import {
   View,
   Text,
@@ -14,7 +14,7 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
-import { router } from "expo-router";
+import { router, useFocusEffect } from "expo-router";
 import * as ImagePicker from "expo-image-picker";
 import * as Notifications from "expo-notifications";
 import Colors from "@/constants/colors";
@@ -53,6 +53,19 @@ export default function ProfileScreen() {
     if (user?.suggestionNotifFrequency) setNotifFreq(user.suggestionNotifFrequency);
     if (user?.suggestionNotifTime) setNotifTime(user.suggestionNotifTime);
   }, [user?.suggestionNotifFrequency, user?.suggestionNotifTime]);
+
+  // Re-check real permission state on mount and whenever the screen regains focus
+  // (e.g. user went to device Settings to grant/revoke permission and came back).
+  useFocusEffect(
+    useCallback(() => {
+      if (Platform.OS === "web") return;
+      Notifications.getPermissionsAsync().then(({ status }) => {
+        // Invalidate the cache so ensureNotificationPermission re-checks next time.
+        _notifPermissionCache = status === "granted" ? "granted" : status === "denied" ? "denied" : null;
+        setNotifBlocked(status === "denied");
+      });
+    }, []),
+  );
 
   const FREQ_OPTIONS = [
     { value: "daily", label: "Daily" },
