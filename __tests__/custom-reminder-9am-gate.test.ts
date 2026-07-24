@@ -160,7 +160,7 @@ describe("buildReminderMessages — custom reminder notifType contract", () => {
       lastContacted: "2024-03-14",
       customReminders: [{ label: "Anniversary", date: DATE_TODAY }],
     });
-    const msgs = buildReminderMessages(c);
+    const msgs = buildReminderMessages(c, "UTC");
     const dayOf = msgs.filter((m) => m.title.includes("Anniversary") || m.body.includes("Anniversary"));
     expect(dayOf).toHaveLength(1);
     expect(dayOf[0].notifType).toBe("birthday");
@@ -174,7 +174,7 @@ describe("buildReminderMessages — custom reminder notifType contract", () => {
       lastContacted: "2024-02-01",
       customReminders: [{ label: "Work anniversary", date: DATE_TODAY }],
     });
-    const msgs = buildReminderMessages(c);
+    const msgs = buildReminderMessages(c, "UTC");
     const dayOf = msgs.filter((m) => m.body.includes("Work anniversary"));
     expect(dayOf).toHaveLength(1);
     expect(dayOf[0].notifType).toBe("birthday");
@@ -187,7 +187,7 @@ describe("buildReminderMessages — custom reminder notifType contract", () => {
       lastContacted: "2024-01-01",
       customReminders: [{ label: "Friendiversary", date: DATE_TODAY }],
     });
-    const msgs = buildReminderMessages(c);
+    const msgs = buildReminderMessages(c, "UTC");
     const dayOf = msgs.filter((m) => m.body.includes("Friendiversary"));
     expect(dayOf).toHaveLength(1);
     expect(dayOf[0].notifType).toBe("birthday");
@@ -202,7 +202,7 @@ describe("buildReminderMessages — custom reminder notifType contract", () => {
       lastContacted: "2024-03-14",
       customReminders: [{ label: "Anniversary", date: DATE_7D }],
     });
-    const msgs = buildReminderMessages(c);
+    const msgs = buildReminderMessages(c, "UTC");
     const advance = msgs.filter((m) => m.title.includes("Anniversary") || m.body.includes("Anniversary"));
     expect(advance).toHaveLength(1);
     expect(advance[0].notifType).toBe("milestone");
@@ -215,7 +215,7 @@ describe("buildReminderMessages — custom reminder notifType contract", () => {
       lastContacted: "2024-03-14",
       customReminders: [{ label: "Anniversary", date: DATE_14D }],
     });
-    const msgs = buildReminderMessages(c);
+    const msgs = buildReminderMessages(c, "UTC");
     const advance = msgs.filter((m) => m.title.includes("Anniversary") || m.body.includes("Anniversary"));
     expect(advance).toHaveLength(1);
     expect(advance[0].notifType).toBe("milestone");
@@ -228,7 +228,7 @@ describe("buildReminderMessages — custom reminder notifType contract", () => {
       lastContacted: "2024-03-14",
       customReminders: [{ label: "Anniversary", date: DATE_30D }],
     });
-    const msgs = buildReminderMessages(c);
+    const msgs = buildReminderMessages(c, "UTC");
     const advance = msgs.filter((m) => m.title.includes("Anniversary") || m.body.includes("Anniversary"));
     expect(advance).toHaveLength(1);
     expect(advance[0].notifType).toBe("milestone");
@@ -241,7 +241,7 @@ describe("buildReminderMessages — custom reminder notifType contract", () => {
       lastContacted: "2024-02-01",
       customReminders: [{ label: "Work anniversary", date: DATE_7D }],
     });
-    const msgs = buildReminderMessages(c);
+    const msgs = buildReminderMessages(c, "UTC");
     const advance = msgs.filter((m) => m.body.includes("Work anniversary"));
     expect(advance).toHaveLength(1);
     expect(advance[0].notifType).toBe("milestone");
@@ -257,7 +257,7 @@ describe("buildReminderMessages — custom reminder notifType contract", () => {
         { label: "Big Day", date: DATE_7D },      // daysUntil===7  → milestone
       ],
     });
-    const msgs = buildReminderMessages(c);
+    const msgs = buildReminderMessages(c, "UTC");
     const dayOf = msgs.find((m) => m.notifType === "birthday" && m.body.includes("Big Day"));
     const advance = msgs.find((m) => m.notifType === "milestone" && (m.title.includes("Big Day") || m.body.includes("Big Day")));
     expect(dayOf).toBeDefined();

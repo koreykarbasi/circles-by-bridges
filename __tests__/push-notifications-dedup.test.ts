@@ -243,7 +243,7 @@ describe("buildBirthdayDayOfMessages — notifType is always 'birthday'", () => 
 
   test("Circle 1 birthday-today message has notifType 'birthday'", () => {
     const c = contact({ id: "c1", circleLevel: 1, birthday: "03/15" });
-    const msgs = buildBirthdayDayOfMessages(c);
+    const msgs = buildBirthdayDayOfMessages(c, "UTC");
     expect(msgs).toHaveLength(1);
     expect(msgs[0].notifType).toBe("birthday");
     expect(msgs[0].contactId).toBe("c1");
@@ -251,27 +251,27 @@ describe("buildBirthdayDayOfMessages — notifType is always 'birthday'", () => 
 
   test("Circle 2 birthday-today message has notifType 'birthday'", () => {
     const c = contact({ id: "c2", circleLevel: 2, birthday: "03/15" });
-    const msgs = buildBirthdayDayOfMessages(c);
+    const msgs = buildBirthdayDayOfMessages(c, "UTC");
     expect(msgs).toHaveLength(1);
     expect(msgs[0].notifType).toBe("birthday");
   });
 
   test("Circle 3 birthday-today message has notifType 'birthday'", () => {
     const c = contact({ id: "c3", circleLevel: 3, birthday: "03/15" });
-    const msgs = buildBirthdayDayOfMessages(c);
+    const msgs = buildBirthdayDayOfMessages(c, "UTC");
     expect(msgs).toHaveLength(1);
     expect(msgs[0].notifType).toBe("birthday");
   });
 
   test("returns empty array when birthday is NOT today", () => {
     const c = contact({ id: "c1", circleLevel: 1, birthday: "03/22" }); // 7 days away
-    const msgs = buildBirthdayDayOfMessages(c);
+    const msgs = buildBirthdayDayOfMessages(c, "UTC");
     expect(msgs).toHaveLength(0);
   });
 
   test("returns empty array when birthday is null", () => {
     const c = contact({ id: "c1", circleLevel: 1, birthday: null });
-    const msgs = buildBirthdayDayOfMessages(c);
+    const msgs = buildBirthdayDayOfMessages(c, "UTC");
     expect(msgs).toHaveLength(0);
   });
 });
@@ -291,7 +291,7 @@ describe("buildReminderMessages — birthday milestone notifType is 'milestone'"
   test("Circle 1 — 7-day birthday milestone has notifType 'milestone'", () => {
     // Today: March 15 → birthday March 22 = 7 days away
     const c = contact({ id: "c1", circleLevel: 1, birthday: "03/22", lastContacted: "2024-03-14" });
-    const msgs = buildReminderMessages(c);
+    const msgs = buildReminderMessages(c, "UTC");
     const milestone = msgs.find((m) => m.notifType === "milestone");
     expect(milestone).toBeDefined();
     expect(milestone!.contactId).toBe("c1");
@@ -300,7 +300,7 @@ describe("buildReminderMessages — birthday milestone notifType is 'milestone'"
   test("Circle 1 — 14-day birthday milestone has notifType 'milestone'", () => {
     // March 15 + 14 = March 29
     const c = contact({ id: "c1", circleLevel: 1, birthday: "03/29", lastContacted: "2024-03-14" });
-    const msgs = buildReminderMessages(c);
+    const msgs = buildReminderMessages(c, "UTC");
     const milestone = msgs.find((m) => m.notifType === "milestone");
     expect(milestone).toBeDefined();
   });
@@ -308,7 +308,7 @@ describe("buildReminderMessages — birthday milestone notifType is 'milestone'"
   test("Circle 1 — 30-day birthday milestone has notifType 'milestone'", () => {
     // March 15 + 30 = April 14
     const c = contact({ id: "c1", circleLevel: 1, birthday: "04/14", lastContacted: "2024-03-14" });
-    const msgs = buildReminderMessages(c);
+    const msgs = buildReminderMessages(c, "UTC");
     const milestone = msgs.find((m) => m.notifType === "milestone");
     expect(milestone).toBeDefined();
   });
@@ -316,7 +316,7 @@ describe("buildReminderMessages — birthday milestone notifType is 'milestone'"
   test("Circle 1 — overdue check-in has notifType 'reminder'", () => {
     // lastContacted 20 days ago → overdue (threshold > 17)
     const c = contact({ id: "c1", circleLevel: 1, birthday: "08/01", lastContacted: "2024-02-24" });
-    const msgs = buildReminderMessages(c);
+    const msgs = buildReminderMessages(c, "UTC");
     const reminder = msgs.find((m) => m.notifType === "reminder");
     expect(reminder).toBeDefined();
     expect(reminder!.contactId).toBe("c1");
@@ -324,7 +324,7 @@ describe("buildReminderMessages — birthday milestone notifType is 'milestone'"
 
   test("Circle 2 — 7-day birthday milestone has notifType 'milestone'", () => {
     const c = contact({ id: "c2", circleLevel: 2, birthday: "03/22", lastContacted: "2024-02-01" });
-    const msgs = buildReminderMessages(c);
+    const msgs = buildReminderMessages(c, "UTC");
     const milestone = msgs.find((m) => m.notifType === "milestone");
     expect(milestone).toBeDefined();
   });
@@ -332,7 +332,7 @@ describe("buildReminderMessages — birthday milestone notifType is 'milestone'"
   test("milestone and reminder for same contact have different notifType values", () => {
     // Circle 1 contact: birthday 7 days away AND overdue check-in (both fire together)
     const c = contact({ id: "c1", circleLevel: 1, birthday: "03/22", lastContacted: "2024-02-01" });
-    const msgs = buildReminderMessages(c);
+    const msgs = buildReminderMessages(c, "UTC");
     const types = new Set(msgs.map((m) => m.notifType));
     expect(types.has("reminder")).toBe(true);
     expect(types.has("milestone")).toBe(true);

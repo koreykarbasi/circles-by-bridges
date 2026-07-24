@@ -424,6 +424,22 @@ export default function HomeScreen() {
     });
   }, []);
 
+  const handleBirthdayText = useCallback(async (reminder: Reminder) => {
+    if (!reminder.contactId) return;
+    const contact = contacts.find((c) => c.id === reminder.contactId);
+    const phone = contact?.phone;
+    if (!phone) return;
+    const message = reminder.suggestedMessage ?? `Happy Birthday ${reminder.contactName}! 🎂`;
+    if (Platform.OS === "web") {
+      try { await navigator.clipboard.writeText(message); } catch {}
+    } else {
+      const url = Platform.OS === "ios"
+        ? `sms:${phone}&body=${message}`
+        : `sms:${phone}?body=${encodeURIComponent(message)}`;
+      try { await Linking.openURL(url); } catch {}
+    }
+  }, [contacts]);
+
   const handleSuggestionDone = useCallback(
     async (suggestion: Suggestion) => {
       dismissSuggestion(suggestion.contactId);
@@ -723,16 +739,28 @@ export default function HomeScreen() {
               </View>
             )}
 
-            {visibleReminders.map((reminder) =>
-              (reminder.type === "check-in-quickpick" || reminder.type === "hangout-quickpick" || reminder.type.startsWith("profile-completion")) ? (
-                <ReminderItem
-                  key={reminder.id}
-                  reminder={reminder}
-                  onComplete={() => handleReminderComplete(reminder)}
-                  onQuickPick={(date, label) => handleReminderQuickPick(reminder, date, label)}
-                  onCalendarPress={reminder.type === "hangout-quickpick" ? () => handleHangoutCalendarPress(reminder) : undefined}
-                />
-              ) : (
+            {visibleReminders.map((reminder) => {
+              const usesReminderItem =
+                reminder.type === "check-in-quickpick" ||
+                reminder.type === "hangout-quickpick" ||
+                reminder.type === "birthday" ||
+                reminder.type.startsWith("profile-completion");
+              if (usesReminderItem) {
+                const birthdayContact = reminder.type === "birthday" && reminder.contactId
+                  ? contacts.find((c) => c.id === reminder.contactId)
+                  : undefined;
+                return (
+                  <ReminderItem
+                    key={reminder.id}
+                    reminder={reminder}
+                    onComplete={() => handleReminderComplete(reminder)}
+                    onQuickPick={(date, label) => handleReminderQuickPick(reminder, date, label)}
+                    onCalendarPress={reminder.type === "hangout-quickpick" ? () => handleHangoutCalendarPress(reminder) : undefined}
+                    onTextPress={birthdayContact?.phone ? () => handleBirthdayText(reminder) : undefined}
+                  />
+                );
+              }
+              return (
                 <ChecklistItem
                   key={reminder.id}
                   icon={getReminderIcon(reminder)}
@@ -744,8 +772,8 @@ export default function HomeScreen() {
                   actionType={reminder.actionType}
                   onComplete={() => handleReminderComplete(reminder)}
                 />
-              )
-            )}
+              );
+            })}
           </View>
 
           {hangoutWithNewVotes && (

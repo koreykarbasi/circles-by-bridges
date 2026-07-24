@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useCallback, useRef, useEffect } from "react";
-import { View, Text, StyleSheet, ScrollView, Pressable, Platform, Animated } from "react-native";
+import { View, Text, StyleSheet, ScrollView, Pressable, Platform, Animated, Linking } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import Colors from "@/constants/colors";
@@ -461,6 +461,22 @@ export default function SuggestionsScreen() {
     });
   }, []);
 
+  const handleBirthdayText = useCallback(async (reminder: Reminder) => {
+    if (!reminder.contactId) return;
+    const contact = contacts.find((c) => c.id === reminder.contactId);
+    const phone = contact?.phone;
+    if (!phone) return;
+    const message = reminder.suggestedMessage ?? `Happy Birthday ${reminder.contactName}! 🎂`;
+    if (Platform.OS === "web") {
+      try { await navigator.clipboard.writeText(message); } catch {}
+    } else {
+      const url = Platform.OS === "ios"
+        ? `sms:${phone}&body=${message}`
+        : `sms:${phone}?body=${encodeURIComponent(message)}`;
+      try { await Linking.openURL(url); } catch {}
+    }
+  }, [contacts]);
+
   const handleShuffle = useCallback(() => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     const nonElevatedIds = suggestions
@@ -594,19 +610,25 @@ export default function SuggestionsScreen() {
 
           {!remindersCollapsed && (
             <View style={styles.remindersList}>
-              {reminders.map((reminder) => (
-                <ReminderItem
-                  key={reminder.id}
-                  reminder={reminder}
-                  onComplete={() => handleReminderComplete(reminder)}
-                  onQuickPick={
-                    (reminder.type === "check-in-quickpick" || reminder.type === "hangout-quickpick")
-                      ? (date, label) => handleReminderQuickPick(reminder, date, label)
-                      : undefined
-                  }
-                  onCalendarPress={reminder.type === "hangout-quickpick" ? () => handleHangoutCalendarPress(reminder) : undefined}
-                />
-              ))}
+              {reminders.map((reminder) => {
+                const birthdayContact = reminder.type === "birthday" && reminder.contactId
+                  ? contacts.find((c) => c.id === reminder.contactId)
+                  : undefined;
+                return (
+                  <ReminderItem
+                    key={reminder.id}
+                    reminder={reminder}
+                    onComplete={() => handleReminderComplete(reminder)}
+                    onQuickPick={
+                      (reminder.type === "check-in-quickpick" || reminder.type === "hangout-quickpick")
+                        ? (date, label) => handleReminderQuickPick(reminder, date, label)
+                        : undefined
+                    }
+                    onCalendarPress={reminder.type === "hangout-quickpick" ? () => handleHangoutCalendarPress(reminder) : undefined}
+                    onTextPress={birthdayContact?.phone ? () => handleBirthdayText(reminder) : undefined}
+                  />
+                );
+              })}
             </View>
           )}
         </View>

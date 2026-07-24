@@ -14,6 +14,7 @@ interface ReminderItemProps {
   onComplete: () => void;
   onQuickPick?: (date: Date, label: string) => void;
   onCalendarPress?: () => void;
+  onTextPress?: () => void;
 }
 
 const TYPE_ICONS: Record<string, keyof typeof Ionicons.glyphMap> = {
@@ -44,7 +45,7 @@ function getProfileCompletionRoute(type: string): { circle?: string; filter: str
   return { filter: "yellow-dot" };
 }
 
-export function ReminderItem({ reminder, onComplete, onQuickPick, onCalendarPress }: ReminderItemProps) {
+export function ReminderItem({ reminder, onComplete, onQuickPick, onCalendarPress, onTextPress }: ReminderItemProps) {
   const isProfileCompletion = reminder.type.startsWith("profile-completion");
   const circleColor = isProfileCompletion
     ? (getProfileCompletionColor(reminder.type) ?? Colors.primary)
@@ -117,6 +118,16 @@ export function ReminderItem({ reminder, onComplete, onQuickPick, onCalendarPres
         <Ionicons name="chevron-forward" size={16} color={Colors.textTertiary} style={styles.chevron} />
       ) : !isPersistent ? (
         <View style={styles.actions}>
+          {isBirthday && onTextPress && (
+            <Pressable
+              onPress={onTextPress}
+              hitSlop={6}
+              style={({ pressed }) => [styles.textBtn, pressed && { opacity: 0.6 }]}
+            >
+              <Ionicons name="chatbubble-outline" size={13} color={Colors.primaryLight} />
+              <Text style={styles.textBtnLabel}>Text</Text>
+            </Pressable>
+          )}
           <Pressable
             onPress={handleComplete}
             hitSlop={6}
@@ -206,6 +217,21 @@ const styles = StyleSheet.create({
   },
   checkBtn: {
     padding: 4,
+  },
+  textBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    backgroundColor: Colors.primary + "1A",
+    borderRadius: 8,
+    paddingHorizontal: 9,
+    paddingVertical: 5,
+    marginRight: 4,
+  },
+  textBtnLabel: {
+    fontSize: 12,
+    fontFamily: "Nunito_600SemiBold",
+    color: Colors.primaryLight,
   },
   chevron: {
     marginLeft: 8,

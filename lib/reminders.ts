@@ -20,6 +20,7 @@ export interface Reminder {
   title: string;
   subtitle: string;
   actionType?: "text" | "call" | "hangout";
+  suggestedMessage?: string;
   persistent?: boolean;
 }
 
@@ -160,6 +161,8 @@ function generateCircle1Reminders(contact: Contact): Reminder[] {
         priority: 200,
         title: `Today is ${contact.name}'s birthday — wish them a happy birthday!`,
         subtitle: "Today is their birthday",
+        actionType: "text",
+        suggestedMessage: `Happy Birthday ${contact.name}! 🎂`,
       });
     } else if (daysUntil <= 7) {
       reminders.push({
@@ -252,6 +255,8 @@ function generateCircle2Reminders(contact: Contact): Reminder[] {
         priority: 150,
         title: `Today is ${contact.name}'s birthday — wish them a happy birthday!`,
         subtitle: "Today is their birthday",
+        actionType: "text",
+        suggestedMessage: `Happy Birthday ${contact.name}! 🎂`,
       });
     } else if (daysUntil <= 7) {
       reminders.push({
@@ -321,6 +326,8 @@ function generateCircle3Reminders(contact: Contact): Reminder[] {
       priority: 70,
       title: `Today is ${contact.name}'s birthday.`,
       subtitle: "Today is their birthday",
+      actionType: "text",
+      suggestedMessage: `Happy Birthday ${contact.name}! 🎂`,
     });
   }
 

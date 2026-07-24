@@ -143,7 +143,7 @@ describe("buildBirthdayDayOfMessages — pure function", () => {
 
   test("Circle 1 contact with birthday today returns one birthday message", () => {
     const c = contact({ id: FAKE_CONTACT_ID, circleLevel: 1, birthday: BIRTHDAY_TODAY });
-    const msgs = buildBirthdayDayOfMessages(c);
+    const msgs = buildBirthdayDayOfMessages(c, "UTC");
     expect(msgs).toHaveLength(1);
     expect(msgs[0].notifType).toBe("birthday");
     expect(msgs[0].contactId).toBe(FAKE_CONTACT_ID);
@@ -152,7 +152,7 @@ describe("buildBirthdayDayOfMessages — pure function", () => {
 
   test("Circle 2 contact with birthday today returns one birthday message", () => {
     const c = contact({ id: FAKE_CONTACT_ID, circleLevel: 2, birthday: BIRTHDAY_TODAY });
-    const msgs = buildBirthdayDayOfMessages(c);
+    const msgs = buildBirthdayDayOfMessages(c, "UTC");
     expect(msgs).toHaveLength(1);
     expect(msgs[0].notifType).toBe("birthday");
     expect(msgs[0].contactId).toBe(FAKE_CONTACT_ID);
@@ -160,7 +160,7 @@ describe("buildBirthdayDayOfMessages — pure function", () => {
 
   test("Circle 3 contact with birthday today returns one birthday message", () => {
     const c = contact({ id: FAKE_CONTACT_ID, circleLevel: 3, birthday: BIRTHDAY_TODAY });
-    const msgs = buildBirthdayDayOfMessages(c);
+    const msgs = buildBirthdayDayOfMessages(c, "UTC");
     expect(msgs).toHaveLength(1);
     expect(msgs[0].notifType).toBe("birthday");
     expect(msgs[0].contactId).toBe(FAKE_CONTACT_ID);
@@ -168,13 +168,13 @@ describe("buildBirthdayDayOfMessages — pure function", () => {
 
   test("Contact with birthday tomorrow returns no messages (daysUntil===1)", () => {
     const c = contact({ id: FAKE_CONTACT_ID, circleLevel: 1, birthday: BIRTHDAY_TOMORROW });
-    const msgs = buildBirthdayDayOfMessages(c);
+    const msgs = buildBirthdayDayOfMessages(c, "UTC");
     expect(msgs).toHaveLength(0);
   });
 
   test("Contact with no birthday returns no messages", () => {
     const c = contact({ id: FAKE_CONTACT_ID, circleLevel: 1, birthday: null });
-    const msgs = buildBirthdayDayOfMessages(c);
+    const msgs = buildBirthdayDayOfMessages(c, "UTC");
     expect(msgs).toHaveLength(0);
   });
 });
