@@ -1,7 +1,7 @@
 import { db, pool } from "./db";
 import { users, contacts, hangoutVotes, hangoutOptions, hangoutPlans } from "@shared/schema";
 import { isNotNull, eq } from "drizzle-orm";
-import { getDaysUntilBirthday, getDaysSince } from "./birthday-utils";
+import { getDaysUntilBirthday, getDaysUntilBirthdayInTz, getDaysSince } from "./birthday-utils";
 export { getDaysUntilBirthday };
 
 interface CustomReminder {
@@ -29,9 +29,11 @@ export type ContactRow = {
 };
 
 // Birthday day-of messages — delivered when the hourly run fires on the birthday.
-export function buildBirthdayDayOfMessages(contact: ContactRow): PushMessage[] {
+// timezone must be the user's local timezone so day-of detection uses their calendar
+// date, not the server's UTC date (critical for timezones ahead of UTC).
+export function buildBirthdayDayOfMessages(contact: ContactRow, timezone: string): PushMessage[] {
   const messages: PushMessage[] = [];
-  const daysUntil = getDaysUntilBirthday(contact.birthday);
+  const daysUntil = getDaysUntilBirthdayInTz(contact.birthday, timezone);
   if (daysUntil !== 0) return messages;
 
   if (contact.circleLevel === 1 || contact.circleLevel === 2) {
@@ -56,9 +58,9 @@ export function buildBirthdayDayOfMessages(contact: ContactRow): PushMessage[] {
 // check-in overdue (notifType='reminder'). Check-in is placed FIRST so the
 // per-contact collapse (one message per contact) favours the actionable reminder
 // over a milestone when both are present.
-export function buildReminderMessages(contact: ContactRow): PushMessage[] {
+export function buildReminderMessages(contact: ContactRow, timezone: string): PushMessage[] {
   const messages: PushMessage[] = [];
-  const daysUntilBirthday = getDaysUntilBirthday(contact.birthday);
+  const daysUntilBirthday = getDaysUntilBirthdayInTz(contact.birthday, timezone);
 
   if (contact.circleLevel === 1) {
     // Check-in overdue: > 17 days (in-app card shows at 14d; push fires 3 days later)
@@ -97,7 +99,7 @@ export function buildReminderMessages(contact: ContactRow): PushMessage[] {
       }
     }
     // Custom reminders: C1 advance at 30/14/7/day-of
-    buildCustomReminderMessages(contact, [30, 14, 7, 0], messages);
+    buildCustomReminderMessages(contact, [30, 14, 7, 0], timezone, messages);
   } else if (contact.circleLevel === 2) {
     // Check-in overdue: > 48 days (in-app card shows at 45d; push fires 3 days later)
     const daysSinceContact = getDaysSince(contact.lastContacted);
@@ -119,7 +121,7 @@ export function buildReminderMessages(contact: ContactRow): PushMessage[] {
       });
     }
     // Custom reminders: C2 advance at 7/day-of
-    buildCustomReminderMessages(contact, [7, 0], messages);
+    buildCustomReminderMessages(contact, [7, 0], timezone, messages);
   } else if (contact.circleLevel === 3) {
     // Check-in overdue: > 78 days (in-app card shows at 75d; push fires 3 days later)
     const daysSinceContact3 = getDaysSince(contact.lastContacted);
@@ -132,7 +134,7 @@ export function buildReminderMessages(contact: ContactRow): PushMessage[] {
       });
     }
     // Custom reminders: C3 day-of only
-    buildCustomReminderMessages(contact, [0], messages);
+    buildCustomReminderMessages(contact, [0], timezone, messages);
   }
 
   return messages;
@@ -141,6 +143,7 @@ export function buildReminderMessages(contact: ContactRow): PushMessage[] {
 function buildCustomReminderMessages(
   contact: ContactRow,
   milestones: number[],
+  timezone: string,
   messages: PushMessage[],
 ): void {
   let reminders: CustomReminder[] = [];
@@ -153,7 +156,7 @@ function buildCustomReminderMessages(
 
   for (const cr of reminders) {
     if (!cr.label || !cr.date) continue;
-    const daysUntil = getDaysUntilBirthday(cr.date);
+    const daysUntil = getDaysUntilBirthdayInTz(cr.date, timezone);
     if (daysUntil === null) continue;
     if (!milestones.includes(daysUntil)) continue;
 
@@ -365,11 +368,11 @@ export async function sendDailyReminders() {
         // Birthday day-of messages are only sent during the 9am local window so
         // users receive them first thing in the morning, not mid-afternoon.
         if (isNineAm) {
-          for (const msg of buildBirthdayDayOfMessages(contact)) {
+          for (const msg of buildBirthdayDayOfMessages(contact, tz)) {
             birthdayMessages.push(msg);
           }
         }
-        for (const msg of buildReminderMessages(contact)) {
+        for (const msg of buildReminderMessages(contact, tz)) {
           if (msg.notifType === "reminder") {
             reminderMessages.push(msg);
           } else if (msg.notifType === "birthday") {

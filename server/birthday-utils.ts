@@ -66,3 +66,57 @@ export function getDaysUntilBirthday(birthday?: string | null): number | null {
   if (thisYear < todayMidnight) thisYear.setFullYear(thisYear.getFullYear() + 1);
   return Math.floor((thisYear.getTime() - todayMidnight.getTime()) / (1000 * 60 * 60 * 24));
 }
+
+// Timezone-aware version of getDaysUntilBirthday.
+// Uses the user's local calendar date rather than the server's UTC date so that
+// a birthday on July 25 fires at 9am in the user's timezone — not 9am UTC which
+// may still be July 24 in timezones ahead of UTC (e.g. UTC+5:30, UTC+10).
+export function getDaysUntilBirthdayInTz(birthday: string | null | undefined, timezone: string): number | null {
+  if (!birthday) return null;
+
+  let month: number;
+  let day: number;
+
+  const slashParts = birthday.split("/");
+  if (slashParts.length >= 2) {
+    month = parseInt(slashParts[0], 10) - 1;
+    day = parseInt(slashParts[1], 10);
+  } else {
+    const dashParts = birthday.split("-");
+    if (dashParts.length === 3) {
+      month = parseInt(dashParts[1], 10) - 1;
+      day = parseInt(dashParts[2], 10);
+    } else {
+      return null;
+    }
+  }
+
+  if (isNaN(month) || isNaN(day) || month < 0 || month > 11 || day < 1 || day > 31) return null;
+
+  // Resolve today's calendar date in the user's local timezone
+  let localYear: number;
+  let localMonth: number;
+  let localDay: number;
+  try {
+    const parts = new Intl.DateTimeFormat("en-CA", {
+      timeZone: timezone,
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+    }).formatToParts(new Date());
+    localYear = parseInt(parts.find((p) => p.type === "year")!.value, 10);
+    localMonth = parseInt(parts.find((p) => p.type === "month")!.value, 10) - 1;
+    localDay = parseInt(parts.find((p) => p.type === "day")!.value, 10);
+  } catch {
+    // Fallback: use UTC date
+    const now = new Date();
+    localYear = now.getUTCFullYear();
+    localMonth = now.getUTCMonth();
+    localDay = now.getUTCDate();
+  }
+
+  const todayMidnight = new Date(localYear, localMonth, localDay);
+  const thisYear = new Date(localYear, month, day);
+  if (thisYear < todayMidnight) thisYear.setFullYear(thisYear.getFullYear() + 1);
+  return Math.floor((thisYear.getTime() - todayMidnight.getTime()) / (1000 * 60 * 60 * 24));
+}
