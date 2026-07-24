@@ -37,6 +37,7 @@ export default function ProfileScreen() {
 
   const [notifFreq, setNotifFreq] = useState<string>(user?.suggestionNotifFrequency ?? "daily");
   const [notifTime, setNotifTime] = useState<string>(user?.suggestionNotifTime ?? "morning");
+  const [notifBlocked, setNotifBlocked] = useState(false);
 
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
@@ -104,10 +105,14 @@ export default function ProfileScreen() {
 
   const handleFreqChange = async (freq: string) => {
     setNotifFreq(freq);
+    if (freq === "off") {
+      setNotifBlocked(false);
+    }
     if (freq !== "off") {
       const granted = await ensureNotificationPermission();
       if (!granted) {
         setNotifFreq("off");
+        setNotifBlocked(true);
         try {
           await updateNotificationPreferences("off", null);
           scheduleSuggestionNudge("off", null, contacts).catch(() => {});
@@ -365,6 +370,14 @@ export default function ProfileScreen() {
                 </Pressable>
               ))}
             </View>
+            {notifBlocked && (
+              <View style={profileNotifStyles.blockedBanner}>
+                <Ionicons name="notifications-off-outline" size={14} color={Colors.textSecondary} />
+                <Text style={profileNotifStyles.blockedText}>
+                  Notifications are blocked. Enable them in Settings to receive nudges.
+                </Text>
+              </View>
+            )}
             {notifFreq !== "off" && (
               <View style={{ width: "100%" }}>
                 <Text style={[styles.menuDesc, { marginBottom: 8 }]}>Time of day</Text>
@@ -884,5 +897,19 @@ const profileNotifStyles = StyleSheet.create({
   },
   timeTileSubActive: {
     color: Colors.primary + "cc",
+  },
+  blockedBanner: {
+    flexDirection: "row" as const,
+    alignItems: "center" as const,
+    gap: 6,
+    marginTop: 4,
+    width: "100%",
+  },
+  blockedText: {
+    flex: 1,
+    fontSize: 12,
+    fontFamily: "Nunito_400Regular",
+    color: Colors.textSecondary,
+    lineHeight: 16,
   },
 });
