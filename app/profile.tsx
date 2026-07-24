@@ -17,6 +17,11 @@ import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import { router, useFocusEffect } from "expo-router";
 import * as ImagePicker from "expo-image-picker";
 import * as Notifications from "expo-notifications";
+import {
+  getCachedNotifPermission,
+  setCachedNotifPermission,
+  refreshNotifPermission,
+} from "@/lib/notification-permission";
 import Colors from "@/constants/colors";
 import { useContacts } from "@/lib/contacts-context";
 import { useOnboarding } from "@/lib/onboarding-context";
@@ -26,8 +31,6 @@ import { CIRCLE_CONFIG } from "@/lib/types";
 import * as Haptics from "expo-haptics";
 import { apiRequest } from "@/lib/query-client";
 import { scheduleSuggestionNudge, sendTestNotification } from "@/lib/reminder-notifications";
-
-let _notifPermissionCache: "granted" | "denied" | null = null;
 
 export default function ProfileScreen() {
   const insets = useSafeAreaInsets();
@@ -56,12 +59,12 @@ export default function ProfileScreen() {
 
   // Re-check real permission state on mount and whenever the screen regains focus
   // (e.g. user went to device Settings to grant/revoke permission and came back).
+  // refreshNotifPermission() updates the shared _notifPermissionCache in
+  // lib/notification-permission.ts so every other caller also sees the fresh value.
   useFocusEffect(
     useCallback(() => {
       if (Platform.OS === "web") return;
-      Notifications.getPermissionsAsync().then(({ status }) => {
-        // Invalidate the cache so ensureNotificationPermission re-checks next time.
-        _notifPermissionCache = status === "granted" ? "granted" : status === "denied" ? "denied" : null;
+      refreshNotifPermission().then((status) => {
         setNotifBlocked(status === "denied");
       });
     }, []),
@@ -81,8 +84,9 @@ export default function ProfileScreen() {
 
   const ensureNotificationPermission = async (): Promise<boolean> => {
     if (Platform.OS === "web") return true;
-    if (_notifPermissionCache === "granted") return true;
-    if (_notifPermissionCache === "denied") {
+    const cached = getCachedNotifPermission();
+    if (cached === "granted") return true;
+    if (cached === "denied") {
       Alert.alert(
         "Notifications blocked",
         "To receive nudges, enable notifications for Bridges in your device Settings.",
@@ -95,16 +99,16 @@ export default function ProfileScreen() {
     }
     const { status } = await Notifications.getPermissionsAsync();
     if (status === "granted") {
-      _notifPermissionCache = "granted";
+      setCachedNotifPermission("granted");
       return true;
     }
     if (status === "undetermined") {
       const { status: requested } = await Notifications.requestPermissionsAsync();
-      _notifPermissionCache = requested === "granted" ? "granted" : "denied";
+      setCachedNotifPermission(requested === "granted" ? "granted" : "denied");
       return requested === "granted";
     }
     // denied — direct to Settings
-    _notifPermissionCache = "denied";
+    setCachedNotifPermission("denied");
     Alert.alert(
       "Notifications blocked",
       "To receive nudges, enable notifications for Bridges in your device Settings.",
