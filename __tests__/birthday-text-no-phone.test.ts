@@ -21,6 +21,7 @@
  */
 
 import type { Reminder } from "../lib/reminders";
+import { generateReminders } from "../lib/reminders";
 import { buildExtraFromDeviceContact } from "../lib/contact-extra";
 import {
   sendBirthdayText,
@@ -29,6 +30,7 @@ import {
   type ContactWithPhone as Contact,
 } from "../lib/birthday-text";
 import { handleFindInContacts } from "../lib/find-in-contacts";
+import type { Contact as FullContact } from "../lib/types";
 
 // ── Shared test data ──────────────────────────────────────────────────────────
 
@@ -793,5 +795,91 @@ describe("handleFindInContacts — permission denied", () => {
     expect(deps.setError).not.toHaveBeenCalled();
     expect(deps.setLoadingContacts).not.toHaveBeenCalled();
     expect(deps.setDeviceContacts).not.toHaveBeenCalled();
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+//
+// generateReminders — birthday reminder contactId invariant
+//
+// Defensive guard: any birthday reminder emitted by generateReminders must
+// carry a non-null, non-undefined contactId.  This ensures handleBirthdayText
+// never silently short-circuits because a partially-written contact row slipped
+// through without an id.
+//
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe("generateReminders — birthday reminders always carry a contactId", () => {
+  // Returns today's date as "MM/DD" so getDaysUntilBirthday returns 0,
+  // which is <= 1 and triggers a birthday reminder for all circle levels.
+  function todayAsBirthday(): string {
+    const now = new Date();
+    const m = String(now.getMonth() + 1).padStart(2, "0");
+    const d = String(now.getDate()).padStart(2, "0");
+    return `${m}/${d}`;
+  }
+
+  function makeContact(overrides: Partial<FullContact>): FullContact {
+    return {
+      id: "contact-test-id",
+      name: "Test Person",
+      circleLevel: 1,
+      interests: [],
+      labels: [],
+      avatarColor: "#aabbcc",
+      birthday: todayAsBirthday(),
+      ...overrides,
+    };
+  }
+
+  test("circle 1 birthday reminder has a truthy contactId", () => {
+    const contact = makeContact({ id: "c1-id", circleLevel: 1 });
+    const reminders = generateReminders([contact]);
+    const birthdayReminders = reminders.filter((r) => r.type === "birthday");
+    expect(birthdayReminders.length).toBeGreaterThan(0);
+    for (const r of birthdayReminders) {
+      expect(r.contactId).toBeTruthy();
+    }
+  });
+
+  test("circle 2 birthday reminder has a truthy contactId", () => {
+    const contact = makeContact({ id: "c2-id", circleLevel: 2 });
+    const reminders = generateReminders([contact]);
+    const birthdayReminders = reminders.filter((r) => r.type === "birthday");
+    expect(birthdayReminders.length).toBeGreaterThan(0);
+    for (const r of birthdayReminders) {
+      expect(r.contactId).toBeTruthy();
+    }
+  });
+
+  test("circle 3 birthday reminder has a truthy contactId", () => {
+    const contact = makeContact({ id: "c3-id", circleLevel: 3 });
+    const reminders = generateReminders([contact]);
+    const birthdayReminders = reminders.filter((r) => r.type === "birthday");
+    expect(birthdayReminders.length).toBeGreaterThan(0);
+    for (const r of birthdayReminders) {
+      expect(r.contactId).toBeTruthy();
+    }
+  });
+
+  test("birthday reminder contactId matches the source contact's id", () => {
+    const contacts: FullContact[] = [
+      makeContact({ id: "alice-id", name: "Alice", circleLevel: 1 }),
+      makeContact({ id: "bob-id", name: "Bob", circleLevel: 2 }),
+      makeContact({ id: "carol-id", name: "Carol", circleLevel: 3 }),
+    ];
+    const reminders = generateReminders(contacts);
+    const birthdayReminders = reminders.filter((r) => r.type === "birthday");
+    expect(birthdayReminders.length).toBe(3);
+
+    const ids = birthdayReminders.map((r) => r.contactId).sort();
+    expect(ids).toEqual(["alice-id", "bob-id", "carol-id"].sort());
+  });
+
+  test("no birthday reminder is produced for a contact without a birthday", () => {
+    const contact = makeContact({ id: "no-bday-id", birthday: undefined });
+    const reminders = generateReminders([contact]);
+    const birthdayReminders = reminders.filter((r) => r.type === "birthday");
+    expect(birthdayReminders).toHaveLength(0);
   });
 });
