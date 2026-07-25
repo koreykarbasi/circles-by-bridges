@@ -324,6 +324,13 @@ export function getLocalHour(timezone: string): number {
 }
 
 // Returns the local day-of-week (0=Sun … 6=Sat) in the given timezone.
+// Implementation note: this function uses the `weekday: "short"` Intl option
+// (string-based day lookup) rather than deriving the day from an hour value.
+// This means the 24→0 midnight edge case that affects hour-based Intl output
+// does NOT apply here.  If this function is ever refactored to derive the day
+// from an hour offset (e.g. using `hour: "numeric", hour12: false`), the raw
+// Intl hour string must be passed through `parseIntlHour()` first to guard
+// against runtimes that return "24" instead of "0" at midnight.
 const DAY_SHORT = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"] as const;
 export function getLocalDayOfWeek(timezone: string): number {
   try {
