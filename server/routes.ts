@@ -1040,7 +1040,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
         pushToken: trimmedToken,
       };
       if (timezone && typeof timezone === "string") {
-        update.notificationTimezone = timezone.trim();
+        const trimmedTz = timezone.trim();
+        let validTimezones: string[] = [];
+        try {
+          validTimezones = Intl.supportedValuesOf("timeZone");
+        } catch {
+          // Node < 18 doesn't support supportedValuesOf; skip validation
+        }
+        if (validTimezones.length > 0 && !validTimezones.includes(trimmedTz)) {
+          return bad(res, `Unrecognised timezone: "${trimmedTz}". Please send an IANA timezone name such as "America/New_York".`);
+        }
+        update.notificationTimezone = trimmedTz;
       }
       await storage.updateUser(req.session.userId!, update);
       res.json({ ok: true });

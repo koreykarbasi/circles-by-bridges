@@ -315,6 +315,10 @@ export function getLocalHour(timezone: string): number {
     });
     return parseIntlHour(formatter.format(new Date()));
   } catch {
+    console.warn(
+      `[push] getLocalHour: unrecognised timezone "${timezone}", falling back to UTC. ` +
+      `User will receive pushes at the wrong local hour until their timezone is corrected.`
+    );
     return new Date().getUTCHours();
   }
 }
@@ -330,6 +334,10 @@ export function getLocalDayOfWeek(timezone: string): number {
     const idx = DAY_SHORT.indexOf(short as (typeof DAY_SHORT)[number]);
     return idx >= 0 ? idx : new Date().getDay();
   } catch {
+    console.warn(
+      `[push] getLocalDayOfWeek: unrecognised timezone "${timezone}", falling back to server local day. ` +
+      `User will receive pushes on the wrong local day until their timezone is corrected.`
+    );
     return new Date().getDay();
   }
 }
