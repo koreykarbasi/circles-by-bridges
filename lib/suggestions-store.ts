@@ -3,10 +3,10 @@ import { Platform } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { loadSchedulerData, markSuggested as _markSuggested } from "./suggestion-scheduler";
 
-// Dismissed IDs persist for 1 day — survives a restart without the swipe coming
-// back, but short enough that contacts re-enter the cooldown pool naturally.
+// Dismissed IDs persist for 15 days (max cooldown period) so that a swiped contact
+// can never re-surface via stale state even if the scheduler entry is somehow missed.
 const DISMISSED_PERSIST_KEY = "bridges_dismissed_suggestions_v1";
-const MAX_DISMISSED_AGE_MS = 24 * 60 * 60 * 1000; // 1 day
+const MAX_DISMISSED_AGE_MS = 15 * 24 * 60 * 60 * 1000; // 15 days (matches max cooldown)
 
 type DismissedStore = Record<string, string>; // contactId → ISO timestamp
 

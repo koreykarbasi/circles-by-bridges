@@ -325,16 +325,9 @@ export default function HomeScreen() {
       return b.score - a.score;
     });
 
-    const eligibleIds = new Set(eligible.map((c) => c.id));
-    const cooldownPool = contacts.filter(
-      (c) => !reminderContactIds.has(c.id) && !eligibleIds.has(c.id),
-    );
-    const rankedCooldown = cooldownPool.map(rankContact).sort((a, b) => {
-      if (a.elevated !== b.elevated) return a.elevated ? -1 : 1;
-      return b.score - a.score;
-    });
-
-    const visible = [...rankedEligible, ...rankedCooldown]
+    // No cooldown pool — contacts in cooldown (swiped or recently shown) stay hidden
+    // for the full circle-level cooldown period. Only eligible contacts appear.
+    const visible = rankedEligible
       .filter((x) => !dismissedSuggestions.has(x.contact.id))
       .slice(0, MAX_SUGGESTIONS)
       .map((x) => x.contact);
@@ -345,7 +338,8 @@ export default function HomeScreen() {
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
     clearDismissedReminders();
-    clearDismissedSuggestions();
+    // Do NOT clear dismissedSuggestions — swiped contacts should stay hidden
+    // for their full cooldown period even after a pull-to-refresh.
     clearPromptCache();
     setSuggestionPrompts(new Map());
     await refreshContacts();

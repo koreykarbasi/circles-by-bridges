@@ -239,14 +239,11 @@ export default function SuggestionsScreen() {
     };
 
     const SUGGESTION_MAX = 6;
+    // No cooldown pool — contacts in cooldown stay hidden for their full circle-level
+    // period (C1: 7d, C2: 5d, C3: 15d). Only fully-eligible contacts are shown.
     const rankedEligible = eligible.map(rankContact).sort((a, b) => b.score - a.score);
-    const eligibleIds = new Set(eligible.map((c) => c.id));
-    // Contacts in cooldown but not dismissed — fill remaining slots as fallback.
-    // Dismissed contacts are already excluded from base via completedIds (persisted 1 day).
-    const cooldownPool = base.filter((c) => !eligibleIds.has(c.id));
-    const rankedCooldown = cooldownPool.map(rankContact).sort((a, b) => b.score - a.score);
 
-    return [...rankedEligible, ...rankedCooldown]
+    return rankedEligible
       .slice(0, SUGGESTION_MAX)
       .map((x) => x.contact);
   }, [contacts, filterCircle, lastSuggestedDates, elevationMap, sessionSkippedIds, completedIds]);
