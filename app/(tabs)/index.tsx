@@ -64,6 +64,7 @@ interface Suggestion {
   circleLevel: 1 | 2 | 3;
   prompt: string;
   actionType: "call" | "text" | "hangout";
+  isEnrichmentMissing: boolean;
 }
 
 function SwipableSuggestionRow({ children, onSwipeDismiss }: { children: React.ReactNode; onSwipeDismiss?: () => void }) {
@@ -291,6 +292,7 @@ export default function HomeScreen() {
         circleLevel,
         prompt,
         actionType,
+        isEnrichmentMissing: (contact.labels ?? []).length === 0 && (contact.interests ?? []).length === 0,
       };
     },
     [suggestionPrompts],
@@ -835,6 +837,9 @@ export default function HomeScreen() {
                   <View style={styles.suggestionHeader}>
                     <View style={[styles.suggestionDot, { backgroundColor: circleColor }]} />
                     <Text style={styles.suggestionName} numberOfLines={1}>{suggestion.contactName}</Text>
+                    {suggestion.isEnrichmentMissing && (
+                      <View style={styles.suggestionEnrichmentDot} />
+                    )}
                     <View style={[styles.suggestionCircleBadge, { backgroundColor: circleColor + "15" }]}>
                       <Text style={[styles.suggestionCircleText, { color: circleColor }]}>{circleLabel}</Text>
                     </View>
@@ -1230,6 +1235,12 @@ const styles = StyleSheet.create({
     fontFamily: "Nunito_700Bold",
     color: Colors.text,
     flex: 1,
+  },
+  suggestionEnrichmentDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: Colors.yellow,
   },
   suggestionCircleBadge: {
     paddingHorizontal: 7,

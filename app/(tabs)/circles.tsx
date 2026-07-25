@@ -90,6 +90,11 @@ export default function CirclesScreen() {
     [activeCircle, reorderCircleContacts],
   );
 
+  const incompleteContactIds = useMemo(
+    () => new Set(profileCompletion.incompleteAnyContact.map((c) => c.id)),
+    [profileCompletion.incompleteAnyContact],
+  );
+
   const renderItem = useCallback(
     ({ item: contact, drag, isActive }: RenderItemParams<Contact>) => {
       return (
@@ -107,6 +112,7 @@ export default function CirclesScreen() {
               }}
               onLongPress={canDrag ? drag : undefined}
               showCircleLabel={activeFilter === "yellow-dot"}
+              isProfileIncomplete={incompleteContactIds.has(contact.id)}
             />
             {!activeFilter && activeCircle === 1 && !contact.birthday && profileCompletion.stage === 1 && (
               <Pressable
@@ -122,7 +128,7 @@ export default function CirclesScreen() {
         </ScaleDecorator>
       );
     },
-    [canDrag, activeCircle, markContacted, profileCompletion.stage, activeFilter],
+    [canDrag, activeCircle, markContacted, profileCompletion.stage, activeFilter, incompleteContactIds],
   );
 
   const filterBannerLabel = useMemo(() => {

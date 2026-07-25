@@ -250,6 +250,8 @@ export function SuggestionCard({
     }
   }, [phoneSheetMode, openSms, openDialer, onSaveContactData]);
 
+  const enrichmentMissing = (interests ?? []).length === 0 && (labels ?? []).length === 0;
+
   return (
     <>
       <Animated.View style={[styles.container, animatedStyle]} {...panResponder.panHandlers}>
@@ -259,7 +261,14 @@ export function SuggestionCard({
             style={({ pressed }) => [pressed && { opacity: 0.7 }]}
             hitSlop={4}
           >
-            <Avatar name={contactName} color={avatarColor} size={42} photoUri={photoUri} />
+            <View style={styles.avatarWrapper}>
+              <Avatar name={contactName} color={avatarColor} size={42} photoUri={photoUri} />
+              {enrichmentMissing && (
+                <View style={styles.enrichmentBadge}>
+                  <Text style={styles.enrichmentBadgeText}>!</Text>
+                </View>
+              )}
+            </View>
           </Pressable>
           <View style={styles.headerInfo}>
             <Text style={styles.name} numberOfLines={1}>{contactName}</Text>
@@ -373,6 +382,29 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     marginBottom: 12,
+  },
+  avatarWrapper: {
+    position: "relative",
+    width: 42,
+    height: 42,
+  },
+  enrichmentBadge: {
+    position: "absolute",
+    top: -3,
+    right: -3,
+    width: 16,
+    height: 16,
+    borderRadius: 8,
+    backgroundColor: Colors.yellow + "30",
+    borderColor: "transparent",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  enrichmentBadgeText: {
+    fontSize: 10,
+    fontFamily: "Nunito_800ExtraBold",
+    color: Colors.yellow,
+    lineHeight: 12,
   },
   headerInfo: {
     marginLeft: 12,

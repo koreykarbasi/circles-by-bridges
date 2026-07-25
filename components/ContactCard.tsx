@@ -15,6 +15,8 @@ interface ContactCardProps {
   onPlanHangout?: () => void;
   showCircleLabel?: boolean;
   onLongPress?: () => void;
+  /** Override: mark this contact as having an incomplete profile (shows the yellow enrichment dot) */
+  isProfileIncomplete?: boolean;
 }
 
 function isMissingBirthday(contact: Contact): boolean {
@@ -25,7 +27,7 @@ function isMissingEnrichment(contact: Contact): boolean {
   return (contact.labels ?? []).length === 0 && (contact.interests ?? []).length === 0;
 }
 
-export function ContactCard({ contact, onPress, onMarkContacted, onPlanHangout, showCircleLabel, onLongPress }: ContactCardProps) {
+export function ContactCard({ contact, onPress, onMarkContacted, onPlanHangout, showCircleLabel, onLongPress, isProfileIncomplete }: ContactCardProps) {
   const urgency = getContactUrgency(contact.circleLevel as 1 | 2 | 3, contact.lastContacted ?? undefined);
   const circleColor = CIRCLE_CONFIG[contact.circleLevel as 1 | 2 | 3]?.color ?? Colors.primary;
   const flashAnim = useRef(new Animated.Value(0)).current;
@@ -33,7 +35,8 @@ export function ContactCard({ contact, onPress, onMarkContacted, onPlanHangout, 
   const incomplete = isMissingBirthday(contact);
   const badgeColor = contact.circleLevel === 1 ? Colors.danger : Colors.warning;
 
-  const enrichmentMissing = !incomplete && isMissingEnrichment(contact);
+  // Show yellow dot when enrichment is missing: use external override if provided, otherwise compute locally
+  const enrichmentMissing = !incomplete && (isProfileIncomplete !== undefined ? isProfileIncomplete : isMissingEnrichment(contact));
 
   const handleMarkContacted = () => {
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
