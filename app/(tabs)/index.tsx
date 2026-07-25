@@ -325,9 +325,21 @@ export default function HomeScreen() {
       return b.score - a.score;
     });
 
-    // No cooldown pool — contacts in cooldown (swiped or recently shown) stay hidden
-    // for the full circle-level cooldown period. Only eligible contacts appear.
-    const visible = rankedEligible
+    // Fallback pool: contacts in cooldown (recently shown) but NOT swiped away.
+    // Dismissed contacts are excluded by the final filter below.
+    // This ensures the home tab always has something to show even when everyone
+    // is mid-cooldown — swiped contacts still stay hidden because the
+    // dismissedSuggestions store now persists across restarts.
+    const eligibleIds = new Set(eligible.map((c) => c.id));
+    const cooldownPool = contacts.filter(
+      (c) => !reminderContactIds.has(c.id) && !eligibleIds.has(c.id),
+    );
+    const rankedCooldown = cooldownPool.map(rankContact).sort((a, b) => {
+      if (a.elevated !== b.elevated) return a.elevated ? -1 : 1;
+      return b.score - a.score;
+    });
+
+    const visible = [...rankedEligible, ...rankedCooldown]
       .filter((x) => !dismissedSuggestions.has(x.contact.id))
       .slice(0, MAX_SUGGESTIONS)
       .map((x) => x.contact);
