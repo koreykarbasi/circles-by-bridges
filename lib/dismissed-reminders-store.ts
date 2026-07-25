@@ -3,7 +3,7 @@ import { Platform } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 
 const PERSIST_KEY = "bridges_dismissed_reminders_v1";
-const MAX_AGE_MS = 24 * 60 * 60 * 1000; // 1 day
+const MAX_AGE_MS = 2 * 24 * 60 * 60 * 1000; // 2 days — covers same-day dismissals and overnight
 
 type DismissedStore = Record<string, string>; // reminderId → ISO timestamp
 

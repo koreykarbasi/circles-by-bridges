@@ -349,9 +349,8 @@ export default function HomeScreen() {
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
-    clearDismissedReminders();
-    // Do NOT clear dismissedSuggestions — swiped contacts should stay hidden
-    // for their full cooldown period even after a pull-to-refresh.
+    // Do NOT clear dismissedReminders or dismissedSuggestions on pull-to-refresh.
+    // Dismissed cards must stay gone until their TTL expires, not reset every refresh.
     clearPromptCache();
     setSuggestionPrompts(new Map());
     await refreshContacts();
