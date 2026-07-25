@@ -16,16 +16,12 @@ import Colors from "@/constants/colors";
 import * as Haptics from "expo-haptics";
 import { buildExtraFromDeviceContact } from "@/lib/contact-extra";
 import type { ExtraContactData } from "@/lib/contact-extra";
+import {
+  handleFindInContacts as _handleFindInContacts,
+  type DeviceContact,
+} from "@/lib/find-in-contacts";
 
 type Screen = "entry" | "contacts" | "save";
-
-interface DeviceContact {
-  id: string;
-  name: string;
-  phone: string;
-  birthday?: string | null;
-  imageUri?: string | null;
-}
 
 // Re-export so existing importers that pull ExtraContactData from this module
 // continue to work without changes.
@@ -39,12 +35,6 @@ interface NoPhoneSheetProps {
   onDismiss: () => void;
 }
 
-function formatDeviceBirthday(bday?: { year?: number; month?: number; day?: number }): string | undefined {
-  if (!bday || !bday.month || !bday.day) return undefined;
-  const m = String(bday.month).padStart(2, "0");
-  const d = String(bday.day).padStart(2, "0");
-  return `${m}/${d}`;
-}
 
 export function NoPhoneSheet({ visible, contactName, mode, onConfirm, onDismiss }: NoPhoneSheetProps) {
   const [screen, setScreen] = useState<Screen>("entry");
@@ -88,54 +78,26 @@ export function NoPhoneSheet({ visible, contactName, mode, onConfirm, onDismiss 
   }, [manualPhone, proceedWithPhone]);
 
   const handleFindInContacts = useCallback(async () => {
-    if (Platform.OS === "web") return;
-    setLoadingContacts(true);
-    setError("");
-    try {
-      const Contacts = await import("expo-contacts");
-      const { status } = await Contacts.requestPermissionsAsync();
-      if (status !== "granted") {
-        setError("Contacts permission denied");
-        setLoadingContacts(false);
-        return;
-      }
-      const { data } = await Contacts.getContactsAsync({
-        fields: [
-          Contacts.Fields.PhoneNumbers,
-          Contacts.Fields.Name,
-          Contacts.Fields.Birthday,
-          Contacts.Fields.Image,
-          Contacts.Fields.RawImage,
-        ],
-      });
-      const withPhone: DeviceContact[] = [];
-      for (const c of data) {
-        if (!c.phoneNumbers || c.phoneNumbers.length === 0) continue;
-        const phone = c.phoneNumbers[0].number ?? "";
-        if (!phone) continue;
-        let imageUri: string | null = null;
-        if ((c.rawImage as { base64?: string } | undefined)?.base64) {
-          imageUri = `data:image/jpeg;base64,${(c.rawImage as { base64?: string }).base64}`;
-        } else if ((c.image as { uri?: string } | undefined)?.uri) {
-          imageUri = (c.image as { uri: string }).uri;
-        }
-        withPhone.push({
-          id: c.id ?? Math.random().toString(),
-          name: c.name ?? "Unknown",
-          phone,
-          birthday: formatDeviceBirthday(c.birthday as { year?: number; month?: number; day?: number } | undefined),
-          imageUri,
-        });
-      }
-      withPhone.sort((a, b) => a.name.localeCompare(b.name));
-      setDeviceContacts(withPhone);
-      setScreen("contacts");
-    } catch {
-      setError("Could not load contacts");
-    } finally {
-      setLoadingContacts(false);
-    }
-  }, []);
+    const Contacts = await import("expo-contacts");
+    await _handleFindInContacts({
+      platform: Platform,
+      requestPermissions: () => Contacts.requestPermissionsAsync(),
+      getContacts: () =>
+        Contacts.getContactsAsync({
+          fields: [
+            Contacts.Fields.PhoneNumbers,
+            Contacts.Fields.Name,
+            Contacts.Fields.Birthday,
+            Contacts.Fields.Image,
+            Contacts.Fields.RawImage,
+          ],
+        }) as Promise<{ data: import("@/lib/find-in-contacts").RawContactRecord[] }>,
+      setError,
+      setLoadingContacts,
+      setDeviceContacts,
+      setScreen,
+    });
+  }, [setError, setLoadingContacts, setDeviceContacts, setScreen]);
 
   const handlePickContact = useCallback((contact: DeviceContact) => {
     Haptics.selectionAsync();

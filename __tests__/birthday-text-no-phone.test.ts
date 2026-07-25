@@ -28,6 +28,7 @@ import {
   handleBirthdaySheetConfirm,
   type ContactWithPhone as Contact,
 } from "../lib/birthday-text";
+import { handleFindInContacts } from "../lib/find-in-contacts";
 
 // ── Shared test data ──────────────────────────────────────────────────────────
 
@@ -720,5 +721,77 @@ describe("handlePickContact → proceedWithPhone → handleSaveYes / handleSaveN
       expect(smsUrl).toMatch(/^sms:\+14155558888\?body=/);
       expect(smsUrl).toContain(encodeURIComponent("Happy Birthday Bob! 🎂"));
     });
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+//
+// handleFindInContacts — permission-denied path
+//
+// Exercises the branch in lib/find-in-contacts.ts (used by NoPhoneSheet.tsx)
+// where requestPermissionsAsync returns a status that is NOT "granted".
+//
+// The component's state setters are injected as jest.fn() spies so we can
+// verify each setter is called correctly without mounting any React Native UI.
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe("handleFindInContacts — permission denied", () => {
+  function makeDeniedDeps(status: string = "denied") {
+    return {
+      platform: { OS: "ios" },
+      requestPermissions: jest.fn().mockResolvedValue({ status }),
+      getContacts: jest.fn().mockResolvedValue({ data: [] }),
+      setError: jest.fn(),
+      setLoadingContacts: jest.fn(),
+      setDeviceContacts: jest.fn(),
+      setScreen: jest.fn() as jest.MockedFunction<(s: "entry" | "contacts" | "save") => void>,
+    };
+  }
+
+  test("sets error to 'Contacts permission denied' when status is 'denied'", async () => {
+    const deps = makeDeniedDeps("denied");
+    await handleFindInContacts(deps);
+    expect(deps.setError).toHaveBeenCalledWith("Contacts permission denied");
+  });
+
+  test("sets error to 'Contacts permission denied' for any non-granted status (e.g. 'undetermined')", async () => {
+    const deps = makeDeniedDeps("undetermined");
+    await handleFindInContacts(deps);
+    expect(deps.setError).toHaveBeenCalledWith("Contacts permission denied");
+  });
+
+  test("sets loadingContacts back to false (spinner stops) on permission denial", async () => {
+    const deps = makeDeniedDeps("denied");
+    await handleFindInContacts(deps);
+    // setLoadingContacts must have been called with false at least once (spinner off)
+    const calls = (deps.setLoadingContacts as jest.Mock).mock.calls as [boolean][];
+    expect(calls.some(([v]) => v === false)).toBe(true);
+  });
+
+  test("does NOT call getContacts when permission is denied", async () => {
+    const deps = makeDeniedDeps("denied");
+    await handleFindInContacts(deps);
+    expect(deps.getContacts).not.toHaveBeenCalled();
+  });
+
+  test("does NOT populate the contacts list (setDeviceContacts is never called) on denial", async () => {
+    const deps = makeDeniedDeps("denied");
+    await handleFindInContacts(deps);
+    expect(deps.setDeviceContacts).not.toHaveBeenCalled();
+  });
+
+  test("does NOT navigate to the contacts screen on denial", async () => {
+    const deps = makeDeniedDeps("denied");
+    await handleFindInContacts(deps);
+    expect(deps.setScreen).not.toHaveBeenCalledWith("contacts");
+  });
+
+  test("skips all work on web (Platform.OS === 'web') regardless of permission outcome", async () => {
+    const deps = { ...makeDeniedDeps("denied"), platform: { OS: "web" } };
+    await handleFindInContacts(deps);
+    expect(deps.requestPermissions).not.toHaveBeenCalled();
+    expect(deps.setError).not.toHaveBeenCalled();
+    expect(deps.setLoadingContacts).not.toHaveBeenCalled();
+    expect(deps.setDeviceContacts).not.toHaveBeenCalled();
   });
 });
