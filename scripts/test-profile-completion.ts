@@ -178,6 +178,143 @@ console.log("\nTest 12: No profile completion cards with zero contacts");
   assert(pcCards.length === 0, "No profile completion cards with zero contacts");
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Suggestions Tab path tests
+//
+// The Suggestions tab runs the same generateReminders() call and then applies
+// this filter (simplified from suggestions.tsx reminders useMemo):
+//
+//   allReminders
+//     .filter(circleLevel matches if filterCircle set)
+//     .filter(r => !completedReminderIds.has(r.id))
+//     .filter(r => not suppressed by elevation/snooze for check-in/hangout types)
+//
+// Profile-completion reminders are only removed by the completedReminderIds
+// filter, so we simulate that here.
+// ─────────────────────────────────────────────────────────────────────────────
+
+function suggestionsTabReminders(
+  contacts: Contact[],
+  dismissedIds: Set<string> = new Set(),
+  filterCircle: 1 | 2 | 3 | null = null,
+) {
+  const allReminders = generateReminders(contacts);
+  const filtered = filterCircle
+    ? allReminders.filter((r) => r.circleLevel === filterCircle)
+    : allReminders;
+  return filtered.filter((r) => !dismissedIds.has(r.id));
+}
+
+console.log("\n=== Suggestions Tab Profile Completion Card Tests ===\n");
+
+// ─── Test 13: Red card appears in Suggestions tab ───
+console.log("Test 13: Red (high) card appears in Suggestions tab when C1 has no birthday");
+{
+  const contacts: Contact[] = [
+    makeContact({ id: "c1", circleLevel: 1, birthday: undefined, labels: ["Family"], interests: ["Reading"] }),
+    makeContact({ id: "c2", circleLevel: 2, birthday: "05/01", labels: ["Work"], interests: ["Gaming"] }),
+  ];
+  const reminders = suggestionsTabReminders(contacts);
+  const card = reminders.find((r) => r.type === "profile-completion-high");
+  assert(!!card, "Red card appears in Suggestions tab when C1 contact is missing a birthday");
+}
+
+// ─── Test 14: Red card disappears from Suggestions tab after data is added ───
+console.log("\nTest 14: Red card disappears from Suggestions tab after C1 birthday is added");
+{
+  const contacts: Contact[] = [
+    makeContact({ id: "c1", circleLevel: 1, birthday: "03/15", labels: ["Family"], interests: ["Reading"] }),
+    makeContact({ id: "c2", circleLevel: 2, birthday: "05/01", labels: ["Work"], interests: ["Gaming"] }),
+  ];
+  const reminders = suggestionsTabReminders(contacts);
+  const card = reminders.find((r) => r.type === "profile-completion-high");
+  assert(!card, "Red card disappears from Suggestions tab once C1 contact has a birthday");
+}
+
+// ─── Test 15: Orange card appears in Suggestions tab ───
+console.log("\nTest 15: Orange (medium) card appears in Suggestions tab when C2 has no birthday");
+{
+  const contacts: Contact[] = [
+    makeContact({ id: "c1", circleLevel: 1, birthday: "03/15", labels: ["Family"], interests: ["Running"] }),
+    makeContact({ id: "c2", circleLevel: 2, birthday: undefined, labels: ["Work"], interests: ["Gaming"] }),
+    makeContact({ id: "c3", circleLevel: 3, birthday: "11/22", labels: ["Neighbor"], interests: ["Movies"] }),
+  ];
+  const reminders = suggestionsTabReminders(contacts);
+  const card = reminders.find((r) => r.type === "profile-completion-medium");
+  assert(!!card, "Orange card appears in Suggestions tab when C2 contact is missing a birthday");
+}
+
+// ─── Test 16: Orange card disappears from Suggestions tab after data is added ───
+console.log("\nTest 16: Orange card disappears from Suggestions tab after C2 birthday is added");
+{
+  const contacts: Contact[] = [
+    makeContact({ id: "c1", circleLevel: 1, birthday: "03/15", labels: ["Family"], interests: ["Running"] }),
+    makeContact({ id: "c2", circleLevel: 2, birthday: "07/04", labels: ["Work"], interests: ["Gaming"] }),
+    makeContact({ id: "c3", circleLevel: 3, birthday: "11/22", labels: ["Neighbor"], interests: ["Movies"] }),
+  ];
+  const reminders = suggestionsTabReminders(contacts);
+  const card = reminders.find((r) => r.type === "profile-completion-medium");
+  assert(!card, "Orange card disappears from Suggestions tab once C2 contact has a birthday");
+}
+
+// ─── Test 17: Yellow card appears in Suggestions tab ───
+console.log("\nTest 17: Yellow (low) card appears in Suggestions tab when any contact is missing enrichment");
+{
+  const contacts: Contact[] = [
+    makeContact({ id: "c1", circleLevel: 1, birthday: "03/15", labels: ["Family"], interests: ["Running"] }),
+    makeContact({ id: "c2", circleLevel: 2, birthday: "07/04", labels: [], interests: [] }),
+    makeContact({ id: "c3", circleLevel: 3, birthday: "11/22", labels: ["Neighbor"], interests: ["Movies"] }),
+  ];
+  const reminders = suggestionsTabReminders(contacts);
+  const card = reminders.find((r) => r.type === "profile-completion-low");
+  assert(!!card, "Yellow card appears in Suggestions tab when any contact lacks labels and interests");
+}
+
+// ─── Test 18: Yellow card disappears from Suggestions tab after enrichment added ───
+console.log("\nTest 18: Yellow card disappears from Suggestions tab after enrichment is added");
+{
+  const contacts: Contact[] = [
+    makeContact({ id: "c1", circleLevel: 1, birthday: "03/15", labels: ["Family"], interests: ["Running"] }),
+    makeContact({ id: "c2", circleLevel: 2, birthday: "07/04", labels: ["Work"], interests: ["Music"] }),
+    makeContact({ id: "c3", circleLevel: 3, birthday: "11/22", labels: ["Neighbor"], interests: ["Movies"] }),
+  ];
+  const reminders = suggestionsTabReminders(contacts);
+  const card = reminders.find((r) => r.type === "profile-completion-low");
+  assert(!card, "Yellow card disappears from Suggestions tab once all contacts have enrichment data");
+}
+
+// ─── Test 19: Dismissed cards are hidden in Suggestions tab ───
+console.log("\nTest 19: Dismissed profile-completion-high card is hidden in Suggestions tab");
+{
+  const contacts: Contact[] = [
+    makeContact({ id: "c1", circleLevel: 1, birthday: undefined, labels: ["Family"], interests: ["Reading"] }),
+  ];
+  // Card appears before dismiss
+  const before = suggestionsTabReminders(contacts);
+  assert(!!before.find((r) => r.type === "profile-completion-high"), "Red card visible before dismiss");
+
+  // Simulate user dismissing the card
+  const dismissed = new Set<string>(["profile-completion-high"]);
+  const after = suggestionsTabReminders(contacts, dismissed);
+  assert(!after.find((r) => r.type === "profile-completion-high"), "Red card hidden in Suggestions tab after dismiss");
+}
+
+// ─── Test 20: Circle filter in Suggestions tab does not hide profile-completion-high (C1 priority) ───
+console.log("\nTest 20: Circle 1 filter shows red card; Circle 2 filter hides it");
+{
+  const contacts: Contact[] = [
+    makeContact({ id: "c1", circleLevel: 1, birthday: undefined, labels: ["Family"], interests: ["Reading"] }),
+    makeContact({ id: "c2", circleLevel: 2, birthday: "05/01", labels: ["Work"], interests: ["Gaming"] }),
+  ];
+  // profile-completion-high has circleLevel: 1, so it should appear under C1 filter
+  const c1Filtered = suggestionsTabReminders(contacts, new Set(), 1);
+  assert(!!c1Filtered.find((r) => r.type === "profile-completion-high"), "Red card visible with Circle 1 filter");
+
+  // Under Circle 2 filter it should be excluded (circleLevel mismatch)
+  const c2Filtered = suggestionsTabReminders(contacts, new Set(), 2);
+  assert(!c2Filtered.find((r) => r.type === "profile-completion-high"), "Red card hidden under Circle 2 filter");
+}
+
 // ─── Summary ───
 console.log(`\n=== Results: ${passed} passed, ${failed} failed ===\n`);
 if (failed > 0) process.exit(1);
