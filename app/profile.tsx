@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from "react";
+import React, { useState, useCallback, useEffect, useRef } from "react";
 import {
   View,
   Text,
@@ -11,6 +11,8 @@ import {
   Image,
   TextInput,
   ActivityIndicator,
+  AppState,
+  AppStateStatus,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
@@ -69,6 +71,23 @@ export default function ProfileScreen() {
       });
     }, []),
   );
+
+  // Re-check permission whenever the app returns to the foreground.
+  // This covers the case where the user is already on this screen, backgrounds
+  // the app to toggle the permission in device Settings, and then resumes —
+  // useFocusEffect alone won't re-fire in that situation.
+  useEffect(() => {
+    if (Platform.OS === "web") return;
+    const handleAppStateChange = (nextState: AppStateStatus) => {
+      if (nextState === "active") {
+        refreshNotifPermission().then((status) => {
+          setNotifBlocked(status === "denied");
+        });
+      }
+    };
+    const subscription = AppState.addEventListener("change", handleAppStateChange);
+    return () => subscription.remove();
+  }, []);
 
   const FREQ_OPTIONS = [
     { value: "daily", label: "Daily" },
