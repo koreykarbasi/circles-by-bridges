@@ -826,6 +826,62 @@ describe("handleFindInContacts — permission denied", () => {
 
 // ─────────────────────────────────────────────────────────────────────────────
 //
+// handleFindInContacts — unexpected error path
+//
+// Exercises the catch/finally block in lib/find-in-contacts.ts that runs when
+// getContactsAsync throws an unexpected error (e.g. a native crash, network
+// failure, or OS-level error).
+//
+// Regression guard: if the catch block is removed, or setLoadingContacts(false)
+// is dropped from the finally block, one of these tests will fail.
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe("handleFindInContacts — unexpected error from getContacts", () => {
+  function makeErrorDeps(err: Error = new Error("native crash")) {
+    return {
+      platform: { OS: "ios" },
+      requestPermissions: jest.fn().mockResolvedValue({ status: "granted" }),
+      getContacts: jest.fn().mockRejectedValue(err),
+      setError: jest.fn(),
+      setLoadingContacts: jest.fn(),
+      setDeviceContacts: jest.fn(),
+      setScreen: jest.fn() as jest.MockedFunction<(s: "entry" | "contacts" | "save") => void>,
+    };
+  }
+
+  test("calls setError with 'Could not load contacts' when getContacts rejects", async () => {
+    const deps = makeErrorDeps(new Error("native crash"));
+    await handleFindInContacts(deps);
+    expect(deps.setError).toHaveBeenCalledWith("Could not load contacts");
+  });
+
+  test("calls setLoadingContacts(false) via finally even when getContacts throws", async () => {
+    const deps = makeErrorDeps(new Error("OS failure"));
+    await handleFindInContacts(deps);
+    const calls = (deps.setLoadingContacts as jest.Mock).mock.calls as [boolean][];
+    expect(calls.some(([v]) => v === false)).toBe(true);
+  });
+
+  test("never calls setDeviceContacts when getContacts throws", async () => {
+    const deps = makeErrorDeps(new Error("boom"));
+    await handleFindInContacts(deps);
+    expect(deps.setDeviceContacts).not.toHaveBeenCalled();
+  });
+
+  test("does not propagate the error — resolves normally", async () => {
+    const deps = makeErrorDeps(new Error("unexpected"));
+    await expect(handleFindInContacts(deps)).resolves.toBeUndefined();
+  });
+
+  test("never navigates to the contacts screen when getContacts throws", async () => {
+    const deps = makeErrorDeps(new Error("crash"));
+    await handleFindInContacts(deps);
+    expect(deps.setScreen).not.toHaveBeenCalledWith("contacts");
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+//
 // generateReminders — birthday reminder contactId invariant
 //
 // Defensive guard: any birthday reminder emitted by generateReminders must
