@@ -72,6 +72,9 @@ export function ContactsProvider({ children }: { children: ReactNode }) {
   }, [fetchContacts]);
 
   const updateContactFn = useCallback(async (contact: Contact) => {
+    // Optimistic update so the UI reflects changes (e.g. yellow dot clears) immediately
+    // on the next render, without waiting for the server round-trip.
+    setContacts((prev) => prev.map((c) => (c.id === contact.id ? { ...c, ...contact } : c)));
     await apiRequest("PUT", `/api/contacts/${contact.id}`, {
       name: contact.name,
       circleLevel: contact.circleLevel,
