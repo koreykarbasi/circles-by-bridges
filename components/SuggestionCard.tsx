@@ -1,7 +1,7 @@
 import React, { useCallback, useState, useMemo, useRef, useEffect } from "react";
 import { View, Text, StyleSheet, Pressable, Platform, Linking, PanResponder } from "react-native";
 import { router } from "expo-router";
-import Animated, { useSharedValue, useAnimatedStyle, withTiming, withSequence, runOnJS, Easing } from "react-native-reanimated";
+import Animated, { useSharedValue, useAnimatedStyle, withTiming, withSpring, withSequence, runOnJS, Easing } from "react-native-reanimated";
 import { Ionicons } from "@expo/vector-icons";
 import { Avatar } from "./Avatar";
 import Colors from "@/constants/colors";
@@ -118,32 +118,35 @@ export function SuggestionCard({
       onStartShouldSetPanResponder: () => false,
       onMoveShouldSetPanResponder: (_, gs) =>
         !swipeAnimating.current &&
-        Math.abs(gs.dx) > 8 &&
-        Math.abs(gs.dx) > Math.abs(gs.dy) * 1.5,
+        Math.abs(gs.dx) > 5 &&
+        Math.abs(gs.dx) > Math.abs(gs.dy) * 1.2,
       onPanResponderMove: (_, gs) => {
         translateX.value = gs.dx;
-        opacity.value = Math.max(0.3, 1 - Math.abs(gs.dx) / 250);
+        opacity.value = Math.max(0.3, 1 - Math.abs(gs.dx) / 220);
       },
       onPanResponderRelease: (_, gs) => {
         const dismissFn = onSwipeDismissRef.current;
-        if (Math.abs(gs.dx) > 80 || Math.abs(gs.vx) > 0.5) {
+        if (Math.abs(gs.dx) > 60 || Math.abs(gs.vx) > 0.4) {
           swipeAnimating.current = true;
           const dir = gs.dx > 0 ? 1 : -1;
-          opacity.value = withTiming(0, { duration: 200 });
-          translateX.value = withTiming(dir * 500, { duration: 250 }, () => {
-            height.value = withTiming(0, { duration: 180 });
-            marginBottom.value = withTiming(0, { duration: 180 }, () => {
+          // Fly out in the direction of the swipe, then collapse height
+          const flyDistance = dir * (Math.abs(gs.dx) + 300);
+          opacity.value = withTiming(0, { duration: 150 });
+          translateX.value = withTiming(flyDistance, { duration: 200, easing: Easing.out(Easing.quad) }, () => {
+            height.value = withTiming(0, { duration: 160 });
+            marginBottom.value = withTiming(0, { duration: 160 }, () => {
               if (dismissFn) runOnJS(dismissFn)();
             });
           });
         } else {
-          translateX.value = withTiming(0, { duration: 250 });
-          opacity.value = withTiming(1, { duration: 250 });
+          // Spring snap-back feels more natural than a plain timing curve
+          translateX.value = withSpring(0, { damping: 20, stiffness: 220, mass: 0.8 });
+          opacity.value = withTiming(1, { duration: 180 });
         }
       },
       onPanResponderTerminate: () => {
-        translateX.value = withTiming(0, { duration: 250 });
-        opacity.value = withTiming(1, { duration: 250 });
+        translateX.value = withSpring(0, { damping: 20, stiffness: 220, mass: 0.8 });
+        opacity.value = withTiming(1, { duration: 180 });
       },
     })
   ).current;

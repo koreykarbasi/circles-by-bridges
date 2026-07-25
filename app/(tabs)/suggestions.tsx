@@ -366,6 +366,12 @@ export default function SuggestionsScreen() {
   const handleSwipeDismiss = useCallback((contactId: string) => {
     dismissSuggestion(contactId);
     markContactSuggested(contactId).catch(() => {});
+    // Tell the server so the push-notification picker respects the cooldown too
+    fetch("/api/suggestions/dismiss", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ contactId }),
+    }).catch(() => {});
   }, []);
 
   useEffect(() => {

@@ -978,6 +978,25 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Records a client-side swipe-dismiss so the server's push-notification picker
+  // respects the same cooldown window and doesn't re-surface the contact immediately.
+  app.post("/api/suggestions/dismiss", requireAuth, async (req, res) => {
+    try {
+      const { contactId } = req.body;
+      if (!contactId || typeof contactId !== "string") {
+        return bad(res, "contactId is required");
+      }
+      await pool.query(
+        `INSERT INTO notification_log (user_id, contact_id, notif_type) VALUES ($1, $2, 'suggestion')`,
+        [req.session.userId!, contactId.trim()],
+      );
+      res.json({ ok: true });
+    } catch (err) {
+      console.error("Error logging suggestion dismiss:", err);
+      res.status(500).json({ message: "Failed to log dismiss" });
+    }
+  });
+
   app.put("/api/notifications/preferences", requireAuth, async (req, res) => {
     try {
       const { frequency, time } = req.body;
