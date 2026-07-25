@@ -295,6 +295,17 @@ async function sendExpoPush(
 
 // ─── Per-user local-time checks ───────────────────────────────────────────────
 
+/**
+ * Normalise the raw hour string returned by `Intl.DateTimeFormat` with
+ * `hour12: false`.  Some runtimes/locales return "24" instead of "0" for
+ * midnight; this utility centralises the guard so every future caller that
+ * parses Intl hour output gets the correct 0–23 value automatically.
+ */
+export function parseIntlHour(raw: string): number {
+  const h = parseInt(raw, 10);
+  return h === 24 ? 0 : h;
+}
+
 export function getLocalHour(timezone: string): number {
   try {
     const formatter = new Intl.DateTimeFormat("en-US", {
@@ -302,8 +313,7 @@ export function getLocalHour(timezone: string): number {
       hour: "numeric",
       hour12: false,
     });
-    const h = parseInt(formatter.format(new Date()), 10);
-    return h === 24 ? 0 : h;
+    return parseIntlHour(formatter.format(new Date()));
   } catch {
     return new Date().getUTCHours();
   }

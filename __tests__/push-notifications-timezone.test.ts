@@ -31,6 +31,7 @@ jest.mock("../shared/schema", () => ({
 }));
 
 import {
+  parseIntlHour,
   getLocalHour,
   getLocalDayOfWeek,
   isNineAmLocalNow,
@@ -51,6 +52,30 @@ beforeAll(() => {
 
 afterAll(() => {
   jest.useRealTimers();
+});
+
+// ─── parseIntlHour ────────────────────────────────────────────────────────────
+
+describe("parseIntlHour", () => {
+  it("returns 0 for '0' (normal midnight string)", () => {
+    expect(parseIntlHour("0")).toBe(0);
+  });
+
+  it("normalises '24' to 0 (Intl midnight edge case on some runtimes)", () => {
+    expect(parseIntlHour("24")).toBe(0);
+  });
+
+  it("returns 9 for '9'", () => {
+    expect(parseIntlHour("9")).toBe(9);
+  });
+
+  it("returns 23 for '23'", () => {
+    expect(parseIntlHour("23")).toBe(23);
+  });
+
+  it("returns 1 for '1'", () => {
+    expect(parseIntlHour("1")).toBe(1);
+  });
 });
 
 // ─── getLocalHour ─────────────────────────────────────────────────────────────
