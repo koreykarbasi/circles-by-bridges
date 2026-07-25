@@ -22,6 +22,12 @@
 
 import type { Reminder } from "../lib/reminders";
 import { buildExtraFromDeviceContact } from "../lib/contact-extra";
+import {
+  sendBirthdayText,
+  handleBirthdayText,
+  handleBirthdaySheetConfirm,
+  type ContactWithPhone as Contact,
+} from "../lib/birthday-text";
 
 // ── Shared test data ──────────────────────────────────────────────────────────
 
@@ -40,115 +46,13 @@ function makeReminder(overrides: Partial<Reminder> = {}): Reminder {
   };
 }
 
-// ── sendBirthdayText logic (extracted from both tabs) ─────────────────────────
+// ── Handler functions ─────────────────────────────────────────────────────────
 //
-// Original source in app/(tabs)/index.tsx:
-//   const sendBirthdayText = async (reminder, phone) => {
-//     const message = reminder.suggestedMessage ?? `Happy Birthday ${reminder.contactName}! 🎂`;
-//     if (Platform.OS === "web") {
-//       try { await navigator.clipboard.writeText(message); } catch {}
-//     } else {
-//       const url = Platform.OS === "ios"
-//         ? `sms:${phone}&body=${message}`
-//         : `sms:${phone}?body=${encodeURIComponent(message)}`;
-//       try { await Linking.openURL(url); } catch {}
-//     }
-//   };
+// sendBirthdayText, handleBirthdayText, and handleBirthdaySheetConfirm are
+// imported from lib/birthday-text.ts — the single source of truth shared by
+// both app/(tabs)/index.tsx and app/(tabs)/suggestions.tsx.
 //
-// We replicate this as a pure function that accepts injected dependencies so
-// we can test it without importing React Native.
-
-type Platform = { OS: "web" | "ios" | "android" };
-type Clipboard = { writeText: (text: string) => Promise<void> };
-type Linking = { openURL: (url: string) => Promise<void> };
-
-async function sendBirthdayText(
-  reminder: Reminder,
-  phone: string,
-  deps: { platform: Platform; clipboard: Clipboard; linking: Linking },
-): Promise<void> {
-  const { platform, clipboard, linking } = deps;
-  const message = reminder.suggestedMessage ?? `Happy Birthday ${reminder.contactName}! 🎂`;
-  if (platform.OS === "web") {
-    try { await clipboard.writeText(message); } catch {}
-  } else {
-    const url =
-      platform.OS === "ios"
-        ? `sms:${phone}&body=${message}`
-        : `sms:${phone}?body=${encodeURIComponent(message)}`;
-    try { await linking.openURL(url); } catch {}
-  }
-}
-
-// ── handleBirthdayText logic ──────────────────────────────────────────────────
-//
-// Original source in app/(tabs)/index.tsx:
-//   const handleBirthdayText = async (reminder) => {
-//     if (!reminder.contactId) return;
-//     const contact = contacts.find((c) => c.id === reminder.contactId);
-//     const phone = contact?.phone;
-//     if (!phone) {
-//       setBirthdaySheet({ reminder });
-//       return;
-//     }
-//     await sendBirthdayText(reminder, phone);
-//   };
-
-interface Contact {
-  id: string;
-  phone?: string | null;
-}
-
-async function handleBirthdayText(
-  reminder: Reminder,
-  contacts: Contact[],
-  deps: {
-    setBirthdaySheet: (sheet: { reminder: Reminder }) => void;
-    sendBirthdayText: (reminder: Reminder, phone: string) => Promise<void>;
-  },
-): Promise<void> {
-  if (!reminder.contactId) return;
-  const contact = contacts.find((c) => c.id === reminder.contactId);
-  const phone = contact?.phone;
-  if (!phone) {
-    deps.setBirthdaySheet({ reminder });
-    return;
-  }
-  await deps.sendBirthdayText(reminder, phone);
-}
-
-// ── handleBirthdaySheetConfirm logic ─────────────────────────────────────────
-//
-// Original source in app/(tabs)/index.tsx:
-//   const handleBirthdaySheetConfirm = async (phone, shouldSave, extra) => {
-//     if (!birthdaySheet) return;
-//     const { reminder } = birthdaySheet;
-//     setBirthdaySheet(null);
-//     if (shouldSave && reminder.contactId) {
-//       try { await savePhoneNumber(reminder.contactId, phone, extra); } catch {}
-//     }
-//     await sendBirthdayText(reminder, phone);
-//   };
-
-async function handleBirthdaySheetConfirm(
-  phone: string,
-  shouldSave: boolean,
-  extra: { birthday?: string; photoUri?: string } | undefined,
-  birthdaySheet: { reminder: Reminder } | null,
-  deps: {
-    setBirthdaySheet: (sheet: null) => void;
-    savePhoneNumber: (contactId: string, phone: string, extra?: { birthday?: string; photoUri?: string }) => Promise<void>;
-    sendBirthdayText: (reminder: Reminder, phone: string) => Promise<void>;
-  },
-): Promise<void> {
-  if (!birthdaySheet) return;
-  const { reminder } = birthdaySheet;
-  deps.setBirthdaySheet(null);
-  if (shouldSave && reminder.contactId) {
-    try { await deps.savePhoneNumber(reminder.contactId, phone, extra); } catch {}
-  }
-  await deps.sendBirthdayText(reminder, phone);
-}
+// The tests below verify that shared implementation directly.
 
 // ── Tests ─────────────────────────────────────────────────────────────────────
 
@@ -158,7 +62,7 @@ describe("sendBirthdayText", () => {
 
   function makeDeps(os: "web" | "ios" | "android") {
     return {
-      platform: { OS: os } as Platform,
+      platform: { OS: os },
       clipboard: { writeText: jest.fn().mockResolvedValue(undefined) },
       linking: { openURL: jest.fn().mockResolvedValue(undefined) },
     };

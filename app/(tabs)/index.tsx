@@ -30,6 +30,7 @@ import { getViewedTimestamps, hasUnreadVotes } from "@/lib/hangout-notifications
 import { useSequentialHints, HINT_TEXT } from "@/lib/hints-store";
 import { HintTooltip } from "@/components/HintTooltip";
 import { scheduleReminderNotifications, scheduleSuggestionNudge } from "@/lib/reminder-notifications";
+import * as BirthdayText from "@/lib/birthday-text";
 
 const MAX_REMINDERS = 5;
 const MAX_SUGGESTIONS = 3;
@@ -428,37 +429,27 @@ export default function HomeScreen() {
   }, []);
 
   const sendBirthdayText = useCallback(async (reminder: Reminder, phone: string) => {
-    const message = reminder.suggestedMessage ?? `Happy Birthday ${reminder.contactName}! 🎂`;
-    if (Platform.OS === "web") {
-      try { await navigator.clipboard.writeText(message); } catch {}
-    } else {
-      const url = Platform.OS === "ios"
-        ? `sms:${phone}&body=${message}`
-        : `sms:${phone}?body=${encodeURIComponent(message)}`;
-      try { await Linking.openURL(url); } catch {}
-    }
+    await BirthdayText.sendBirthdayText(reminder, phone, {
+      platform: Platform,
+      clipboard: { writeText: (t: string) => navigator.clipboard.writeText(t) },
+      linking: Linking,
+    });
   }, []);
 
   const handleBirthdayText = useCallback(async (reminder: Reminder) => {
-    if (!reminder.contactId) return;
-    const contact = contacts.find((c) => c.id === reminder.contactId);
-    const phone = contact?.phone;
-    if (!phone) {
-      setBirthdaySheet({ reminder });
-      return;
-    }
-    await sendBirthdayText(reminder, phone);
+    await BirthdayText.handleBirthdayText(reminder, contacts, {
+      setBirthdaySheet,
+      sendBirthdayText,
+    });
   }, [contacts, sendBirthdayText]);
 
   const handleBirthdaySheetConfirm = useCallback(
     async (phone: string, shouldSave: boolean, extra?: { birthday?: string; photoUri?: string }) => {
-      if (!birthdaySheet) return;
-      const { reminder } = birthdaySheet;
-      setBirthdaySheet(null);
-      if (shouldSave && reminder.contactId) {
-        try { await savePhoneNumber(reminder.contactId, phone, extra); } catch {}
-      }
-      await sendBirthdayText(reminder, phone);
+      await BirthdayText.handleBirthdaySheetConfirm(phone, shouldSave, extra, birthdaySheet, {
+        setBirthdaySheet,
+        savePhoneNumber,
+        sendBirthdayText,
+      });
     },
     [birthdaySheet, savePhoneNumber, sendBirthdayText],
   );
