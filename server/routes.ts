@@ -822,7 +822,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
     if (!user) {
       return res.status(401).json({ message: "User not found" });
     }
-    res.json({ id: user.id, email: user.email, name: user.username, profilePhotoUri: user.profilePhotoUri, suggestionNotifFrequency: user.suggestionNotifFrequency, suggestionNotifTime: user.suggestionNotifTime, hasPassword: user.hasPassword !== false });
+    // profilePhotoUri is intentionally excluded — it can be up to 7 MB as a base64 blob.
+    // The client fetches it separately via /api/auth/photo after the critical startup path.
+    res.json({ id: user.id, email: user.email, name: user.username, suggestionNotifFrequency: user.suggestionNotifFrequency, suggestionNotifTime: user.suggestionNotifTime, hasPassword: user.hasPassword !== false });
+  });
+
+  // Dedicated endpoint for the profile photo blob so it doesn't slow down session checks.
+  app.get("/api/auth/photo", requireAuth, async (req, res) => {
+    const user = await storage.getUser(req.session.userId!);
+    if (!user) return res.status(404).json({ message: "User not found" });
+    res.json({ profilePhotoUri: user.profilePhotoUri ?? null });
   });
 
   app.post("/api/auth/forgot-password", authRateLimiter, async (req, res) => {
