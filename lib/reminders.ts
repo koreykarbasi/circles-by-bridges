@@ -281,7 +281,13 @@ function generateCircle2Reminders(contact: Contact): Reminder[] {
   reminders.push(...generateCustomReminders(contact, 2));
 
   const daysSinceContact = getDaysSince(contact.lastContacted ?? undefined);
-  if (daysSinceContact === null || daysSinceContact > CHECKIN_THRESHOLDS[2]) {
+  const daysSinceCreated = getDaysSince(contact.createdAt ?? undefined);
+  // Grace period: if lastContacted is null and the contact was added within 7 days, suppress the
+  // "You haven't reached out yet" reminder so it doesn't fire immediately on day one.
+  const withinNewContactGrace =
+    daysSinceContact === null &&
+    (daysSinceCreated === null || daysSinceCreated <= 7);
+  if (!withinNewContactGrace && (daysSinceContact === null || daysSinceContact > CHECKIN_THRESHOLDS[2])) {
     const severity = daysSinceContact === null
       ? 60
       : Math.min(60, 20 + Math.floor((daysSinceContact - CHECKIN_THRESHOLDS[2]) * 1.2));
