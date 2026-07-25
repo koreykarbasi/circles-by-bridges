@@ -236,7 +236,13 @@ export default function SuggestionsScreen() {
     const SUGGESTION_MAX = 6;
     const rankedEligible = eligible.map(rankContact).sort((a, b) => b.score - a.score);
     const eligibleIds = new Set(eligible.map((c) => c.id));
-    const cooldownPool = base.filter((c) => !eligibleIds.has(c.id));
+    // Exclude contacts dismissed today from the fallback pool — they were just swiped away
+    // and must not reappear within the same session or on restart.
+    const cooldownPool = base.filter((c) => {
+      if (eligibleIds.has(c.id)) return false;
+      const daysSince = getDaysSinceLastSuggestedSync(c.id, lastSuggestedDates);
+      return daysSince === null || daysSince >= 1;
+    });
     const rankedCooldown = cooldownPool.map(rankContact).sort((a, b) => b.score - a.score);
 
     return [...rankedEligible, ...rankedCooldown]

@@ -5,7 +5,7 @@ const SCHEDULER_KEY = "bridges_suggestion_scheduler_v2";
 
 export const CIRCLE_COOLDOWN_DAYS: Record<1 | 2 | 3, number> = {
   1: 7,
-  2: 3,
+  2: 5,
   3: 15,
 };
 
