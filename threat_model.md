@@ -36,20 +36,20 @@ This scan assumes only production-reachable behavior matters. Development-only t
 
 ### Spoofing
 
-The application relies on cookie-backed sessions for all authenticated APIs. Session identifiers must be signed with an unpredictable secret, and production must fail closed if the secret is missing instead of falling back to a known default. Authentication endpoints must resist credential guessing, and social-login flows must verify both that third-party tokens were minted for Bridges' own OAuth client IDs and that the verified provider subject is durably bound to the local account rather than trusting a mutable email claim alone.
+The application relies on cookie-backed sessions for all authenticated APIs. Session identifiers are signed with an operator-supplied `SESSION_SECRET` that is mandatory in production (server fails to start if missing). Authentication endpoints are rate-limited and Apple/Google identity tokens are verified against their respective JWKS and tokeninfo endpoints. Social-login flows bind accounts to stable provider `sub` values (not mutable email claims), preventing account-linking attacks via email recycling.
 
 ### Tampering
 
-Users can mutate contacts, hangouts, votes, prompts sync state, and notification settings. The server must treat all client input as untrusted, validate object ownership on every write, and protect authenticated state-changing routes from cross-site request forgery. Public voting links must preserve ballot integrity and prevent one visitor from submitting unlimited votes for the same survey, including integrity-sensitive side fields such as guest counts.
+Users can mutate contacts, hangouts, votes, prompts sync state, and notification settings. All write endpoints enforce server-side ownership checks (contact/hangout records are verified against `req.session.userId`). The public voting surface validates ballot integrity (one vote per option, unique ranks, option IDs bound to the plan), and voter identity is bound to per-invitee unforgeable tokens. The prompts sync endpoint requires a separately configured admin secret and an hourly cooldown.
 
 ### Information Disclosure
 
-The backend stores private relationship data and exposes a public voting surface. API responses must only disclose the minimum data required to the current user or public invitee. Public voting routes should not expose live tallies or attendance state before the workflow intends to reveal them. Notification and email delivery paths must bind recipients to stable identities or delivery endpoints so private plan details and relationship reminders cannot leak to unrelated accounts or later device holders. Logs and error paths must avoid leaking sensitive contact details, provider identifiers, integration data, or secrets.
+All authenticated data endpoints return only records owned by the session user. The public voting endpoint withholds live tally data until voting closes (finalized status or deadline passed). The ICS calendar endpoint is unauthenticated but requires a UUID (non-guessable) plan ID and returns only title/time/location of finalized plans. Error responses do not expose stack traces or database details. Registration uses a silent-success pattern to prevent email enumeration; login uses a dummy bcrypt compare for the same purpose.
 
 ### Denial of Service
 
-Public auth and voting endpoints can be hit anonymously and repeatedly. The system must bound expensive operations, rate limit brute-force and spam-prone routes, and avoid allowing unauthenticated or low-cost authenticated requests to trigger disproportionate database or external-service work such as outbound email, push delivery, or privileged Google Sheets synchronization.
+Auth and voting endpoints are rate-limited. Registration is limited to 5 per IP per hour. Email invite delivery is capped per-hangout (24 h) and per-user (3 batches/day). The request body is capped at 2 MB by Express. The prompts sync requires a secret token and is rate-limited to once per hour even for authorized callers.
 
 ### Elevation of Privilege
 
-There is no admin role, so the main privilege boundary is between unauthenticated users, authenticated users, and holders of public share links. Users must never gain access to another user's contacts or hangout plans by guessing identifiers, exploiting weak session configuration, abusing social-auth account-linking gaps, or reaching production-only bootstrap paths that create reusable accounts.
+There is no admin role, so the main privilege boundary is between unauthenticated users, authenticated users, and holders of public share links. All contact and hangout endpoints verify ownership server-side. Dev-only endpoints (`/api/dev/test-nudges`, `/api/dev/test-reminders`) are gated behind a `NODE_ENV !== "production"` guard. Minimum password length of 6 characters is below modern recommendations (NIST SP 800-63B requires 8+) — strengthening this would reduce credential-stuffing exposure.
