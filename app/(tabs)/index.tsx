@@ -252,14 +252,9 @@ export default function HomeScreen() {
       if (r.type === "hangout-quickpick" && r.contactId && elevatedContactTypes.has(`${r.contactId}:hangout`)) return false;
       return true;
     };
-    const actionable = allReminders
-      .filter((r) => !r.type.startsWith("profile-completion"))
+    return allReminders
       .filter(passesFilter)
       .slice(0, MAX_REMINDERS);
-    const profileCompletion = allReminders
-      .filter((r) => r.type.startsWith("profile-completion"))
-      .filter(passesFilter);
-    return [...actionable, ...profileCompletion];
   }, [allReminders, dismissedReminders, elevatedContactTypes]);
 
   const getSuggestionForContact = useCallback(

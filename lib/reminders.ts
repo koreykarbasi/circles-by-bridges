@@ -460,7 +460,7 @@ export function generateReminders(contacts: Contact[]): Reminder[] {
     }
   }
 
-  reminders.push(...generateProfileCompletionReminders(contacts));
+  // Profile completion cards removed from reminders — handled by the bell icon only.
 
   reminders.sort((a, b) => b.priority - a.priority);
   return reminders;
