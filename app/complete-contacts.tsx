@@ -15,6 +15,7 @@ import { useContacts } from "@/lib/contacts-context";
 import { Avatar } from "@/components/Avatar";
 import { CIRCLE_CONFIG } from "@/lib/types";
 import * as Haptics from "expo-haptics";
+import { HINT_TEXT } from "@/lib/hints-store";
 
 export default function CompleteContactsScreen() {
   const insets = useSafeAreaInsets();
@@ -43,6 +44,22 @@ export default function CompleteContactsScreen() {
       ),
     [contacts, importedIdSet],
   );
+
+  // Imported contacts missing both labels and interests — they'll show the yellow dot
+  const enrichmentMissing = useMemo(
+    () =>
+      contacts.filter((c) => {
+        const isImported = importedIdSet.size > 0 ? importedIdSet.has(c.id) : true;
+        return (
+          isImported &&
+          (c.labels ?? []).length === 0 &&
+          (c.interests ?? []).length === 0
+        );
+      }),
+    [contacts, importedIdSet],
+  );
+
+  const firstEnrichmentContact = enrichmentMissing[0] ?? null;
 
   const handleDone = () => {
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
@@ -125,6 +142,44 @@ export default function CompleteContactsScreen() {
               );
             })}
           </>
+        )}
+
+        {enrichmentMissing.length > 0 && (
+          <View style={styles.enrichmentBanner}>
+            <View style={styles.enrichmentIconRow}>
+              <View style={styles.enrichmentDot} />
+              <Text style={styles.enrichmentTitle}>Add labels for better suggestions</Text>
+            </View>
+            <Text style={styles.enrichmentBody}>
+              {HINT_TEXT.import_enrichment_dot}
+            </Text>
+            {firstEnrichmentContact && (
+              <Pressable
+                onPress={() => {
+                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                  router.push({
+                    pathname: "/edit-contact",
+                    params: { id: firstEnrichmentContact.id },
+                  });
+                }}
+                style={({ pressed }) => [
+                  styles.enrichmentCta,
+                  pressed && { opacity: 0.7 },
+                ]}
+              >
+                <Avatar
+                  name={firstEnrichmentContact.name}
+                  color={firstEnrichmentContact.avatarColor}
+                  size={32}
+                  photoUri={firstEnrichmentContact.photoUri}
+                />
+                <Text style={styles.enrichmentCtaText} numberOfLines={1}>
+                  Start with {firstEnrichmentContact.name}
+                </Text>
+                <Ionicons name="chevron-forward" size={16} color={Colors.yellow} />
+              </Pressable>
+            )}
+          </View>
         )}
 
         <Pressable
@@ -257,5 +312,54 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontFamily: "Nunito_700Bold",
     color: "#fff",
+  },
+  enrichmentBanner: {
+    backgroundColor: Colors.yellow + "14",
+    borderRadius: 14,
+    padding: 16,
+    marginTop: 24,
+    borderWidth: 1.5,
+    borderColor: Colors.yellow + "50",
+  },
+  enrichmentIconRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    marginBottom: 6,
+  },
+  enrichmentDot: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    backgroundColor: Colors.yellow,
+  },
+  enrichmentTitle: {
+    fontSize: 15,
+    fontFamily: "Nunito_700Bold",
+    color: Colors.text,
+  },
+  enrichmentBody: {
+    fontSize: 13,
+    fontFamily: "Nunito_400Regular",
+    color: Colors.textSecondary,
+    lineHeight: 18,
+    marginBottom: 12,
+  },
+  enrichmentCta: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: Colors.background,
+    borderRadius: 10,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    gap: 10,
+    borderWidth: 1,
+    borderColor: Colors.yellow + "40",
+  },
+  enrichmentCtaText: {
+    flex: 1,
+    fontSize: 14,
+    fontFamily: "Nunito_600SemiBold",
+    color: Colors.yellow,
   },
 });

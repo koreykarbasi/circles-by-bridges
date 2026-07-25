@@ -15,7 +15,8 @@ export type HintId =
   | "hangouts_intro"
   | "create_hangout_survey"
   | "edit_custom_reminder"
-  | "edit_labels";
+  | "edit_labels"
+  | "import_enrichment_dot";
 
 export const HINT_TEXT: Record<HintId, string> = {
   home_profile:
@@ -40,6 +41,8 @@ export const HINT_TEXT: Record<HintId, string> = {
     "Tap 'Add reminder' to set a custom reminder for any date — anniversaries, events, anything personal to this friendship.",
   edit_labels:
     "Labels like 'Childhood Friend' or 'Work Friend' help Bridges personalise the suggestions it gives you for this contact.",
+  import_enrichment_dot:
+    "Add labels to contacts to get better suggestions — look for the yellow dot on their card.",
 };
 
 // In-memory cache so reads are instant after the first async load
