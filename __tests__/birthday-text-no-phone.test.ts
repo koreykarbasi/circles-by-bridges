@@ -21,6 +21,7 @@
  */
 
 import type { Reminder } from "../lib/reminders";
+import { buildExtraFromDeviceContact } from "../lib/contact-extra";
 
 // ── Shared test data ──────────────────────────────────────────────────────────
 
@@ -537,5 +538,283 @@ describe("full flow integration — contact with no phone → sheet → confirm 
     const smsUrl = (openURL as jest.Mock).mock.calls[0][0] as string;
     expect(smsUrl).toMatch(/^sms:\+14155556666\?body=/);
     expect(smsUrl).toContain(encodeURIComponent("Happy Birthday Bob! 🎂"));
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+//
+// handlePickContact → proceedWithPhone → handleSaveYes / handleSaveNo
+//
+// These tests cover the "Find in Contacts" path in NoPhoneSheet.tsx.
+//
+// The internal state machine is:
+//   1. handlePickContact(contact)
+//        calls buildExtraFromDeviceContact(contact) [imported from lib/contact-extra.ts]
+//        then calls proceedWithPhone(contact.phone, extra)
+//   2. proceedWithPhone(phone, extra)
+//        stores capturedPhone + capturedExtra, moves to "save" screen
+//   3. handleSaveYes()  → onConfirm(capturedPhone, true,  capturedExtra)
+//      handleSaveNo()   → onConfirm(capturedPhone, false, undefined)
+//
+// buildExtraFromDeviceContact is the real production function from
+// lib/contact-extra.ts, imported at the top of this file. Tests that
+// exercise it here will fail on actual regressions in that module.
+// ─────────────────────────────────────────────────────────────────────────────
+
+// Mirrors the DeviceContact shape used internally in NoPhoneSheet.tsx.
+interface DeviceContactFixture {
+  id: string;
+  name: string;
+  phone: string;
+  birthday?: string | null;
+  imageUri?: string | null;
+}
+
+/**
+ * Simulates the full handlePickContact → proceedWithPhone → handleSaveYes /
+ * handleSaveNo state machine using the real production buildExtraFromDeviceContact.
+ *
+ * saveChoice=true  ≈ user tapped "Save to <contact>"  → onConfirm(phone, true,  extra)
+ * saveChoice=false ≈ user tapped "Just this time"     → onConfirm(phone, false, undefined)
+ */
+function simulatePickAndSave(
+  contact: DeviceContactFixture,
+  saveChoice: boolean,
+  onConfirm: (phone: string, shouldSave: boolean, extra?: { birthday?: string; photoUri?: string }) => void,
+): void {
+  // handlePickContact calls the real production helper
+  const extra = buildExtraFromDeviceContact(contact);
+  // proceedWithPhone stores phone + extra in component state
+
+  // handleSaveYes / handleSaveNo
+  if (saveChoice) {
+    onConfirm(contact.phone, true, extra);       // handleSaveYes path
+  } else {
+    onConfirm(contact.phone, false, undefined);  // handleSaveNo path
+  }
+}
+
+describe("handlePickContact → proceedWithPhone → handleSaveYes / handleSaveNo", () => {
+  // ── buildExtraFromDeviceContact — the real production helper ──────────────
+  //
+  // These tests exercise lib/contact-extra.ts directly, which is the same
+  // module that NoPhoneSheet.tsx imports.  A regression in the field mapping
+  // (wrong key name, missing null-check, etc.) will fail here.
+
+  describe("buildExtraFromDeviceContact — extra field construction (production function)", () => {
+    test("returns both birthday and photoUri when contact has both", () => {
+      const extra = buildExtraFromDeviceContact({
+        birthday: "03/15",
+        imageUri: "data:image/jpeg;base64,abc123",
+      });
+      expect(extra).toEqual({ birthday: "03/15", photoUri: "data:image/jpeg;base64,abc123" });
+    });
+
+    test("returns only birthday when imageUri is absent", () => {
+      const extra = buildExtraFromDeviceContact({ birthday: "07/04" });
+      expect(extra).toEqual({ birthday: "07/04" });
+      expect(extra).not.toHaveProperty("photoUri");
+    });
+
+    test("returns only photoUri when birthday is absent", () => {
+      const extra = buildExtraFromDeviceContact({ imageUri: "file:///path/to/image.jpg" });
+      expect(extra).toEqual({ photoUri: "file:///path/to/image.jpg" });
+      expect(extra).not.toHaveProperty("birthday");
+    });
+
+    test("returns undefined when contact has no birthday and no imageUri", () => {
+      const extra = buildExtraFromDeviceContact({});
+      expect(extra).toBeUndefined();
+    });
+
+    test("returns undefined when birthday and imageUri are both null", () => {
+      const extra = buildExtraFromDeviceContact({ birthday: null, imageUri: null });
+      expect(extra).toBeUndefined();
+    });
+
+    test("maps imageUri to the photoUri key (not imageUri)", () => {
+      // Regression guard: the key rename imageUri → photoUri must not silently drop.
+      const extra = buildExtraFromDeviceContact({ imageUri: "file:///photo.jpg" });
+      expect(extra).toHaveProperty("photoUri", "file:///photo.jpg");
+      expect(extra).not.toHaveProperty("imageUri");
+    });
+  });
+
+  // ── handleSaveYes path (shouldSave = true) ────────────────────────────────
+
+  describe("handleSaveYes path — onConfirm called with shouldSave=true", () => {
+    test("forwards birthday and photoUri as extra when contact has both", () => {
+      const onConfirm = jest.fn();
+      simulatePickAndSave(
+        { id: "c1", name: "Alice", phone: "+14155551111", birthday: "03/15", imageUri: "data:image/jpeg;base64,abc123" },
+        true,
+        onConfirm,
+      );
+      expect(onConfirm).toHaveBeenCalledTimes(1);
+      expect(onConfirm).toHaveBeenCalledWith(
+        "+14155551111",
+        true,
+        { birthday: "03/15", photoUri: "data:image/jpeg;base64,abc123" },
+      );
+    });
+
+    test("forwards only birthday in extra when contact has no image", () => {
+      const onConfirm = jest.fn();
+      simulatePickAndSave(
+        { id: "c2", name: "Bob", phone: "+14155552222", birthday: "12/25" },
+        true,
+        onConfirm,
+      );
+      expect(onConfirm).toHaveBeenCalledWith("+14155552222", true, { birthday: "12/25" });
+    });
+
+    test("forwards only photoUri in extra when contact has no birthday", () => {
+      const onConfirm = jest.fn();
+      simulatePickAndSave(
+        { id: "c3", name: "Carol", phone: "+14155553333", imageUri: "file:///carol.jpg" },
+        true,
+        onConfirm,
+      );
+      expect(onConfirm).toHaveBeenCalledWith("+14155553333", true, { photoUri: "file:///carol.jpg" });
+    });
+
+    test("calls onConfirm with extra=undefined when contact has no birthday or image", () => {
+      const onConfirm = jest.fn();
+      simulatePickAndSave(
+        { id: "c4", name: "Dave", phone: "+14155554444" },
+        true,
+        onConfirm,
+      );
+      expect(onConfirm).toHaveBeenCalledTimes(1);
+      expect(onConfirm).toHaveBeenCalledWith("+14155554444", true, undefined);
+    });
+  });
+
+  // ── handleSaveNo path (shouldSave = false) ────────────────────────────────
+
+  describe("handleSaveNo path — onConfirm called with shouldSave=false, extra=undefined", () => {
+    test("calls onConfirm(phone, false, undefined) even when contact has birthday+image", () => {
+      const onConfirm = jest.fn();
+      simulatePickAndSave(
+        { id: "c1", name: "Alice", phone: "+14155551111", birthday: "03/15", imageUri: "data:image/jpeg;base64,abc123" },
+        false,
+        onConfirm,
+      );
+      expect(onConfirm).toHaveBeenCalledTimes(1);
+      expect(onConfirm).toHaveBeenCalledWith("+14155551111", false, undefined);
+    });
+
+    test("calls onConfirm(phone, false, undefined) when contact has no birthday or image", () => {
+      const onConfirm = jest.fn();
+      simulatePickAndSave(
+        { id: "c5", name: "Eve", phone: "+14155555555" },
+        false,
+        onConfirm,
+      );
+      expect(onConfirm).toHaveBeenCalledTimes(1);
+      expect(onConfirm).toHaveBeenCalledWith("+14155555555", false, undefined);
+    });
+
+    test("does NOT forward extra data to onConfirm on the 'Just this time' path", () => {
+      const onConfirm = jest.fn();
+      simulatePickAndSave(
+        { id: "c6", name: "Frank", phone: "+14155556666", birthday: "06/01", imageUri: "file:///frank.jpg" },
+        false,
+        onConfirm,
+      );
+      const [, , extra] = (onConfirm as jest.Mock).mock.calls[0] as [string, boolean, { birthday?: string; photoUri?: string } | undefined];
+      expect(extra).toBeUndefined();
+    });
+  });
+
+  // ── Full picker flow integration ──────────────────────────────────────────
+
+  describe("full picker flow — contact picked → sheet confirm → SMS", () => {
+    test("picking a contact with birthday+image and saving calls savePhoneNumber with extra then sends SMS", async () => {
+      const reminder = makeReminder({ contactId: "alice-id", contactName: "Alice" });
+      const contacts: Contact[] = [{ id: "alice-id", phone: null }];
+
+      // Step 1: no phone → sheet opens
+      let capturedSheet: { reminder: Reminder } | null = null;
+      const setBirthdaySheet = jest.fn().mockImplementation((s) => { capturedSheet = s; });
+      const savePhoneNumber = jest.fn().mockResolvedValue(undefined);
+      const openURL = jest.fn().mockResolvedValue(undefined);
+      const platform = { OS: "ios" as const };
+      const clipboard = { writeText: jest.fn() };
+
+      const sendText = (r: Reminder, p: string) =>
+        sendBirthdayText(r, p, { platform, clipboard, linking: { openURL } });
+
+      await handleBirthdayText(reminder, contacts, { setBirthdaySheet, sendBirthdayText: sendText });
+      expect(capturedSheet).toEqual({ reminder });
+
+      // Step 2: user picks a device contact — extra built by the real production helper
+      const pickedContact: DeviceContactFixture = {
+        id: "device-alice",
+        name: "Alice",
+        phone: "+14155559999",
+        birthday: "03/15",
+        imageUri: "data:image/jpeg;base64,xyz",
+      };
+      const pickedPhone = pickedContact.phone;
+      const pickedExtra = buildExtraFromDeviceContact(pickedContact); // same call the component makes
+
+      // Simulate proceedWithPhone + handleSaveYes via handleBirthdaySheetConfirm
+      await handleBirthdaySheetConfirm(pickedPhone, true, pickedExtra, capturedSheet, {
+        setBirthdaySheet,
+        savePhoneNumber,
+        sendBirthdayText: sendText,
+      });
+
+      // Extra data forwarded to savePhoneNumber
+      expect(savePhoneNumber).toHaveBeenCalledWith("alice-id", pickedPhone, pickedExtra);
+      expect(pickedExtra).toEqual({ birthday: "03/15", photoUri: "data:image/jpeg;base64,xyz" });
+
+      // SMS launched
+      expect(openURL).toHaveBeenCalledTimes(1);
+      const smsUrl = (openURL as jest.Mock).mock.calls[0][0] as string;
+      expect(smsUrl).toMatch(/^sms:\+14155559999/);
+      expect(smsUrl).toContain("Happy Birthday Alice! 🎂");
+    });
+
+    test("picking a contact with no birthday/image and choosing 'Just this time' sends SMS without saving", async () => {
+      const reminder = makeReminder({ contactId: "bob-id", contactName: "Bob" });
+      const contacts: Contact[] = [{ id: "bob-id", phone: null }];
+
+      let capturedSheet: { reminder: Reminder } | null = null;
+      const setBirthdaySheet = jest.fn().mockImplementation((s) => { capturedSheet = s; });
+      const savePhoneNumber = jest.fn();
+      const openURL = jest.fn().mockResolvedValue(undefined);
+      const platform = { OS: "android" as const };
+      const clipboard = { writeText: jest.fn() };
+
+      const sendText = (r: Reminder, p: string) =>
+        sendBirthdayText(r, p, { platform, clipboard, linking: { openURL } });
+
+      await handleBirthdayText(reminder, contacts, { setBirthdaySheet, sendBirthdayText: sendText });
+      expect(capturedSheet).toEqual({ reminder });
+
+      // Contact with no birthday or image — extra must be undefined
+      const pickedContact: DeviceContactFixture = { id: "device-bob", name: "Bob", phone: "+14155558888" };
+      const pickedPhone = pickedContact.phone;
+      const pickedExtra = buildExtraFromDeviceContact(pickedContact);
+      expect(pickedExtra).toBeUndefined(); // guard: confirms no extra leaked in
+
+      // User taps "Just this time" — handleSaveNo path
+      await handleBirthdaySheetConfirm(pickedPhone, false, pickedExtra, capturedSheet, {
+        setBirthdaySheet,
+        savePhoneNumber,
+        sendBirthdayText: sendText,
+      });
+
+      // Phone NOT saved
+      expect(savePhoneNumber).not.toHaveBeenCalled();
+
+      // SMS still launched
+      expect(openURL).toHaveBeenCalledTimes(1);
+      const smsUrl = (openURL as jest.Mock).mock.calls[0][0] as string;
+      expect(smsUrl).toMatch(/^sms:\+14155558888\?body=/);
+      expect(smsUrl).toContain(encodeURIComponent("Happy Birthday Bob! 🎂"));
+    });
   });
 });

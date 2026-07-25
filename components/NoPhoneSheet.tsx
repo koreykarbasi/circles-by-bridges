@@ -14,6 +14,8 @@ import {
 import { Ionicons } from "@expo/vector-icons";
 import Colors from "@/constants/colors";
 import * as Haptics from "expo-haptics";
+import { buildExtraFromDeviceContact } from "@/lib/contact-extra";
+import type { ExtraContactData } from "@/lib/contact-extra";
 
 type Screen = "entry" | "contacts" | "save";
 
@@ -25,10 +27,9 @@ interface DeviceContact {
   imageUri?: string | null;
 }
 
-export interface ExtraContactData {
-  birthday?: string;
-  photoUri?: string;
-}
+// Re-export so existing importers that pull ExtraContactData from this module
+// continue to work without changes.
+export type { ExtraContactData } from "@/lib/contact-extra";
 
 interface NoPhoneSheetProps {
   visible: boolean;
@@ -138,10 +139,7 @@ export function NoPhoneSheet({ visible, contactName, mode, onConfirm, onDismiss 
 
   const handlePickContact = useCallback((contact: DeviceContact) => {
     Haptics.selectionAsync();
-    const extra: ExtraContactData = {};
-    if (contact.birthday) extra.birthday = contact.birthday;
-    if (contact.imageUri) extra.photoUri = contact.imageUri;
-    proceedWithPhone(contact.phone, Object.keys(extra).length > 0 ? extra : undefined);
+    proceedWithPhone(contact.phone, buildExtraFromDeviceContact(contact));
   }, [proceedWithPhone]);
 
   const handleSaveYes = useCallback(() => {
