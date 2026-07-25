@@ -223,6 +223,32 @@ describe("handleBirthdayText", () => {
     expect(setBirthdaySheet).not.toHaveBeenCalled();
     expect(sendText).not.toHaveBeenCalled();
   });
+
+  test("calls showError when reminder has no contactId", async () => {
+    const noContactIdReminder = makeReminder({ contactId: undefined });
+    const contacts: Contact[] = [{ id: "contact-1", phone: "+14155559999" }];
+    const setBirthdaySheet = jest.fn();
+    const sendText = jest.fn();
+    const showError = jest.fn();
+
+    await handleBirthdayText(noContactIdReminder, contacts, { setBirthdaySheet, sendBirthdayText: sendText, showError });
+
+    expect(showError).toHaveBeenCalledTimes(1);
+    expect(showError).toHaveBeenCalledWith("Couldn't open this contact — try refreshing the app");
+    expect(setBirthdaySheet).not.toHaveBeenCalled();
+    expect(sendText).not.toHaveBeenCalled();
+  });
+
+  test("does not throw when showError is omitted and contactId is absent", async () => {
+    const noContactIdReminder = makeReminder({ contactId: undefined });
+    const contacts: Contact[] = [];
+    const setBirthdaySheet = jest.fn();
+    const sendText = jest.fn();
+
+    await expect(
+      handleBirthdayText(noContactIdReminder, contacts, { setBirthdaySheet, sendBirthdayText: sendText }),
+    ).resolves.toBeUndefined();
+  });
 });
 
 // ─────────────────────────────────────────────────────────────────────────────

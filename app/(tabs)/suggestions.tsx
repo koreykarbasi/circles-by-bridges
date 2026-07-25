@@ -106,6 +106,10 @@ export default function SuggestionsScreen() {
   const [copiedToast, setCopiedToast] = useState(false);
   const copiedToastAnim = useRef(new Animated.Value(0)).current;
   const copiedToastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [errorToast, setErrorToast] = useState(false);
+  const [errorToastMessage, setErrorToastMessage] = useState("");
+  const errorToastAnim = useRef(new Animated.Value(0)).current;
+  const errorToastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [birthdaySheet, setBirthdaySheet] = useState<{ reminder: Reminder } | null>(null);
 
   useEffect(() => {
@@ -384,6 +388,7 @@ export default function SuggestionsScreen() {
   useEffect(() => {
     return () => {
       if (copiedToastTimer.current) clearTimeout(copiedToastTimer.current);
+      if (errorToastTimer.current) clearTimeout(errorToastTimer.current);
     };
   }, []);
 
@@ -397,6 +402,18 @@ export default function SuggestionsScreen() {
       });
     }, 1800);
   }, [copiedToastAnim]);
+
+  const showErrorToast = useCallback((message: string) => {
+    if (errorToastTimer.current) clearTimeout(errorToastTimer.current);
+    setErrorToastMessage(message);
+    setErrorToast(true);
+    Animated.timing(errorToastAnim, { toValue: 1, duration: 180, useNativeDriver: true }).start();
+    errorToastTimer.current = setTimeout(() => {
+      Animated.timing(errorToastAnim, { toValue: 0, duration: 280, useNativeDriver: true }).start(() => {
+        setErrorToast(false);
+      });
+    }, 2500);
+  }, [errorToastAnim]);
 
   const handleCopyText = useCallback(
     (_contactId: string) => {
@@ -488,8 +505,9 @@ export default function SuggestionsScreen() {
     await BirthdayText.handleBirthdayText(reminder, contacts, {
       setBirthdaySheet,
       sendBirthdayText,
+      showError: showErrorToast,
     });
-  }, [contacts, sendBirthdayText]);
+  }, [contacts, sendBirthdayText, showErrorToast]);
 
   const handleBirthdaySheetConfirm = useCallback(
     async (phone: string, shouldSave: boolean, extra?: { birthday?: string; photoUri?: string }) => {
@@ -737,6 +755,24 @@ export default function SuggestionsScreen() {
       >
         <Ionicons name="checkmark-circle" size={16} color={Colors.success} />
         <Text style={styles.copiedToastText}>Text copied</Text>
+      </Animated.View>
+    )}
+
+    {errorToast && (
+      <Animated.View
+        testID="error-toast"
+        style={[
+          styles.copiedToast,
+          {
+            opacity: errorToastAnim,
+            bottom: insets.bottom + 90 + (Platform.OS === "web" ? 34 : 0),
+            pointerEvents: "none",
+            backgroundColor: Colors.danger + "EE",
+          },
+        ]}
+      >
+        <Ionicons name="alert-circle" size={16} color="#fff" />
+        <Text style={[styles.copiedToastText, { color: "#fff" }]}>{errorToastMessage}</Text>
       </Animated.View>
     )}
 

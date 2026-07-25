@@ -61,9 +61,13 @@ export async function handleBirthdayText(
   deps: {
     setBirthdaySheet: (sheet: { reminder: Reminder }) => void;
     sendBirthdayText: (reminder: Reminder, phone: string) => Promise<void>;
+    showError?: (message: string) => void;
   },
 ): Promise<void> {
-  if (!reminder.contactId) return;
+  if (!reminder.contactId) {
+    deps.showError?.("Couldn't open this contact — try refreshing the app");
+    return;
+  }
   const contact = contacts.find((c) => c.id === reminder.contactId);
   const phone = contact?.phone;
   if (!phone) {
