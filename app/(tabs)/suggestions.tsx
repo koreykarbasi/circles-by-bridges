@@ -24,6 +24,7 @@ import { useSequentialHints, HINT_TEXT } from "@/lib/hints-store";
 import { HintTooltip } from "@/components/HintTooltip";
 import { useAuth } from "@/lib/auth-context";
 import { scheduleReminderNotifications } from "@/lib/reminder-notifications";
+import { NoPhoneSheet } from "@/components/NoPhoneSheet";
 
 interface GeneratedSuggestion {
   contact: Contact;
@@ -104,6 +105,7 @@ export default function SuggestionsScreen() {
   const [copiedToast, setCopiedToast] = useState(false);
   const copiedToastAnim = useRef(new Animated.Value(0)).current;
   const copiedToastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [birthdaySheet, setBirthdaySheet] = useState<{ reminder: Reminder } | null>(null);
 
   useEffect(() => {
     loadSyncedPrompts();
@@ -461,11 +463,7 @@ export default function SuggestionsScreen() {
     });
   }, []);
 
-  const handleBirthdayText = useCallback(async (reminder: Reminder) => {
-    if (!reminder.contactId) return;
-    const contact = contacts.find((c) => c.id === reminder.contactId);
-    const phone = contact?.phone;
-    if (!phone) return;
+  const sendBirthdayText = useCallback(async (reminder: Reminder, phone: string) => {
     const message = reminder.suggestedMessage ?? `Happy Birthday ${reminder.contactName}! 🎂`;
     if (Platform.OS === "web") {
       try { await navigator.clipboard.writeText(message); } catch {}
@@ -475,7 +473,31 @@ export default function SuggestionsScreen() {
         : `sms:${phone}?body=${encodeURIComponent(message)}`;
       try { await Linking.openURL(url); } catch {}
     }
-  }, [contacts]);
+  }, []);
+
+  const handleBirthdayText = useCallback(async (reminder: Reminder) => {
+    if (!reminder.contactId) return;
+    const contact = contacts.find((c) => c.id === reminder.contactId);
+    const phone = contact?.phone;
+    if (!phone) {
+      setBirthdaySheet({ reminder });
+      return;
+    }
+    await sendBirthdayText(reminder, phone);
+  }, [contacts, sendBirthdayText]);
+
+  const handleBirthdaySheetConfirm = useCallback(
+    async (phone: string, shouldSave: boolean, extra?: { birthday?: string; photoUri?: string }) => {
+      if (!birthdaySheet) return;
+      const { reminder } = birthdaySheet;
+      setBirthdaySheet(null);
+      if (shouldSave && reminder.contactId) {
+        try { await savePhoneNumber(reminder.contactId, phone, extra); } catch {}
+      }
+      await sendBirthdayText(reminder, phone);
+    },
+    [birthdaySheet, savePhoneNumber, sendBirthdayText],
+  );
 
   const handleShuffle = useCallback(() => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
@@ -610,25 +632,20 @@ export default function SuggestionsScreen() {
 
           {!remindersCollapsed && (
             <View style={styles.remindersList}>
-              {reminders.map((reminder) => {
-                const birthdayContact = reminder.type === "birthday" && reminder.contactId
-                  ? contacts.find((c) => c.id === reminder.contactId)
-                  : undefined;
-                return (
-                  <ReminderItem
-                    key={reminder.id}
-                    reminder={reminder}
-                    onComplete={() => handleReminderComplete(reminder)}
-                    onQuickPick={
-                      (reminder.type === "check-in-quickpick" || reminder.type === "hangout-quickpick")
-                        ? (date, label) => handleReminderQuickPick(reminder, date, label)
-                        : undefined
-                    }
-                    onCalendarPress={reminder.type === "hangout-quickpick" ? () => handleHangoutCalendarPress(reminder) : undefined}
-                    onTextPress={birthdayContact?.phone ? () => handleBirthdayText(reminder) : undefined}
-                  />
-                );
-              })}
+              {reminders.map((reminder) => (
+                <ReminderItem
+                  key={reminder.id}
+                  reminder={reminder}
+                  onComplete={() => handleReminderComplete(reminder)}
+                  onQuickPick={
+                    (reminder.type === "check-in-quickpick" || reminder.type === "hangout-quickpick")
+                      ? (date, label) => handleReminderQuickPick(reminder, date, label)
+                      : undefined
+                  }
+                  onCalendarPress={reminder.type === "hangout-quickpick" ? () => handleHangoutCalendarPress(reminder) : undefined}
+                  onTextPress={reminder.type === "birthday" ? () => handleBirthdayText(reminder) : undefined}
+                />
+              ))}
             </View>
           )}
         </View>
@@ -725,6 +742,14 @@ export default function SuggestionsScreen() {
       text={activeHint ? HINT_TEXT[activeHint] : ""}
       onDismiss={dismissHint}
       bottomOffset={80}
+    />
+
+    <NoPhoneSheet
+      visible={!!birthdaySheet}
+      contactName={birthdaySheet?.reminder.contactName ?? ""}
+      mode="sms"
+      onConfirm={handleBirthdaySheetConfirm}
+      onDismiss={() => setBirthdaySheet(null)}
     />
     </View>
   );

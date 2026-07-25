@@ -132,6 +132,7 @@ export default function HomeScreen() {
   const copiedToastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [activeHint, dismissHint] = useSequentialHints(["home_profile", "home_reminders", "home_suggestions"]);
   const [phoneSheet, setPhoneSheet] = useState<{ suggestion: Suggestion; mode: "sms" | "call" } | null>(null);
+  const [birthdaySheet, setBirthdaySheet] = useState<{ reminder: Reminder } | null>(null);
 
   const { data: hangouts } = useQuery<HangoutPlan[]>({
     queryKey: ["/api/hangouts"],
@@ -424,11 +425,7 @@ export default function HomeScreen() {
     });
   }, []);
 
-  const handleBirthdayText = useCallback(async (reminder: Reminder) => {
-    if (!reminder.contactId) return;
-    const contact = contacts.find((c) => c.id === reminder.contactId);
-    const phone = contact?.phone;
-    if (!phone) return;
+  const sendBirthdayText = useCallback(async (reminder: Reminder, phone: string) => {
     const message = reminder.suggestedMessage ?? `Happy Birthday ${reminder.contactName}! 🎂`;
     if (Platform.OS === "web") {
       try { await navigator.clipboard.writeText(message); } catch {}
@@ -438,7 +435,31 @@ export default function HomeScreen() {
         : `sms:${phone}?body=${encodeURIComponent(message)}`;
       try { await Linking.openURL(url); } catch {}
     }
-  }, [contacts]);
+  }, []);
+
+  const handleBirthdayText = useCallback(async (reminder: Reminder) => {
+    if (!reminder.contactId) return;
+    const contact = contacts.find((c) => c.id === reminder.contactId);
+    const phone = contact?.phone;
+    if (!phone) {
+      setBirthdaySheet({ reminder });
+      return;
+    }
+    await sendBirthdayText(reminder, phone);
+  }, [contacts, sendBirthdayText]);
+
+  const handleBirthdaySheetConfirm = useCallback(
+    async (phone: string, shouldSave: boolean, extra?: { birthday?: string; photoUri?: string }) => {
+      if (!birthdaySheet) return;
+      const { reminder } = birthdaySheet;
+      setBirthdaySheet(null);
+      if (shouldSave && reminder.contactId) {
+        try { await savePhoneNumber(reminder.contactId, phone, extra); } catch {}
+      }
+      await sendBirthdayText(reminder, phone);
+    },
+    [birthdaySheet, savePhoneNumber, sendBirthdayText],
+  );
 
   const handleSuggestionDone = useCallback(
     async (suggestion: Suggestion) => {
@@ -746,9 +767,6 @@ export default function HomeScreen() {
                 reminder.type === "birthday" ||
                 reminder.type.startsWith("profile-completion");
               if (usesReminderItem) {
-                const birthdayContact = reminder.type === "birthday" && reminder.contactId
-                  ? contacts.find((c) => c.id === reminder.contactId)
-                  : undefined;
                 return (
                   <ReminderItem
                     key={reminder.id}
@@ -756,7 +774,7 @@ export default function HomeScreen() {
                     onComplete={() => handleReminderComplete(reminder)}
                     onQuickPick={(date, label) => handleReminderQuickPick(reminder, date, label)}
                     onCalendarPress={reminder.type === "hangout-quickpick" ? () => handleHangoutCalendarPress(reminder) : undefined}
-                    onTextPress={birthdayContact?.phone ? () => handleBirthdayText(reminder) : undefined}
+                    onTextPress={reminder.type === "birthday" ? () => handleBirthdayText(reminder) : undefined}
                   />
                 );
               }
@@ -898,6 +916,14 @@ export default function HomeScreen() {
       mode={phoneSheet?.mode ?? "sms"}
       onConfirm={handlePhoneSheetConfirm}
       onDismiss={() => setPhoneSheet(null)}
+    />
+
+    <NoPhoneSheet
+      visible={!!birthdaySheet}
+      contactName={birthdaySheet?.reminder.contactName ?? ""}
+      mode="sms"
+      onConfirm={handleBirthdaySheetConfirm}
+      onDismiss={() => setBirthdaySheet(null)}
     />
 
     {copiedToast && (
