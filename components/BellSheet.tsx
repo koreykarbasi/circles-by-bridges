@@ -31,7 +31,7 @@ export function computeBellDotColor(contacts: Contact[], isComplete: boolean): s
   const c2Missing = contacts.filter((c) => c.circleLevel === 2 && !c.birthday);
   if (c2Missing.length > 0) return Colors.warning;
   const missingEnrichment = contacts.filter(
-    (c) => (c.labels ?? []).length === 0 && (c.interests ?? []).length === 0,
+    (c) => (c.interests ?? []).length === 0,
   );
   if (missingEnrichment.length > 0) return Colors.yellow;
   return Colors.success;
@@ -118,7 +118,7 @@ export function BellSheet({ visible, onClose, contacts, isComplete }: BellSheetP
     }
 
     const missingEnrichmentCount = contacts.filter(
-      (c) => (c.labels ?? []).length === 0 && (c.interests ?? []).length === 0,
+      (c) => (c.interests ?? []).length === 0,
     ).length;
 
     return { urgent, recommended, missingEnrichmentCount };

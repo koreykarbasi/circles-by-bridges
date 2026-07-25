@@ -79,14 +79,14 @@ function SwipableSuggestionRow({ children, onSwipeDismiss }: { children: React.R
     PanResponder.create({
       onStartShouldSetPanResponder: () => false,
       onMoveShouldSetPanResponder: (_, gs) =>
-        !animating.current && Math.abs(gs.dx) > 8 && Math.abs(gs.dx) > Math.abs(gs.dy) * 1.5,
+        !animating.current && Math.abs(gs.dx) > 5 && Math.abs(gs.dx) > Math.abs(gs.dy) * 1.2,
       onPanResponderMove: (_, gs) => {
         translateX.setValue(gs.dx);
         cardOpacity.setValue(Math.max(0.3, 1 - Math.abs(gs.dx) / 250));
       },
       onPanResponderRelease: (_, gs) => {
         const dismissFn = onDismissRef.current;
-        if (Math.abs(gs.dx) > 80 || Math.abs(gs.vx) > 0.5) {
+        if (Math.abs(gs.dx) > 60 || Math.abs(gs.vx) > 0.4) {
           animating.current = true;
           const dir = gs.dx > 0 ? 1 : -1;
           Animated.parallel([
@@ -785,7 +785,7 @@ export default function HomeScreen() {
                     onComplete={() => handleReminderComplete(reminder)}
                     onQuickPick={(date, label) => handleReminderQuickPick(reminder, date, label)}
                     onCalendarPress={reminder.type === "hangout-quickpick" ? () => handleHangoutCalendarPress(reminder) : undefined}
-                    onTextPress={reminder.type === "birthday" ? () => handleBirthdayText(reminder) : undefined}
+                    onTextPress={reminder.actionType === "text" ? () => handleBirthdayText(reminder) : undefined}
                   />
                 );
               }

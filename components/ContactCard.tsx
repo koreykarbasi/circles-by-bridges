@@ -24,7 +24,7 @@ function isMissingBirthday(contact: Contact): boolean {
 }
 
 function isMissingEnrichment(contact: Contact): boolean {
-  return (contact.labels ?? []).length === 0 && (contact.interests ?? []).length === 0;
+  return (contact.interests ?? []).length === 0;
 }
 
 export function ContactCard({ contact, onPress, onMarkContacted, onPlanHangout, showCircleLabel, onLongPress, isProfileIncomplete }: ContactCardProps) {

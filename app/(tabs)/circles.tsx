@@ -17,7 +17,7 @@ import { HintTooltip } from "@/components/HintTooltip";
 import DraggableFlatList, { RenderItemParams, ScaleDecorator } from "react-native-draggable-flatlist";
 
 function isMissingEnrichment(c: Contact): boolean {
-  return (c.labels ?? []).length === 0 && (c.interests ?? []).length === 0;
+  return (c.interests ?? []).length === 0;
 }
 
 export default function CirclesScreen() {
@@ -134,7 +134,7 @@ export default function CirclesScreen() {
   const filterBannerLabel = useMemo(() => {
     if (activeFilter === "missing-birthday-c1") return "Showing Core contacts missing a birthday";
     if (activeFilter === "missing-birthday-c2") return "Showing Close contacts missing birthday or details";
-    if (activeFilter === "yellow-dot") return "Showing all contacts missing labels or interests";
+    if (activeFilter === "yellow-dot") return "Showing all contacts missing a birthday or interests";
     return null;
   }, [activeFilter]);
 

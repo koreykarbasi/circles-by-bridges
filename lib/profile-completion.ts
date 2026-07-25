@@ -22,16 +22,16 @@ export function computeProfileCompletion(contacts: Contact[]): ProfileCompletion
   const circle3Count = contacts.filter((c) => c.circleLevel === 3).length;
   const circle1NoBirthday = contacts.filter((c) => c.circleLevel === 1 && !c.birthday);
   const circle2NoBirthday = contacts.filter((c) => c.circleLevel === 2 && !c.birthday);
+  // Only interests count for enrichment — labels are optional and not required
   const c1c2MissingEnrichment = contacts.filter(
     (c) =>
       (c.circleLevel === 1 || c.circleLevel === 2) &&
-      (c.labels ?? []).length === 0 &&
       (c.interests ?? []).length === 0,
   );
   const incompleteAnyContact = contacts.filter(
     (c) =>
       !c.birthday ||
-      ((c.labels ?? []).length === 0 && (c.interests ?? []).length === 0),
+      (c.interests ?? []).length === 0,
   );
 
   const isComplete =

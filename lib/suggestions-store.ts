@@ -3,9 +3,11 @@ import { Platform } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { loadSchedulerData, markSuggested as _markSuggested } from "./suggestion-scheduler";
 
-// Dismissed IDs survive until the max cooldown window expires (15 days = C3 cooldown)
+// Dismissed IDs persist for 1 day — enough to survive a restart without the
+// swipe coming back, but short enough that contacts re-enter the cooldown pool
+// naturally after that (isInCooldown handles multi-day blocking).
 const DISMISSED_PERSIST_KEY = "bridges_dismissed_suggestions_v1";
-const MAX_DISMISSED_AGE_MS = 15 * 24 * 60 * 60 * 1000;
+const MAX_DISMISSED_AGE_MS = 24 * 60 * 60 * 1000; // 1 day
 
 type DismissedStore = Record<string, string>; // contactId → ISO timestamp
 
@@ -60,14 +62,14 @@ function parseDismissedStore(raw: string): DismissedStore {
 }
 
 function hydrateFromStore(store: DismissedStore): void {
-  _dismissedStore = store;
-  const extra = Object.keys(store);
-  if (extra.length > 0) {
-    _dismissedIds = new Set([..._dismissedIds, ...extra]);
+  // Merge: in-memory entries from the current session take precedence so that
+  // a dismissal happening during async hydration is never lost.
+  _dismissedStore = { ...store, ..._dismissedStore };
+  for (const id of Object.keys(store)) {
+    _dismissedIds.add(id);
   }
 }
 
-// Synchronous hydration for web (localStorage is sync)
 function ensureDismissedSync(): void {
   if (_dismissedLoaded || Platform.OS !== "web") return;
   _dismissedLoaded = true;
@@ -75,7 +77,6 @@ function ensureDismissedSync(): void {
   if (raw) hydrateFromStore(parseDismissedStore(raw));
 }
 
-// Async hydration for native (AsyncStorage)
 async function ensureDismissedAsync(): Promise<void> {
   if (_dismissedLoaded) return;
   _dismissedLoaded = true;
@@ -93,7 +94,7 @@ export function getDismissedIds(): ReadonlySet<string> {
 export function dismissSuggestion(contactId: string): void {
   ensureDismissedSync();
   if (!_dismissedIds.has(contactId)) {
-    _dismissedIds = new Set(_dismissedIds).add(contactId);
+    _dismissedIds.add(contactId);
     _dismissedStore[contactId] = new Date().toISOString();
     writeDismissedRaw(JSON.stringify(_dismissedStore));
     notify();
@@ -112,7 +113,6 @@ export function useDismissedSuggestions(): ReadonlySet<string> {
   useEffect(() => {
     let alive = true;
     const unsub = subscribe(() => { if (alive) setDismissed(getDismissedIds()); });
-    // Async hydration (needed for native; no-op on web since sync hydration already ran)
     ensureDismissedAsync().then(() => {
       if (alive) setDismissed(getDismissedIds());
     });

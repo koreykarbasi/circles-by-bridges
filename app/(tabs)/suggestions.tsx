@@ -241,13 +241,9 @@ export default function SuggestionsScreen() {
     const SUGGESTION_MAX = 6;
     const rankedEligible = eligible.map(rankContact).sort((a, b) => b.score - a.score);
     const eligibleIds = new Set(eligible.map((c) => c.id));
-    // Exclude contacts dismissed today from the fallback pool — they were just swiped away
-    // and must not reappear within the same session or on restart.
-    const cooldownPool = base.filter((c) => {
-      if (eligibleIds.has(c.id)) return false;
-      const daysSince = getDaysSinceLastSuggestedSync(c.id, lastSuggestedDates);
-      return daysSince === null || daysSince >= 1;
-    });
+    // Contacts in cooldown but not dismissed — fill remaining slots as fallback.
+    // Dismissed contacts are already excluded from base via completedIds (persisted 1 day).
+    const cooldownPool = base.filter((c) => !eligibleIds.has(c.id));
     const rankedCooldown = cooldownPool.map(rankContact).sort((a, b) => b.score - a.score);
 
     return [...rankedEligible, ...rankedCooldown]
@@ -544,8 +540,9 @@ export default function SuggestionsScreen() {
     setSessionSkippedIds(new Set());
     setShuffleJitter({});
     setRefreshKey((k) => k + 1);
-    clearDismissedSuggestions();
-    clearDismissedReminders();
+    // Note: we intentionally do NOT clear dismissedSuggestions or dismissedReminders here.
+    // Swiped-away items persist for 1 day so a pull-to-refresh doesn't undo deliberate dismissals.
+    // clearDismissedReminders is also left out for the same reason.
   }, []);
 
   const webTopInset = Platform.OS === "web" ? 67 : 0;
@@ -664,7 +661,7 @@ export default function SuggestionsScreen() {
                       : undefined
                   }
                   onCalendarPress={reminder.type === "hangout-quickpick" ? () => handleHangoutCalendarPress(reminder) : undefined}
-                  onTextPress={reminder.type === "birthday" ? () => handleBirthdayText(reminder) : undefined}
+                  onTextPress={reminder.actionType === "text" ? () => handleBirthdayText(reminder) : undefined}
                 />
               ))}
             </View>

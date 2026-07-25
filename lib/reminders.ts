@@ -395,10 +395,10 @@ export function generateProfileCompletionReminders(contacts: Contact[]): Reminde
   }
 
   const c2NoBirthday = contacts.filter((c) => c.circleLevel === 2 && !c.birthday);
+  // Only interests count — labels are optional and not a profile-completion requirement
   const c1c2MissingEnrichment = contacts.filter(
     (c) =>
       (c.circleLevel === 1 || c.circleLevel === 2) &&
-      (c.labels ?? []).length === 0 &&
       (c.interests ?? []).length === 0,
   );
   if (c2NoBirthday.length > 0 || c1c2MissingEnrichment.length > 0) {
@@ -408,10 +408,10 @@ export function generateProfileCompletionReminders(contacts: Contact[]): Reminde
       circleLevel: 2,
       type: "profile-completion-medium",
       priority: 112,
-      title: "Some close contacts are missing birthdays or profile details.",
+      title: "Some close contacts are missing birthdays or interests.",
       subtitle: [
         c2NoBirthday.length > 0 ? `${c2NoBirthday.length} missing birthday` : "",
-        c1c2MissingEnrichment.length > 0 ? `${c1c2MissingEnrichment.length} missing labels/interests` : "",
+        c1c2MissingEnrichment.length > 0 ? `${c1c2MissingEnrichment.length} missing interests` : "",
       ]
         .filter(Boolean)
         .join(" · "),
@@ -420,7 +420,7 @@ export function generateProfileCompletionReminders(contacts: Contact[]): Reminde
 
   const c3NoBirthday = contacts.filter((c) => c.circleLevel === 3 && !c.birthday);
   const anyMissingEnrichment = contacts.filter(
-    (c) => (c.labels ?? []).length === 0 && (c.interests ?? []).length === 0,
+    (c) => (c.interests ?? []).length === 0,
   );
   if (c3NoBirthday.length > 0 || anyMissingEnrichment.length > 0) {
     reminders.push({
@@ -430,10 +430,10 @@ export function generateProfileCompletionReminders(contacts: Contact[]): Reminde
       type: "profile-completion-low",
       priority: 5,
       persistent: true,
-      title: "Some contacts are missing birthdays, labels, or interests — find them by the yellow dot.",
+      title: "Some contacts are missing birthdays or interests — find them by the yellow dot.",
       subtitle: [
         c3NoBirthday.length > 0 ? `${c3NoBirthday.length} missing birthday` : "",
-        anyMissingEnrichment.length > 0 ? `${anyMissingEnrichment.length} missing labels/interests` : "",
+        anyMissingEnrichment.length > 0 ? `${anyMissingEnrichment.length} missing interests` : "",
       ]
         .filter(Boolean)
         .join(" · "),
