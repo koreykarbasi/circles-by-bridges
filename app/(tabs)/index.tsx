@@ -1,5 +1,7 @@
 import React, { useState, useCallback, useMemo, useEffect, useRef } from "react";
-import { View, Text, StyleSheet, ScrollView, Platform, RefreshControl, Pressable, Image, Animated, Linking, ActivityIndicator, PanResponder, AppState, AppStateStatus } from "react-native";
+import { View, Text, StyleSheet, ScrollView, Platform, RefreshControl, Pressable, Image, Animated, Linking, ActivityIndicator, AppState, AppStateStatus } from "react-native";
+import { Gesture, GestureDetector } from "react-native-gesture-handler";
+import Reanimated, { useSharedValue, useAnimatedStyle, withTiming, withSpring, runOnJS } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import Colors from "@/constants/colors";
@@ -69,50 +71,50 @@ interface Suggestion {
 }
 
 function SwipableSuggestionRow({ children, onSwipeDismiss }: { children: React.ReactNode; onSwipeDismiss?: () => void }) {
-  const translateX = useRef(new Animated.Value(0)).current;
-  const cardOpacity = useRef(new Animated.Value(1)).current;
+  const translateX = useSharedValue(0);
+  const cardOpacity = useSharedValue(1);
   const onDismissRef = useRef<(() => void) | undefined>(onSwipeDismiss);
   useEffect(() => { onDismissRef.current = onSwipeDismiss; }, [onSwipeDismiss]);
-  const animating = useRef(false);
 
-  const panResponder = useRef(
-    PanResponder.create({
-      onStartShouldSetPanResponder: () => false,
-      onMoveShouldSetPanResponder: (_, gs) =>
-        !animating.current && Math.abs(gs.dx) > 5 && Math.abs(gs.dx) > Math.abs(gs.dy) * 1.2,
-      onPanResponderMove: (_, gs) => {
-        translateX.setValue(gs.dx);
-        cardOpacity.setValue(Math.max(0.3, 1 - Math.abs(gs.dx) / 250));
-      },
-      onPanResponderRelease: (_, gs) => {
-        const dismissFn = onDismissRef.current;
-        if (Math.abs(gs.dx) > 60 || Math.abs(gs.vx) > 0.4) {
-          animating.current = true;
-          const dir = gs.dx > 0 ? 1 : -1;
-          Animated.parallel([
-            Animated.timing(translateX, { toValue: dir * 500, duration: 250, useNativeDriver: true }),
-            Animated.timing(cardOpacity, { toValue: 0, duration: 200, useNativeDriver: true }),
-          ]).start(() => { dismissFn?.(); });
-        } else {
-          Animated.parallel([
-            Animated.spring(translateX, { toValue: 0, useNativeDriver: true }),
-            Animated.timing(cardOpacity, { toValue: 1, duration: 200, useNativeDriver: true }),
-          ]).start();
-        }
-      },
-      onPanResponderTerminate: () => {
-        Animated.parallel([
-          Animated.spring(translateX, { toValue: 0, useNativeDriver: true }),
-          Animated.timing(cardOpacity, { toValue: 1, duration: 200, useNativeDriver: true }),
-        ]).start();
-      },
+  const animatedStyle = useAnimatedStyle(() => ({
+    transform: [{ translateX: translateX.value }],
+    opacity: cardOpacity.value,
+  }));
+
+  const panGesture = Gesture.Pan()
+    // Activate on horizontal movement, fail (hand to ScrollView) if vertical moves first
+    .activeOffsetX([-10, 10])
+    .failOffsetY([-8, 8])
+    .onUpdate((e) => {
+      translateX.value = e.translationX;
+      cardOpacity.value = Math.max(0.3, 1 - Math.abs(e.translationX) / 250);
     })
-  ).current;
+    .onEnd((e) => {
+      if (Math.abs(e.translationX) > 60 || Math.abs(e.velocityX) > 400) {
+        const dir = e.translationX > 0 ? 1 : -1;
+        cardOpacity.value = withTiming(0, { duration: 180 });
+        translateX.value = withTiming(dir * 500, { duration: 220 }, () => {
+          const fn = onDismissRef.current;
+          if (fn) runOnJS(fn)();
+        });
+      } else {
+        translateX.value = withSpring(0, { damping: 20, stiffness: 220, mass: 0.8 });
+        cardOpacity.value = withTiming(1, { duration: 180 });
+      }
+    })
+    .onFinalize((_e, success) => {
+      if (!success) {
+        translateX.value = withSpring(0, { damping: 20, stiffness: 220, mass: 0.8 });
+        cardOpacity.value = withTiming(1, { duration: 180 });
+      }
+    });
 
   return (
-    <Animated.View style={{ transform: [{ translateX }], opacity: cardOpacity }} {...panResponder.panHandlers}>
-      {children}
-    </Animated.View>
+    <GestureDetector gesture={panGesture}>
+      <Reanimated.View style={animatedStyle}>
+        {children}
+      </Reanimated.View>
+    </GestureDetector>
   );
 }
 

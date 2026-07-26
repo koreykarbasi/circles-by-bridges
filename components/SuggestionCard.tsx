@@ -1,5 +1,6 @@
 import React, { useCallback, useState, useMemo, useRef, useEffect } from "react";
-import { View, Text, StyleSheet, Pressable, Platform, Linking, PanResponder } from "react-native";
+import { View, Text, StyleSheet, Pressable, Platform, Linking } from "react-native";
+import { Gesture, GestureDetector } from "react-native-gesture-handler";
 import { router } from "expo-router";
 import Animated, { useSharedValue, useAnimatedStyle, withTiming, withSpring, withSequence, runOnJS, Easing } from "react-native-reanimated";
 import { Ionicons } from "@expo/vector-icons";
@@ -111,45 +112,38 @@ export function SuggestionCard({
 
   const onSwipeDismissRef = useRef<(() => void) | undefined>(onSwipeDismiss);
   useEffect(() => { onSwipeDismissRef.current = onSwipeDismiss; }, [onSwipeDismiss]);
-  const swipeAnimating = useRef(false);
 
-  const panResponder = useRef(
-    PanResponder.create({
-      onStartShouldSetPanResponder: () => false,
-      onMoveShouldSetPanResponder: (_, gs) =>
-        !swipeAnimating.current &&
-        Math.abs(gs.dx) > 5 &&
-        Math.abs(gs.dx) > Math.abs(gs.dy) * 1.2,
-      onPanResponderMove: (_, gs) => {
-        translateX.value = gs.dx;
-        opacity.value = Math.max(0.3, 1 - Math.abs(gs.dx) / 220);
-      },
-      onPanResponderRelease: (_, gs) => {
-        const dismissFn = onSwipeDismissRef.current;
-        if (Math.abs(gs.dx) > 60 || Math.abs(gs.vx) > 0.4) {
-          swipeAnimating.current = true;
-          const dir = gs.dx > 0 ? 1 : -1;
-          // Fly out in the direction of the swipe, then collapse height
-          const flyDistance = dir * (Math.abs(gs.dx) + 300);
-          opacity.value = withTiming(0, { duration: 150 });
-          translateX.value = withTiming(flyDistance, { duration: 200, easing: Easing.out(Easing.quad) }, () => {
-            height.value = withTiming(0, { duration: 160 });
-            marginBottom.value = withTiming(0, { duration: 160 }, () => {
-              if (dismissFn) runOnJS(dismissFn)();
-            });
+  const panGesture = Gesture.Pan()
+    // Activate on horizontal movement; hand off to ScrollView if vertical moves first
+    .activeOffsetX([-10, 10])
+    .failOffsetY([-8, 8])
+    .onUpdate((e) => {
+      translateX.value = e.translationX;
+      opacity.value = Math.max(0.3, 1 - Math.abs(e.translationX) / 220);
+    })
+    .onEnd((e) => {
+      if (Math.abs(e.translationX) > 60 || Math.abs(e.velocityX) > 400) {
+        const dir = e.translationX > 0 ? 1 : -1;
+        const flyDistance = dir * (Math.abs(e.translationX) + 300);
+        opacity.value = withTiming(0, { duration: 150 });
+        translateX.value = withTiming(flyDistance, { duration: 200, easing: Easing.out(Easing.quad) }, () => {
+          height.value = withTiming(0, { duration: 160 });
+          marginBottom.value = withTiming(0, { duration: 160 }, () => {
+            const fn = onSwipeDismissRef.current;
+            if (fn) runOnJS(fn)();
           });
-        } else {
-          // Spring snap-back feels more natural than a plain timing curve
-          translateX.value = withSpring(0, { damping: 20, stiffness: 220, mass: 0.8 });
-          opacity.value = withTiming(1, { duration: 180 });
-        }
-      },
-      onPanResponderTerminate: () => {
+        });
+      } else {
         translateX.value = withSpring(0, { damping: 20, stiffness: 220, mass: 0.8 });
         opacity.value = withTiming(1, { duration: 180 });
-      },
+      }
     })
-  ).current;
+    .onFinalize((_e, success) => {
+      if (!success) {
+        translateX.value = withSpring(0, { damping: 20, stiffness: 220, mass: 0.8 });
+        opacity.value = withTiming(1, { duration: 180 });
+      }
+    });
 
   const handleDone = useCallback(() => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
@@ -254,7 +248,8 @@ export function SuggestionCard({
 
   return (
     <>
-      <Animated.View style={[styles.container, animatedStyle]} {...panResponder.panHandlers}>
+    <GestureDetector gesture={panGesture}>
+      <Animated.View style={[styles.container, animatedStyle]}>
         <View style={styles.header}>
           <Pressable
             onPress={() => router.push({ pathname: "/edit-contact", params: { id: contactId } })}
@@ -357,6 +352,7 @@ export function SuggestionCard({
           </Pressable>
         </View>
       </Animated.View>
+    </GestureDetector>
 
       <NoPhoneSheet
         visible={phoneSheetVisible}
