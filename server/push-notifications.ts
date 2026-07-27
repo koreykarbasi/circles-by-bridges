@@ -274,7 +274,7 @@ async function pruneOldNotificationLog(): Promise<void> {
 
 // ─── Expo push sender ─────────────────────────────────────────────────────────
 
-const EXPO_PUSH_URL = "https://exp.host/api/v2/push/send";
+const EXPO_PUSH_URL = "https://exp.host/--/api/v2/push/send";
 
 /**
  * Returns true on success, false on a transient/unknown error, or "expired"
@@ -409,7 +409,7 @@ export function isNineAmLocalNow(timezone: string): boolean {
 
 // Returns true if it is currently between 17:00 and 17:59 in the given timezone.
 export function isFivePmLocalNow(timezone: string): boolean {
-  return getLocalHour(timezone) === 18;
+  return getLocalHour(timezone) === 17;
 }
 
 // ─── Daily reminder dispatch ──────────────────────────────────────────────────
