@@ -8,7 +8,7 @@ import rateLimit from "express-rate-limit";
 import crypto from "crypto";
 import { pool } from "./db";
 import { getPrompts, syncFromSheet } from "./prompts-sync";
-import { sendHangoutFinalizedNotifications, sendSuggestionNudges, sendDailyReminders } from "./push-notifications";
+import { sendHangoutFinalizedNotifications, sendSuggestionNudges, sendDailyReminders, sendRemindersForUser } from "./push-notifications";
 import { sendPasswordResetEmail, sendHangoutCalendarInvite } from "./email";
 import type { InsertContact } from "@shared/schema";
 import * as chrono from "chrono-node";
@@ -1063,6 +1063,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       await storage.updateUser(req.session.userId!, update);
       res.json({ ok: true });
+
+      // Fire-and-forget catch-up delivery: if the user re-registers a token
+      // during an active 9am/5pm window (e.g. after their expired token was
+      // just cleared by the scheduler), send any pending notifications now
+      // rather than making them wait until tomorrow's window.
+      const tz = update.notificationTimezone
+        ?? (await storage.getUser(req.session.userId!))?.notificationTimezone;
+      if (tz) {
+        sendRemindersForUser(req.session.userId!, trimmedToken, tz)
+          .catch((err) => console.error("[push] Catch-up delivery error after token re-register:", err));
+      }
     } catch (err) {
       console.error("Error saving push token:", err);
       res.status(500).json({ message: "Failed to save push token" });
