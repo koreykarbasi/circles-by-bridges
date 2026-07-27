@@ -269,12 +269,18 @@ async function pruneOldNotificationLog(): Promise<void> {
 
 const EXPO_PUSH_URL = "https://exp.host/api/v2/push/send";
 
+/**
+ * Returns true on success, false on a transient/unknown error, or "expired"
+ * when Expo tells us the token is no longer valid (HTTP 404 or DeviceNotRegistered
+ * in the response body). Callers that receive "expired" must clear the token from
+ * the DB so the server doesn't keep retrying a dead address.
+ */
 async function sendExpoPush(
   token: string,
   title: string,
   body: string,
   data?: Record<string, string>,
-): Promise<boolean> {
+): Promise<boolean | "expired"> {
   try {
     const payload = { to: token, title, body, sound: "default", data: data ?? {} };
     const res = await fetch(EXPO_PUSH_URL, {
@@ -283,13 +289,53 @@ async function sendExpoPush(
       body: JSON.stringify(payload),
     });
     if (!res.ok) {
+      if (res.status === 404) {
+        console.warn(`[push] HTTP 404 for token ${token.slice(0, 20)}… — token is expired`);
+        return "expired";
+      }
       console.error(`[push] HTTP ${res.status} sending to ${token.slice(0, 20)}…`);
       return false;
+    }
+    // Even on HTTP 200 Expo can report DeviceNotRegistered inside the body.
+    // When sending a single message object (our case), Expo returns data as a
+    // plain object; when sending an array it returns data as an array. Handle both.
+    try {
+      const json = await res.json() as {
+        data?: { status?: string; details?: { error?: string } } | Array<{ status?: string; details?: { error?: string } }>;
+      };
+      // Normalise to a single ticket entry regardless of shape
+      const ticket = Array.isArray(json?.data) ? json.data[0] : json?.data;
+      if (ticket?.status === "error" && ticket?.details?.error === "DeviceNotRegistered") {
+        console.warn(`[push] DeviceNotRegistered for token ${token.slice(0, 20)}… — token is expired`);
+        return "expired";
+      }
+      // Log unexpected non-success shapes at debug level so they surface without
+      // blocking delivery of genuinely successful sends.
+      if (ticket?.status === "error") {
+        console.warn(`[push] Expo push error for token ${token.slice(0, 20)}…: ${JSON.stringify(ticket)}`);
+      }
+    } catch {
+      // JSON parse failed — HTTP was OK so treat as delivered
     }
     return true;
   } catch (err) {
     console.error("[push] Failed to send notification:", err);
     return false;
+  }
+}
+
+/** Clears an expired push token from the DB so the scheduler skips this user next run. */
+async function clearExpiredPushToken(userId: string, token: string): Promise<void> {
+  try {
+    // Guard: only clear if the token in the DB still matches (a foreground re-register
+    // could have already replaced it with a fresh token between the select and here).
+    await pool.query(
+      `UPDATE users SET push_token = NULL WHERE id = $1 AND push_token = $2`,
+      [userId, token],
+    );
+    console.warn(`[push] Cleared expired push token for user ${userId.slice(0, 8)}`);
+  } catch (err) {
+    console.error(`[push] Failed to clear expired token for user ${userId.slice(0, 8)}:`, err);
   }
 }
 
@@ -443,14 +489,20 @@ export async function sendDailyReminders() {
       const notifiedBirthdayIds = new Set<string>();
       const notifiedReminderIds = new Set<string>();
 
+      let tokenExpired = false;
       for (const msg of toSend) {
-        const ok = await sendExpoPush(
+        const result = await sendExpoPush(
           user.pushToken,
           msg.title,
           msg.body,
           msg.contactId ? { contactId: msg.contactId } : undefined,
         );
-        if (ok && msg.contactId) {
+        if (result === "expired") {
+          await clearExpiredPushToken(user.id, user.pushToken);
+          tokenExpired = true;
+          break;
+        }
+        if (result && msg.contactId) {
           if (msg.notifType === "birthday") {
             notifiedBirthdayIds.add(msg.contactId);
           } else {
@@ -460,6 +512,8 @@ export async function sendDailyReminders() {
           console.log(`[push]     sent [${msg.notifType}] "${msg.title.slice(0, 50)}" → contact ${msg.contactId.slice(0, 8)}`);
         }
       }
+
+      if (tokenExpired) continue;
 
       // Log each type separately so future dedup windows stay isolated
       if (notifiedBirthdayIds.size > 0) {
@@ -615,12 +669,16 @@ export async function sendProfileCompletionPushes() {
       const missingCount = parseInt(c1NoBirthday.rows[0]?.count ?? "0", 10);
       if (missingCount === 0) continue;
 
-      const ok = await sendExpoPush(
+      const result = await sendExpoPush(
         user.pushToken,
         "Complete your Bridges profile",
         "Some of your Core contacts are missing birthdays — add them to unlock reminders.",
       );
-      if (ok) {
+      if (result === "expired") {
+        await clearExpiredPushToken(user.id, user.pushToken);
+        continue;
+      }
+      if (result) {
         await pool.query(
           `UPDATE users SET last_profile_push_at = NOW() WHERE id = $1`,
           [user.id],
@@ -821,13 +879,16 @@ export async function sendSuggestionNudges() {
       for (const ch of `${bestContact.id}${dayKey}`) hash = (hash * 31 + ch.charCodeAt(0)) >>> 0;
       const template = nudgeTemplates[hash % nudgeTemplates.length];
 
-      const ok = await sendExpoPush(
+      const result = await sendExpoPush(
         user.push_token,
         template.title(bestContact.name),
         template.body(bestContact.name),
         { contactId: bestContact.id },
       );
-      if (ok) {
+      if (result === "expired") {
+        await clearExpiredPushToken(user.id, user.push_token);
+        console.log(`[push]   → token expired; cleared from DB`);
+      } else if (result) {
         await logNotifiedContacts(user.id, new Set([bestContact.id]), "suggestion");
         sent++;
         console.log(`[push]   → delivered OK`);
@@ -846,6 +907,11 @@ export async function sendSuggestionNudges() {
 // Runs every hour; sendDailyReminders() only delivers to users for whom it
 // is currently 9am local time, so each user gets notified once per day.
 
+// Module-level flag so that if the server restarts near an hour boundary and
+// two scheduler ticks overlap, the second tick is a no-op rather than sending
+// duplicate notifications or consuming the per-day dedup budget twice.
+let schedulerRunning = false;
+
 export function scheduleDailyNotifications() {
   const MS_PER_HOUR = 60 * 60 * 1000;
 
@@ -855,9 +921,18 @@ export function scheduleDailyNotifications() {
   }
 
   async function runHourly() {
-    await sendDailyReminders().catch((err) => console.error("[push] Uncaught:", err));
-    await sendSuggestionNudges().catch((err) => console.error("[push] Uncaught:", err));
-    await sendProfileCompletionPushes().catch((err) => console.error("[push] Uncaught:", err));
+    if (schedulerRunning) {
+      console.log("[push] Scheduler tick skipped — previous run still in progress");
+      return;
+    }
+    schedulerRunning = true;
+    try {
+      await sendDailyReminders().catch((err) => console.error("[push] Uncaught:", err));
+      await sendSuggestionNudges().catch((err) => console.error("[push] Uncaught:", err));
+      await sendProfileCompletionPushes().catch((err) => console.error("[push] Uncaught:", err));
+    } finally {
+      schedulerRunning = false;
+    }
   }
 
   // Catch-up run ~15s after startup — fires immediately if a user's 9am/midnight window

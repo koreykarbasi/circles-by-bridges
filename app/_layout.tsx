@@ -16,7 +16,7 @@ import {
   Nunito_700Bold,
   Nunito_800ExtraBold,
 } from "@expo-google-fonts/nunito";
-import { View, ActivityIndicator, Platform } from "react-native";
+import { View, ActivityIndicator, Platform, AppState } from "react-native";
 import Colors from "@/constants/colors";
 import * as Notifications from "expo-notifications";
 import Constants from "expo-constants";
@@ -103,8 +103,20 @@ function RootLayoutNav() {
   useEffect(() => {
     if (!user || !onboardingDone) return;
 
+    // Cold-boot registration
     registerForPushNotifications().then((token) => {
       if (token) savePushToken(token);
+    });
+
+    // Re-register every time the app comes to foreground so a token rotated by
+    // iOS (e.g. after an app update) is recorded within minutes of the user
+    // opening the app, rather than waiting for the next cold boot.
+    const appStateSubscription = AppState.addEventListener("change", (nextState) => {
+      if (nextState === "active") {
+        registerForPushNotifications().then((token) => {
+          if (token) savePushToken(token);
+        });
+      }
     });
 
     responseListener.current = Notifications.addNotificationResponseReceivedListener((response) => {
@@ -119,6 +131,7 @@ function RootLayoutNav() {
     });
 
     return () => {
+      appStateSubscription.remove();
       responseListener.current?.remove();
       responseListener.current = null;
     };
