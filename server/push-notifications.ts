@@ -492,15 +492,24 @@ export async function sendDailyReminders() {
       const recentReminderIds  = await getRecentlySentContactIds(user.id, ["reminder", "elevation"]);
       const recentMilestoneIds = await getRecentlySentContactIds(user.id, ["milestone"]);
 
-      // ── 9am: pick highest-priority eligible message (cap 1) ─────────────────
-      let nineAmMsg: PushMessage | null = null;
+      // ── 9am: send ALL day-of birthdays (uncapped) ───────────────────────────
+      // Multiple contacts can share a birthday; each deserves its own push.
+      // If no birthdays are eligible, fall back to 1 item from the next tier:
+      // custom reminder first, then check-in overdue.
+      const nineAmMsgs: PushMessage[] = [];
       if (isNineAm) {
-        const candidates = [
-          ...dedupMessages(nineAmBirthdayMsgs, recentBirthdayIds),
-          ...dedupMessages(nineAmCustomMsgs, recentCustomIds),
-          ...dedupMessages(nineAmReminderMsgs, recentReminderIds),
-        ];
-        nineAmMsg = candidates[0] ?? null;
+        const filteredBirthdays = dedupMessages(nineAmBirthdayMsgs, recentBirthdayIds);
+        if (filteredBirthdays.length > 0) {
+          // All birthdays fire; skip custom/check-in to avoid notification flood
+          nineAmMsgs.push(...filteredBirthdays);
+        } else {
+          // No birthdays — send at most 1 from the next priority tier
+          const fallback = [
+            ...dedupMessages(nineAmCustomMsgs, recentCustomIds),
+            ...dedupMessages(nineAmReminderMsgs, recentReminderIds),
+          ];
+          if (fallback[0]) nineAmMsgs.push(fallback[0]);
+        }
       }
 
       // ── 5pm: pick highest-priority eligible message (cap 1) ─────────────────
@@ -518,7 +527,7 @@ export async function sendDailyReminders() {
         fivePmMsg = candidates[0] ?? null;
       }
 
-      const toSend = [nineAmMsg, fivePmMsg].filter(Boolean) as PushMessage[];
+      const toSend = [...nineAmMsgs, ...(fivePmMsg ? [fivePmMsg] : [])];
 
       if (toSend.length === 0) {
         const totalBuilt = nineAmBirthdayMsgs.length + nineAmCustomMsgs.length +
