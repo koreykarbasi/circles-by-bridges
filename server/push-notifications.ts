@@ -376,6 +376,18 @@ export function getLocalHour(timezone: string): number {
   }
 }
 
+export function getLocalMinute(timezone: string): number {
+  try {
+    const formatter = new Intl.DateTimeFormat("en-US", {
+      timeZone: timezone,
+      minute: "numeric",
+    });
+    return parseInt(formatter.format(new Date()), 10);
+  } catch {
+    return new Date().getUTCMinutes();
+  }
+}
+
 // Returns the local day-of-week (0=Sun … 6=Sat) in the given timezone.
 // Implementation note: this function uses the `weekday: "short"` Intl option
 // (string-based day lookup) rather than deriving the day from an hour value.
@@ -407,9 +419,11 @@ export function isNineAmLocalNow(timezone: string): boolean {
   return getLocalHour(timezone) === 9;
 }
 
-// Returns true if it is currently between 17:00 and 17:59 in the given timezone.
+// Returns true if it is currently 6:15 pm (18:15–18:29) in the given timezone.
 export function isFivePmLocalNow(timezone: string): boolean {
-  return getLocalHour(timezone) === 17;
+  const hour = getLocalHour(timezone);
+  const minute = getLocalMinute(timezone);
+  return hour === 18 && minute >= 15 && minute < 30;
 }
 
 // ─── Daily reminder dispatch ──────────────────────────────────────────────────
@@ -962,14 +976,14 @@ export async function sendSuggestionNudges() {
 let schedulerRunning = false;
 
 export function scheduleDailyNotifications() {
-  const MS_PER_HOUR = 60 * 60 * 1000;
+  const MS_PER_15MIN = 15 * 60 * 1000;
 
-  function msUntilNextHour(): number {
+  function msUntilNext15Min(): number {
     const now = Date.now();
-    return MS_PER_HOUR - (now % MS_PER_HOUR);
+    return MS_PER_15MIN - (now % MS_PER_15MIN);
   }
 
-  async function runHourly() {
+  async function runTick() {
     if (schedulerRunning) {
       console.log("[push] Scheduler tick skipped — previous run still in progress");
       return;
@@ -984,18 +998,18 @@ export function scheduleDailyNotifications() {
     }
   }
 
-  // Catch-up run ~15s after startup — fires immediately if a user's 9am/midnight window
+  // Catch-up run ~15s after startup — fires immediately if a user's 9am/6:15pm window
   // is currently open. Guards are inside sendDailyReminders/sendSuggestionNudges so this
   // is always safe to call; it simply skips users outside their delivery window.
   setTimeout(() => {
-    runHourly().catch((err) => console.error("[push] Startup catch-up error:", err));
+    runTick().catch((err) => console.error("[push] Startup catch-up error:", err));
   }, 15_000);
 
-  // First run at the top of the next hour, then every hour after that
+  // Align to the next 15-minute boundary (:00, :15, :30, :45), then tick every 15 min
   setTimeout(() => {
-    runHourly();
-    setInterval(runHourly, MS_PER_HOUR);
-  }, msUntilNextHour());
+    runTick();
+    setInterval(runTick, MS_PER_15MIN);
+  }, msUntilNext15Min());
 
-  console.log("[push] Hourly notification scheduler started (delivers at 9am/5pm per user timezone)");
+  console.log("[push] Notification scheduler started (delivers at 9am/6:15pm per user timezone)");
 }
