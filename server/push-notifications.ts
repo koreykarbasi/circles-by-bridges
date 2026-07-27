@@ -419,11 +419,9 @@ export function isNineAmLocalNow(timezone: string): boolean {
   return getLocalHour(timezone) === 9;
 }
 
-// Returns true if it is currently 6:15 pm (18:15–18:29) in the given timezone.
+// Returns true if it is currently between 17:00 and 17:59 in the given timezone.
 export function isFivePmLocalNow(timezone: string): boolean {
-  const hour = getLocalHour(timezone);
-  const minute = getLocalMinute(timezone);
-  return hour === 18 && minute >= 15 && minute < 30;
+  return getLocalHour(timezone) === 17;
 }
 
 // ─── Daily reminder dispatch ──────────────────────────────────────────────────
@@ -1011,5 +1009,5 @@ export function scheduleDailyNotifications() {
     setInterval(runTick, MS_PER_15MIN);
   }, msUntilNext15Min());
 
-  console.log("[push] Notification scheduler started (delivers at 9am/6:15pm per user timezone)");
+  console.log("[push] Notification scheduler started (delivers at 9am/5pm per user timezone)");
 }
