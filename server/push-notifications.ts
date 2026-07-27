@@ -11,11 +11,15 @@ interface CustomReminder {
 
 // notifType drives per-type dedup so birthday logs don't suppress check-in
 // logs and vice versa.
+// "birthday"  — day-of birthday (actual birthday, not custom)
+// "custom"    — custom reminders: day-of AND advance (7d/14d/30d)
+// "reminder"  — check-in overdue
+// "milestone" — birthday advance notices (C1: 30d/14d/7d, C2: 7d)
 export interface PushMessage {
   title: string;
   body: string;
   contactId?: string;
-  notifType: "birthday" | "reminder" | "milestone";
+  notifType: "birthday" | "custom" | "reminder" | "milestone";
 }
 
 export type ContactRow = {
@@ -160,33 +164,36 @@ function buildCustomReminderMessages(
     if (daysUntil === null) continue;
     if (!milestones.includes(daysUntil)) continue;
 
+    // All custom reminders (day-of and advance) use notifType "custom" so they
+    // have their own dedup namespace and can be priority-sorted independently
+    // from actual birthdays and birthday milestones.
     if (daysUntil === 0) {
       messages.push({
         title: `${cr.label} — ${contact.name}`,
         body: `Today is ${contact.name}'s ${cr.label}.`,
         contactId: contact.id,
-        notifType: "birthday",
+        notifType: "custom",
       });
     } else if (daysUntil === 7) {
       messages.push({
         title: `${contact.name}'s ${cr.label} is coming up`,
         body: `${contact.name}'s ${cr.label} is a week away.`,
         contactId: contact.id,
-        notifType: "milestone",
+        notifType: "custom",
       });
     } else if (daysUntil === 14) {
       messages.push({
         title: `${contact.name}'s ${cr.label} in 2 weeks`,
         body: `${contact.name}'s ${cr.label} is 2 weeks away.`,
         contactId: contact.id,
-        notifType: "milestone",
+        notifType: "custom",
       });
     } else if (daysUntil === 30) {
       messages.push({
         title: `${contact.name}'s ${cr.label} is a month away`,
         body: `${contact.name}'s ${cr.label} is coming up in a month.`,
         contactId: contact.id,
-        notifType: "milestone",
+        notifType: "custom",
       });
     }
   }
@@ -400,10 +407,15 @@ export function isNineAmLocalNow(timezone: string): boolean {
   return getLocalHour(timezone) === 9;
 }
 
+// Returns true if it is currently between 17:00 and 17:59 in the given timezone.
+export function isFivePmLocalNow(timezone: string): boolean {
+  return getLocalHour(timezone) === 17;
+}
+
 // ─── Daily reminder dispatch ──────────────────────────────────────────────────
 
 export async function sendDailyReminders() {
-  console.log("[push] Checking per-user reminders (runs hourly; per-contact 24h dedup spreads delivery through the day)…");
+  console.log("[push] Checking per-user reminders (9am and 5pm windows; 1 push per window per user)…");
   try {
     await pruneOldNotificationLog();
 
@@ -420,76 +432,113 @@ export async function sendDailyReminders() {
     for (const user of usersWithTokens) {
       if (!user.pushToken) continue;
 
+      const tz = user.notificationTimezone ?? "UTC";
+      const isNineAm = isNineAmLocalNow(tz);
+      const isFivePm = isFivePmLocalNow(tz);
+
+      // Only process users in an active delivery window
+      if (!isNineAm && !isFivePm) continue;
+
       const userContacts = await db
         .select()
         .from(contacts)
         .where(eq(contacts.userId, user.id));
 
-      // Build separate message lists per type.
-      // Birthday dedup is separate from reminder dedup so a birthday push
-      // yesterday does not suppress a check-in push today (and vice versa).
-      const birthdayMessages: PushMessage[] = [];
-      const reminderMessages: PushMessage[] = []; // check-in overdue
-      const milestoneMessages: PushMessage[] = []; // birthday advance notices
-
-      const tz = user.notificationTimezone ?? "UTC";
-      const isNineAm = isNineAmLocalNow(tz);
+      // ── Build message pools per window ──────────────────────────────────────
+      //
+      // 9am (cap 1) priority order:
+      //   1. day-of birthday  ("birthday")
+      //   2. custom reminders ("custom")  — day-of AND advance (7d/14d/30d)
+      //   3. check-in overdue ("reminder")
+      //
+      // 5pm (cap 1) priority order:
+      //   1. check-in overdue ("reminder")
+      //   2. birthday advance milestones ("milestone") — C1/C2 only (7d/14d/30d)
+      //
+      const nineAmBirthdayMsgs: PushMessage[] = [];
+      const nineAmCustomMsgs: PushMessage[] = [];
+      const nineAmReminderMsgs: PushMessage[] = [];
+      const fivePmReminderMsgs: PushMessage[] = [];
+      const fivePmMilestoneMsgs: PushMessage[] = [];
 
       for (const contact of userContacts) {
-        // Birthday day-of messages are only sent during the 9am local window so
-        // users receive them first thing in the morning, not mid-afternoon.
         if (isNineAm) {
           for (const msg of buildBirthdayDayOfMessages(contact, tz)) {
-            birthdayMessages.push(msg);
+            nineAmBirthdayMsgs.push(msg);
           }
         }
         for (const msg of buildReminderMessages(contact, tz)) {
-          if (msg.notifType === "reminder") {
-            reminderMessages.push(msg);
-          } else if (msg.notifType === "birthday") {
-            // Custom reminder day-of entries (daysUntil===0) use notifType "birthday".
-            // Gate them to the 9am local window, consistent with birthday day-of pushes.
-            if (isNineAm) milestoneMessages.push(msg);
-          } else {
-            milestoneMessages.push(msg);
+          switch (msg.notifType) {
+            case "reminder":
+              // Check-ins are eligible in both windows; 24h dedup prevents double-send
+              if (isNineAm) nineAmReminderMsgs.push(msg);
+              if (isFivePm) fivePmReminderMsgs.push(msg);
+              break;
+            case "custom":
+              // Custom reminders are 9am-only (higher priority than check-ins)
+              if (isNineAm) nineAmCustomMsgs.push(msg);
+              break;
+            case "milestone":
+              // Birthday advance notices are 5pm-only (lower priority than check-ins)
+              if (isFivePm) fivePmMilestoneMsgs.push(msg);
+              break;
           }
         }
       }
 
-      // Separate 24h dedup windows per type
-      const recentBirthdayIds = await getRecentlySentContactIds(user.id, ["birthday"]);
-      const recentReminderIds = await getRecentlySentContactIds(user.id, ["reminder", "elevation", "milestone"]);
+      // ── 24h dedup: query each type's own namespace ──────────────────────────
+      const recentBirthdayIds  = await getRecentlySentContactIds(user.id, ["birthday"]);
+      const recentCustomIds    = await getRecentlySentContactIds(user.id, ["custom"]);
+      const recentReminderIds  = await getRecentlySentContactIds(user.id, ["reminder", "elevation"]);
+      const recentMilestoneIds = await getRecentlySentContactIds(user.id, ["milestone"]);
 
-      const filteredBirthday = dedupMessages(birthdayMessages, recentBirthdayIds);
-      // Check-in reminders come first (more actionable); milestones are lower priority
-      const filteredReminders = dedupMessages([...reminderMessages, ...milestoneMessages], recentReminderIds);
+      // ── 9am: pick highest-priority eligible message (cap 1) ─────────────────
+      let nineAmMsg: PushMessage | null = null;
+      if (isNineAm) {
+        const candidates = [
+          ...dedupMessages(nineAmBirthdayMsgs, recentBirthdayIds),
+          ...dedupMessages(nineAmCustomMsgs, recentCustomIds),
+          ...dedupMessages(nineAmReminderMsgs, recentReminderIds),
+        ];
+        nineAmMsg = candidates[0] ?? null;
+      }
 
-      // Priority order: birthday day-of > check-in overdue > milestone.
-      // If a contact has BOTH a birthday today AND an overdue check-in, send only
-      // the birthday (same-day collision). The check-in is eligible again tomorrow
-      // because it uses its own dedup namespace ('reminder' not 'birthday').
-      const birthdayContactIds = new Set(filteredBirthday.map((m) => m.contactId).filter(Boolean) as string[]);
-      const filteredRemindersNoConflict = filteredReminders.filter(
-        (m) => !m.contactId || !birthdayContactIds.has(m.contactId),
-      );
-      const toSend = [...filteredBirthday, ...filteredRemindersNoConflict].slice(0, 3);
+      // ── 5pm: pick highest-priority eligible message (cap 1) ─────────────────
+      // Cross-type same-contact guard: if contact X already received a birthday
+      // or custom push today, suppress their check-in at 5pm (delay to tomorrow).
+      let fivePmMsg: PushMessage | null = null;
+      if (isFivePm) {
+        const crossTypeBlockIds = new Set([...recentBirthdayIds, ...recentCustomIds]);
+        const filteredReminder = dedupMessages(
+          fivePmReminderMsgs,
+          new Set([...recentReminderIds, ...crossTypeBlockIds]),
+        );
+        const filteredMilestone = dedupMessages(fivePmMilestoneMsgs, recentMilestoneIds);
+        const candidates = [...filteredReminder, ...filteredMilestone];
+        fivePmMsg = candidates[0] ?? null;
+      }
 
-      // Diagnostic logging
-      const totalEligible = filteredBirthday.length + filteredReminders.length;
+      const toSend = [nineAmMsg, fivePmMsg].filter(Boolean) as PushMessage[];
+
       if (toSend.length === 0) {
-        if (birthdayMessages.length + reminderMessages.length + milestoneMessages.length > 0) {
-          console.log(`[push]   user ${user.id.slice(0, 8)}: ${userContacts.length} contacts — all in 24h dedup window`);
+        const totalBuilt = nineAmBirthdayMsgs.length + nineAmCustomMsgs.length +
+          nineAmReminderMsgs.length + fivePmReminderMsgs.length + fivePmMilestoneMsgs.length;
+        if (totalBuilt > 0) {
+          console.log(`[push]   user ${user.id.slice(0, 8)}: eligible messages exist but all in 24h dedup window`);
         }
         continue;
       }
+
       console.log(
-        `[push]   user ${user.id.slice(0, 8)}: ${totalEligible} eligible, sending ${toSend.length} notification(s)`,
+        `[push]   user ${user.id.slice(0, 8)}: sending ${toSend.length} notification(s) ` +
+        `[${toSend.map((m) => `${m.notifType}@${(m.contactId ?? "?").slice(0, 8)}`).join(", ")}]`,
       );
 
-      const notifiedBirthdayIds = new Set<string>();
-      const notifiedReminderIds = new Set<string>();
-
+      // ── Send & log ───────────────────────────────────────────────────────────
       let tokenExpired = false;
+      // Accumulate notified contactIds per type so dedup log entries stay isolated
+      const notifiedByType = new Map<string, Set<string>>();
+
       for (const msg of toSend) {
         const result = await sendExpoPush(
           user.pushToken,
@@ -503,11 +552,8 @@ export async function sendDailyReminders() {
           break;
         }
         if (result && msg.contactId) {
-          if (msg.notifType === "birthday") {
-            notifiedBirthdayIds.add(msg.contactId);
-          } else {
-            notifiedReminderIds.add(msg.contactId);
-          }
+          if (!notifiedByType.has(msg.notifType)) notifiedByType.set(msg.notifType, new Set());
+          notifiedByType.get(msg.notifType)!.add(msg.contactId);
           sent++;
           console.log(`[push]     sent [${msg.notifType}] "${msg.title.slice(0, 50)}" → contact ${msg.contactId.slice(0, 8)}`);
         }
@@ -515,17 +561,8 @@ export async function sendDailyReminders() {
 
       if (tokenExpired) continue;
 
-      // Log each type separately so future dedup windows stay isolated
-      if (notifiedBirthdayIds.size > 0) {
-        await logNotifiedContacts(user.id, notifiedBirthdayIds, "birthday");
-      }
-      if (notifiedReminderIds.size > 0) {
-        // Use the specific type for milestones so they have their own dedup window
-        for (const msg of toSend) {
-          if (msg.contactId && notifiedReminderIds.has(msg.contactId)) {
-            await logNotifiedContacts(user.id, new Set([msg.contactId]), msg.notifType);
-          }
-        }
+      for (const [type, ids] of notifiedByType.entries()) {
+        await logNotifiedContacts(user.id, ids, type);
       }
     }
     if (sent > 0) {
