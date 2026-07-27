@@ -419,9 +419,11 @@ export function isNineAmLocalNow(timezone: string): boolean {
   return getLocalHour(timezone) === 9;
 }
 
-// Returns true if it is currently between 17:00 and 17:59 in the given timezone.
+// Returns true if it is currently 6:30 pm (18:30–18:44) in the given timezone.
 export function isFivePmLocalNow(timezone: string): boolean {
-  return getLocalHour(timezone) === 17;
+  const hour = getLocalHour(timezone);
+  const minute = getLocalMinute(timezone);
+  return hour === 18 && minute >= 30 && minute < 45;
 }
 
 // ─── Daily reminder dispatch ──────────────────────────────────────────────────
