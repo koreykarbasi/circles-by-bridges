@@ -316,10 +316,12 @@ async function sendExpoPush(
         console.warn(`[push] DeviceNotRegistered for token ${token.slice(0, 20)}… — token is expired`);
         return "expired";
       }
-      // Log unexpected non-success shapes at debug level so they surface without
-      // blocking delivery of genuinely successful sends.
+      // Any other Expo-reported error (e.g. InvalidCredentials) is a real
+      // failure — return false so callers don't write a dedup entry for an
+      // undelivered notification.
       if (ticket?.status === "error") {
-        console.warn(`[push] Expo push error for token ${token.slice(0, 20)}…: ${JSON.stringify(ticket)}`);
+        console.error(`[push] Expo push error for token ${token.slice(0, 20)}…: ${JSON.stringify(ticket)}`);
+        return false;
       }
     } catch {
       // JSON parse failed — HTTP was OK so treat as delivered
