@@ -47,7 +47,7 @@
       [
         "expo-router",
         {
-          "origin": "https://replit.com/"
+          "origin": "https://circles-bridges.replit.app/"
         }
       ],
       "expo-font",
