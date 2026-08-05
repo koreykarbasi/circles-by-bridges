@@ -2085,6 +2085,51 @@ export async function registerRoutes(app: Express): Promise<Server> {
     });
   }
 
+  // ── Push diagnostic endpoint (auth-gated, available in all envs) ──────────
+  // Hit POST /api/notifications/test-push to immediately attempt a push to
+  // the calling user's stored token and return the raw Expo response.
+  // Useful for verifying credentials and token validity without waiting for
+  // the 9am/5pm scheduler window.
+  app.post("/api/notifications/test-push", requireAuth, async (req, res) => {
+    try {
+      const user = await storage.getUser(req.session.userId!);
+      if (!user?.pushToken) {
+        return res.status(400).json({ ok: false, error: "No push token registered for this account." });
+      }
+
+      const EXPO_PUSH_URL = "https://exp.host/--/api/v2/push/send";
+      const payload = {
+        to: user.pushToken,
+        title: "Bridges test push",
+        body: `Diagnostic push sent at ${new Date().toISOString()}`,
+        sound: "default",
+        data: {},
+      };
+
+      const expoRes = await fetch(EXPO_PUSH_URL, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Accept: "application/json" },
+        body: JSON.stringify(payload),
+      });
+
+      const expoBody = await expoRes.text();
+      let expoJson: unknown;
+      try { expoJson = JSON.parse(expoBody); } catch { expoJson = expoBody; }
+
+      console.log(`[push] test-push for user ${req.session.userId!.slice(0, 8)}: HTTP ${expoRes.status} → ${expoBody}`);
+
+      res.json({
+        ok: expoRes.ok,
+        token: user.pushToken,
+        expoStatus: expoRes.status,
+        expoResponse: expoJson,
+      });
+    } catch (err) {
+      console.error("[push] test-push error:", err);
+      res.status(500).json({ ok: false, error: String(err) });
+    }
+  });
+
   const httpServer = createServer(app);
   return httpServer;
 }

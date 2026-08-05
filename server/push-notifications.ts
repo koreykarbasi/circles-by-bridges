@@ -316,9 +316,17 @@ async function sendExpoPush(
         console.warn(`[push] DeviceNotRegistered for token ${token.slice(0, 20)}… — token is expired`);
         return "expired";
       }
-      // Any other Expo-reported error (e.g. InvalidCredentials) is a real
-      // failure — return false so callers don't write a dedup entry for an
-      // undelivered notification.
+      if (ticket?.status === "error" && ticket?.details?.error === "InvalidCredentials") {
+        console.error(
+          `[push] *** CREDENTIAL FAILURE *** InvalidCredentials for token ${token.slice(0, 30)}…\n` +
+          `[push] This means the APNs credentials for the app bundle registered with Expo have expired or are missing.\n` +
+          `[push] Full Expo response: ${JSON.stringify(ticket)}\n` +
+          `[push] FIX: A new EAS build under the correct bundle ID with valid APNs credentials must be installed on the device.`
+        );
+        return false;
+      }
+      // Any other Expo-reported error is a real failure — return false so callers
+      // don't write a dedup entry for an undelivered notification.
       if (ticket?.status === "error") {
         console.error(`[push] Expo push error for token ${token.slice(0, 20)}…: ${JSON.stringify(ticket)}`);
         return false;
