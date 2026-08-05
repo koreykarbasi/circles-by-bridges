@@ -79,7 +79,7 @@ async function savePushToken(token: string) {
 }
 
 function RootLayoutNav() {
-  const { user, isCacheHydrated } = useAuth();
+  const { user, isCacheHydrated, isLoading: authIsLoading } = useAuth();
   const { hasCompletedOnboarding, isReplayRequested } = useOnboarding();
   const segments = useSegments();
   const segmentsRef = useRef(segments);
@@ -99,9 +99,12 @@ function RootLayoutNav() {
     scheduleSuggestionNudge(user.suggestionNotifFrequency, user.suggestionNotifTime).catch(() => {});
   }, [user?.id, user?.suggestionNotifFrequency, user?.suggestionNotifTime, onboardingDone]);
 
-  // Push notifications gate: only register after both onboarding and auth are complete.
+  // Push notifications gate: only register after both onboarding and auth are complete
+  // AND the server has confirmed the session (isLoading = false). Without this guard
+  // the local cache can set user truthy before /api/auth/me responds, causing the
+  // token-save request to fire without a valid session cookie (→ 401).
   useEffect(() => {
-    if (!user || !onboardingDone) return;
+    if (!user || !onboardingDone || authIsLoading) return;
 
     // Cold-boot registration
     registerForPushNotifications().then((token) => {
@@ -135,7 +138,7 @@ function RootLayoutNav() {
       responseListener.current?.remove();
       responseListener.current = null;
     };
-  }, [user?.id, onboardingDone]);
+  }, [user?.id, onboardingDone, authIsLoading]);
 
   useEffect(() => {
     if (hasCompletedOnboarding === null || !isCacheHydrated) return;
