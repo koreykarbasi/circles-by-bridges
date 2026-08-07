@@ -53,10 +53,15 @@ async function registerForPushNotifications(): Promise<string | null> {
   }
 
   try {
-    const projectId =
-      Constants.expoConfig?.extra?.eas?.projectId ??
-      Constants.easConfig?.projectId;
-    console.log("[push] Registering with projectId:", projectId ?? "(none — Expo Go)");
+    // In Expo Go (appOwnership === "expo"), do NOT pass a projectId.
+    // Expo Go manages APNs credentials internally via host.exp.Exponent —
+    // passing a custom projectId routes through EAS credential lookup instead,
+    // which fails when the EAS project's bundle credentials are expired/missing.
+    const isExpoGo = Constants.appOwnership === "expo";
+    const projectId = isExpoGo
+      ? undefined
+      : (Constants.expoConfig?.extra?.eas?.projectId ?? Constants.easConfig?.projectId);
+    console.log("[push] Registering — isExpoGo:", isExpoGo, "projectId:", projectId ?? "(none)");
     const token = (await Notifications.getExpoPushTokenAsync(
       projectId ? { projectId } : undefined
     )).data;
