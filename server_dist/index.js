@@ -1666,6 +1666,22 @@ async function sendSuggestionNudges() {
         console.log(`[push]   \u2192 skip: weekly day mismatch (day ${localDayOfWeek})`);
         continue;
       }
+      try {
+        const windowLockResult = await pool.query(
+          `SELECT COUNT(*) AS count FROM notification_log
+           WHERE user_id = $1
+             AND notif_type = 'suggestion'
+             AND sent_at >= (date_trunc('hour', NOW() AT TIME ZONE $2) AT TIME ZONE $2)`,
+          [user.id, tz]
+        );
+        const alreadySentThisWindow = parseInt(windowLockResult.rows[0]?.count ?? "0", 10) > 0;
+        if (alreadySentThisWindow) {
+          console.log(`[push]   \u2192 skip: suggestion already sent in this ${preferredHour}:xx window`);
+          continue;
+        }
+      } catch (lockErr) {
+        console.warn(`[push]   window lock check failed (non-fatal):`, lockErr);
+      }
       const windowHours = dedupWindowHours(freq);
       const recentResult = await pool.query(
         `SELECT DISTINCT contact_id FROM notification_log

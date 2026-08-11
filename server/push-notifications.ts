@@ -809,6 +809,33 @@ export async function sendSuggestionNudges() {
         continue;
       }
 
+      // ── Per-user window lock ───────────────────────────────────────────────
+      // The scheduler ticks every 15 minutes. Without this guard, all 4 ticks
+      // in a 60-minute preferred-hour window (e.g. 17:00–17:59) would each pick
+      // a *different* contact and send up to 4 suggestion pushes to the same user.
+      // This query checks whether any suggestion has already been delivered in the
+      // current calendar hour (in the user's local timezone). If yes, skip — the
+      // next eligible window is the same preferred hour tomorrow (or in N days for
+      // 3x_week/weekly frequencies).
+      try {
+        const windowLockResult = await pool.query<{ count: string }>(
+          `SELECT COUNT(*) AS count FROM notification_log
+           WHERE user_id = $1
+             AND notif_type = 'suggestion'
+             AND sent_at >= (date_trunc('hour', NOW() AT TIME ZONE $2) AT TIME ZONE $2)`,
+          [user.id, tz],
+        );
+        const alreadySentThisWindow = parseInt(windowLockResult.rows[0]?.count ?? "0", 10) > 0;
+        if (alreadySentThisWindow) {
+          console.log(`[push]   → skip: suggestion already sent in this ${preferredHour}:xx window`);
+          continue;
+        }
+      } catch (lockErr) {
+        // Non-fatal: if the check fails, fall through and let the per-contact dedup
+        // act as a softer guard rather than silently dropping the notification.
+        console.warn(`[push]   window lock check failed (non-fatal):`, lockErr);
+      }
+
       // Frequency-matched dedup window — only suggestion + elevation types.
       // Reminder-type entries are intentionally excluded so daily reminders at 9am
       // do not suppress the suggestion nudge that fires immediately after.
