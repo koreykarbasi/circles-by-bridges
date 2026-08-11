@@ -499,6 +499,52 @@ export async function sendRemindersForUser(
     }
   }
 
+  // ── Swipe-away cooldown filter ────────────────────────────────────────────
+  // When the user swipes a contact away in the suggestions feed, a 'suggestion'
+  // row is inserted in notification_log. Reminder and milestone pushes must
+  // honour the same per-circle cooldown so a dismissed contact doesn't
+  // immediately resurface as a push notification.
+  // Cooldown mirrors CIRCLE_COOLDOWN_DAYS in lib/suggestion-scheduler.ts:
+  //   C1 = 7 days,  C2 = 5 days,  C3 = 15 days
+  // Birthday (day-of) and custom reminders are NOT filtered — they are
+  // time-sensitive events that should fire regardless of dismissal state.
+  try {
+    const cooldownResult = await pool.query<{ contact_id: string }>(
+      `SELECT DISTINCT nl.contact_id
+       FROM notification_log nl
+       JOIN contacts c ON c.id = nl.contact_id AND c.user_id = $1
+       WHERE nl.user_id = $1
+         AND nl.notif_type IN ('suggestion', 'elevation')
+         AND (
+           (c.circle_level = 1 AND nl.sent_at > NOW() - INTERVAL '7 days')  OR
+           (c.circle_level = 2 AND nl.sent_at > NOW() - INTERVAL '5 days')  OR
+           (c.circle_level = 3 AND nl.sent_at > NOW() - INTERVAL '15 days')
+         )`,
+      [userId],
+    );
+    if (cooldownResult.rows.length > 0) {
+      const cooldownIds = new Set(cooldownResult.rows.map((r) => r.contact_id));
+      const applyCooldown = (msgs: PushMessage[]): PushMessage[] =>
+        msgs.filter((m) => {
+          if (!m.contactId || !cooldownIds.has(m.contactId)) return true;
+          console.log(
+            `[push]   skip [swipe-cooldown] "${m.title.slice(0, 50)}" — ` +
+            `contact ${m.contactId.slice(0, 8)} dismissed recently`,
+          );
+          return false;
+        });
+      // Replace pool contents in-place so the dedup step sees filtered lists.
+      // Only reminder/milestone types are filtered; birthday and custom are not.
+      nineAmReminderMsgs.splice(0, Infinity, ...applyCooldown(nineAmReminderMsgs));
+      fivePmReminderMsgs.splice(0, Infinity, ...applyCooldown(fivePmReminderMsgs));
+      fivePmMilestoneMsgs.splice(0, Infinity, ...applyCooldown(fivePmMilestoneMsgs));
+    }
+  } catch (cooldownErr) {
+    // Non-fatal: if the query fails, proceed without cooldown filtering rather
+    // than silently dropping a legitimate push notification.
+    console.warn(`[push]   swipe-cooldown check failed (non-fatal):`, cooldownErr);
+  }
+
   // ── 24h dedup: each type has its own namespace ─────────────────────────────
   const recentBirthdayIds  = await getRecentlySentContactIds(userId, ["birthday"]);
   const recentCustomIds    = await getRecentlySentContactIds(userId, ["custom"]);

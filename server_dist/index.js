@@ -1457,6 +1457,36 @@ async function sendRemindersForUser(userId, pushToken, timezone) {
       }
     }
   }
+  try {
+    const cooldownResult = await pool.query(
+      `SELECT DISTINCT nl.contact_id
+       FROM notification_log nl
+       JOIN contacts c ON c.id = nl.contact_id AND c.user_id = $1
+       WHERE nl.user_id = $1
+         AND nl.notif_type IN ('suggestion', 'elevation')
+         AND (
+           (c.circle_level = 1 AND nl.sent_at > NOW() - INTERVAL '7 days')  OR
+           (c.circle_level = 2 AND nl.sent_at > NOW() - INTERVAL '5 days')  OR
+           (c.circle_level = 3 AND nl.sent_at > NOW() - INTERVAL '15 days')
+         )`,
+      [userId]
+    );
+    if (cooldownResult.rows.length > 0) {
+      const cooldownIds = new Set(cooldownResult.rows.map((r) => r.contact_id));
+      const applyCooldown = (msgs) => msgs.filter((m) => {
+        if (!m.contactId || !cooldownIds.has(m.contactId)) return true;
+        console.log(
+          `[push]   skip [swipe-cooldown] "${m.title.slice(0, 50)}" \u2014 contact ${m.contactId.slice(0, 8)} dismissed recently`
+        );
+        return false;
+      });
+      nineAmReminderMsgs.splice(0, Infinity, ...applyCooldown(nineAmReminderMsgs));
+      fivePmReminderMsgs.splice(0, Infinity, ...applyCooldown(fivePmReminderMsgs));
+      fivePmMilestoneMsgs.splice(0, Infinity, ...applyCooldown(fivePmMilestoneMsgs));
+    }
+  } catch (cooldownErr) {
+    console.warn(`[push]   swipe-cooldown check failed (non-fatal):`, cooldownErr);
+  }
   const recentBirthdayIds = await getRecentlySentContactIds(userId, ["birthday"]);
   const recentCustomIds = await getRecentlySentContactIds(userId, ["custom"]);
   const recentReminderIds = await getRecentlySentContactIds(userId, ["reminder", "elevation"]);
