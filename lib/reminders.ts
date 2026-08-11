@@ -151,7 +151,7 @@ function generateCircle1Reminders(contact: Contact): Reminder[] {
   const daysUntil = getDaysUntilBirthday(contact.birthday ?? undefined);
 
   if (daysUntil !== null) {
-    if (daysUntil <= 1) {
+    if (daysUntil === 0) {
       reminders.push({
         id: `birthday-0d-${contact.id}`,
         contactId: contact.id,
@@ -251,7 +251,7 @@ function generateCircle2Reminders(contact: Contact): Reminder[] {
 
   const daysUntil = getDaysUntilBirthday(contact.birthday ?? undefined);
   if (daysUntil !== null) {
-    if (daysUntil <= 1) {
+    if (daysUntil === 0) {
       reminders.push({
         id: `birthday-0d-${contact.id}`,
         contactId: contact.id,
@@ -328,7 +328,7 @@ function generateCircle3Reminders(contact: Contact): Reminder[] {
   const reminders: Reminder[] = [];
 
   const daysUntil = getDaysUntilBirthday(contact.birthday ?? undefined);
-  if (daysUntil !== null && daysUntil <= 1) {
+  if (daysUntil !== null && daysUntil === 0) {
     reminders.push({
       id: `birthday-0d-${contact.id}`,
       contactId: contact.id,
