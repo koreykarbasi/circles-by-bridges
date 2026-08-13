@@ -31,6 +31,7 @@
     "production": {
       "ios": {
         "appleId": "korey@karbasi.ca",
+        "ascAppId": "6760731364",
         "appleTeamId": "5BJJ2KP2X5"
       }
     }
