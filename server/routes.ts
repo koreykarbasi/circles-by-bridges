@@ -20,7 +20,7 @@ const APPLE_JWKS = createRemoteJWKSet(
   new URL("https://appleid.apple.com/auth/keys"),
   { cacheMaxAge: 10 * 60 * 1000 }
 );
-const APPLE_BUNDLE_ID = "com.bridges.app";
+const APPLE_BUNDLE_ID = "app.replit.bridges";
 
 declare module "express-session" {
   interface SessionData {
