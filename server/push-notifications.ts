@@ -3,6 +3,8 @@ import { users, contacts, hangoutVotes, hangoutOptions, hangoutPlans } from "@sh
 import { isNotNull, eq } from "drizzle-orm";
 import { getDaysUntilBirthday, getDaysUntilBirthdayInTz, getDaysSince } from "./birthday-utils";
 export { getDaysUntilBirthday };
+import { importPKCS8, SignJWT } from "jose";
+import http2 from "http2";
 
 interface CustomReminder {
   label: string;
@@ -341,6 +343,120 @@ async function sendExpoPush(
   }
 }
 
+// ─── Direct APNs (bypasses Expo's account-based credential routing) ───────────
+// Used when the app registers an "apns:<hex>" device token instead of an
+// ExponentPushToken. Sends directly to Apple's HTTP/2 push endpoint using the
+// APNs Auth Key, so no Expo account association is involved.
+
+let _apnsJwt: string | null = null;
+let _apnsJwtIssuedAt = 0;
+let _apnsClient: http2.ClientHttp2Session | null = null;
+
+async function getApnsJwt(): Promise<string> {
+  const now = Math.floor(Date.now() / 1000);
+  if (_apnsJwt && now - _apnsJwtIssuedAt < 55 * 60) return _apnsJwt;
+  const keyP8 = process.env.APNS_AUTH_KEY_P8;
+  const keyId = process.env.APNS_KEY_ID ?? "A95GG3Y47Y";
+  const teamId = process.env.APNS_TEAM_ID ?? "5BJJ2KP2X5";
+  if (!keyP8) throw new Error("[push] APNS_AUTH_KEY_P8 secret is not set");
+  const privateKey = await importPKCS8(keyP8, "ES256");
+  _apnsJwt = await new SignJWT({})
+    .setProtectedHeader({ alg: "ES256", kid: keyId })
+    .setIssuedAt()
+    .setIssuer(teamId)
+    .sign(privateKey);
+  _apnsJwtIssuedAt = now;
+  return _apnsJwt;
+}
+
+function getApnsClient(): http2.ClientHttp2Session {
+  if (!_apnsClient || _apnsClient.destroyed) {
+    _apnsClient = http2.connect("https://api.push.apple.com");
+    _apnsClient.on("error", (err) => {
+      console.error("[push] APNs HTTP/2 connection error:", err);
+      _apnsClient = null;
+    });
+  }
+  return _apnsClient;
+}
+
+async function sendApnsPush(
+  deviceToken: string,
+  title: string,
+  body: string,
+): Promise<boolean | "expired"> {
+  try {
+    const jwt = await getApnsJwt();
+    const bundleId = process.env.APNS_BUNDLE_ID ?? "app.replit.bridges";
+    const client = getApnsClient();
+    const payload = JSON.stringify({ aps: { alert: { title, body }, sound: "default" } });
+
+    return new Promise((resolve) => {
+      const req = client.request({
+        ":method": "POST",
+        ":path": `/3/device/${deviceToken}`,
+        ":scheme": "https",
+        ":authority": "api.push.apple.com",
+        "authorization": `bearer ${jwt}`,
+        "apns-topic": bundleId,
+        "apns-push-type": "alert",
+        "content-type": "application/json",
+        "content-length": String(Buffer.byteLength(payload)),
+      });
+
+      let status = 0;
+      let responseBody = "";
+      req.on("response", (h) => { status = h[":status"] as number; });
+      req.on("data", (chunk) => { responseBody += chunk; });
+      req.on("end", () => {
+        if (status === 200) {
+          resolve(true);
+          return;
+        }
+        try {
+          const json = JSON.parse(responseBody);
+          if (json.reason === "Unregistered" || json.reason === "BadDeviceToken") {
+            console.warn(`[push] APNs ${json.reason} for token ${deviceToken.slice(0, 10)}…`);
+            resolve("expired");
+          } else {
+            console.error(`[push] APNs error ${status}: ${responseBody}`);
+            resolve(false);
+          }
+        } catch {
+          console.error(`[push] APNs error ${status}: ${responseBody}`);
+          resolve(false);
+        }
+      });
+      req.on("error", (err) => {
+        console.error("[push] APNs request error:", err);
+        _apnsClient = null;
+        resolve(false);
+      });
+      req.write(payload);
+      req.end();
+    });
+  } catch (err) {
+    console.error("[push] sendApnsPush error:", err);
+    return false;
+  }
+}
+
+/**
+ * Routes to direct APNs (token starts with "apns:") or Expo push service.
+ * This is the single send entry-point used by all scheduler paths.
+ */
+async function sendPush(
+  token: string,
+  title: string,
+  body: string,
+  data?: Record<string, string>,
+): Promise<boolean | "expired"> {
+  if (token.startsWith("apns:")) {
+    return sendApnsPush(token.slice(5), title, body);
+  }
+  return sendExpoPush(token, title, body, data);
+}
+
 /** Clears an expired push token from the DB so the scheduler skips this user next run. */
 async function clearExpiredPushToken(userId: string, token: string): Promise<void> {
   try {
@@ -601,7 +717,7 @@ export async function sendRemindersForUser(
   let sent = 0;
 
   for (const msg of toSend) {
-    const result = await sendExpoPush(
+    const result = await sendPush(
       pushToken,
       msg.title,
       msg.body,
@@ -786,7 +902,7 @@ export async function sendProfileCompletionPushes() {
       const missingCount = parseInt(c1NoBirthday.rows[0]?.count ?? "0", 10);
       if (missingCount === 0) continue;
 
-      const result = await sendExpoPush(
+      const result = await sendPush(
         user.pushToken,
         "Complete your Bridges profile",
         "Some of your Core contacts are missing birthdays — add them to unlock reminders.",
@@ -1023,7 +1139,7 @@ export async function sendSuggestionNudges() {
       for (const ch of `${bestContact.id}${dayKey}`) hash = (hash * 31 + ch.charCodeAt(0)) >>> 0;
       const template = nudgeTemplates[hash % nudgeTemplates.length];
 
-      const result = await sendExpoPush(
+      const result = await sendPush(
         user.push_token,
         template.title(bestContact.name),
         template.body(bestContact.name),

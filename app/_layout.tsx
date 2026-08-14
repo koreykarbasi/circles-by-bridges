@@ -53,11 +53,19 @@ async function registerForPushNotifications(): Promise<string | null> {
   }
 
   try {
-    // In Expo Go (appOwnership === "expo"), do NOT pass a projectId.
-    // Expo Go manages APNs credentials internally via host.exp.Exponent —
-    // passing a custom projectId routes through EAS credential lookup instead,
-    // which fails when the EAS project's bundle credentials are expired/missing.
     const isExpoGo = Constants.appOwnership === "expo";
+
+    if (!isExpoGo && Platform.OS === "ios") {
+      // Standalone iOS build — use the raw APNs device token and send directly
+      // to Apple's push endpoint using our own APNs Auth Key. This bypasses
+      // Expo's push service entirely, which previously routed tokens through
+      // Replit's internal Expo account (@replit-private-...) instead of ours.
+      const deviceToken = (await Notifications.getDevicePushTokenAsync()).data;
+      console.log("[push] Got raw APNs device token:", deviceToken.slice(0, 10) + "...");
+      return `apns:${deviceToken}`;
+    }
+
+    // Expo Go or Android — use Expo push token as before.
     const projectId = isExpoGo
       ? undefined
       : (Constants.expoConfig?.extra?.eas?.projectId ?? Constants.easConfig?.projectId);
@@ -68,7 +76,7 @@ async function registerForPushNotifications(): Promise<string | null> {
     console.log("[push] Got token:", token?.slice(0, 30) + "...");
     return token;
   } catch (err) {
-    console.error("[push] getExpoPushTokenAsync failed:", err);
+    console.error("[push] Push token registration failed:", err);
     return null;
   }
 }

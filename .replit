@@ -103,3 +103,10 @@ isValidation = true
 [postMerge]
 path = "scripts/post-merge.sh"
 timeoutMs = 180000
+
+[userenv]
+
+[userenv.shared]
+APNS_BUNDLE_ID = "app.replit.bridges"
+APNS_KEY_ID = "A95GG3Y47Y"
+APNS_TEAM_ID = "5BJJ2KP2X5"
