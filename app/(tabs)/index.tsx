@@ -22,12 +22,13 @@ import { setElevation, getElevations, getExpiredElevations, clearElevation, ELEV
 import { snoozeContact, getSnoozedContacts, SNOOZE_DAYS } from "@/lib/reminder-snooze";
 import { getSmartPrompt, getActionType, getNextPrompt, loadSyncedPrompts } from "@/lib/prompts";
 import { getDaysSinceLastSuggestedSync, scoreSuggestion, isInCooldown } from "@/lib/suggestion-scheduler";
-import { useDismissedSuggestions, dismissSuggestion, clearDismissedSuggestions, getCachedPrompt, setCachedPrompt, clearPromptCache, useSchedulerDates, markContactSuggested } from "@/lib/suggestions-store";
+import { useDismissedSuggestions, dismissSuggestion, flushPendingSuggestionDismissals, persistSuggestionDismissal, getCachedPrompt, setCachedPrompt, clearPromptCache, useSchedulerDates, markContactSuggested } from "@/lib/suggestions-store";
 import { useDismissedReminders, dismissReminder, clearDismissedReminders } from "@/lib/dismissed-reminders-store";
 import { getTextCopyMessage } from "@/components/SuggestionCard";
 import * as Clipboard from "expo-clipboard";
 import { router, useFocusEffect } from "expo-router";
 import { useQuery } from "@tanstack/react-query";
+import { queryClient } from "@/lib/query-client";
 import { getViewedTimestamps, hasUnreadVotes } from "@/lib/hangout-notifications";
 import { useSequentialHints, HINT_TEXT } from "@/lib/hints-store";
 import { HintTooltip } from "@/components/HintTooltip";
@@ -68,6 +69,12 @@ interface Suggestion {
   prompt: string;
   actionType: "call" | "text" | "hangout";
   isEnrichmentMissing: boolean;
+}
+
+interface PrioritySuggestionResponse {
+  contactIds: string[];
+  dismissedContactIds: string[];
+  generatedAt: string;
 }
 
 function SwipableSuggestionRow({ children, onSwipeDismiss }: { children: React.ReactNode; onSwipeDismiss?: () => void }) {
@@ -146,10 +153,21 @@ export default function HomeScreen() {
     queryKey: ["/api/hangouts"],
     refetchInterval: 60000,
   });
+  const { data: prioritySuggestions, refetch: refetchPrioritySuggestions } =
+    useQuery<PrioritySuggestionResponse>({
+      queryKey: ["/api/suggestions/priority"],
+      enabled: !!user,
+      staleTime: 0,
+      refetchOnMount: "always",
+      refetchOnWindowFocus: true,
+    });
   const [hangoutViewedMap, setHangoutViewedMap] = useState<Record<string, string>>({});
 
   useEffect(() => {
     loadSyncedPrompts();
+    flushPendingSuggestionDismissals().then((synced) => {
+      if (synced) queryClient.invalidateQueries({ queryKey: ["/api/suggestions/priority"] });
+    });
   }, []);
 
   const contactsScheduleKey = contacts
@@ -301,6 +319,17 @@ export default function HomeScreen() {
   );
 
   const suggestions = useMemo(() => {
+    if (prioritySuggestions) {
+      const contactsById = new Map(contacts.map((contact) => [contact.id, contact]));
+      return prioritySuggestions.contactIds
+        .map((contactId) => contactsById.get(contactId))
+        .filter((contact): contact is typeof contacts[0] => (
+          !!contact && !dismissedSuggestions.has(contact.id)
+        ))
+        .slice(0, MAX_SUGGESTIONS)
+        .map((contact) => getSuggestionForContact(contact));
+    }
+
     const reminderContactIds = new Set(visibleReminders.map((r) => r.contactId));
 
     const eligible = contacts.filter((c) => {
@@ -347,7 +376,7 @@ export default function HomeScreen() {
       .map((x) => x.contact);
 
     return visible.map((c) => getSuggestionForContact(c));
-  }, [contacts, dismissedSuggestions, visibleReminders, getSuggestionForContact, lastSuggestedDates, elevationMap]);
+  }, [contacts, dismissedSuggestions, visibleReminders, getSuggestionForContact, lastSuggestedDates, elevationMap, prioritySuggestions]);
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
@@ -355,9 +384,9 @@ export default function HomeScreen() {
     // Dismissed cards must stay gone until their TTL expires, not reset every refresh.
     clearPromptCache();
     setSuggestionPrompts(new Map());
-    await refreshContacts();
+    await Promise.all([refreshContacts(), refetchPrioritySuggestions()]);
     setRefreshing(false);
-  }, [refreshContacts]);
+  }, [refreshContacts, refetchPrioritySuggestions]);
 
   const handleReminderComplete = useCallback(
     async (reminder: Reminder) => {
@@ -475,9 +504,10 @@ export default function HomeScreen() {
 
   const handleSuggestionDone = useCallback(
     async (suggestion: Suggestion) => {
-      dismissSuggestion(suggestion.contactId);
+      dismissSuggestion(suggestion.contactId, suggestion.circleLevel);
       markContactSuggested(suggestion.contactId).catch(() => {});
       await markContacted(suggestion.contactId);
+      queryClient.invalidateQueries({ queryKey: ["/api/suggestions/priority"] });
       // DISABLED: hangout tracking
       // if (suggestion.actionType === "hangout") {
       //   await markHangout(suggestion.contactId);
@@ -487,8 +517,11 @@ export default function HomeScreen() {
   );
 
   const handleSuggestionSwipeDismiss = useCallback((suggestion: Suggestion) => {
-    dismissSuggestion(suggestion.contactId);
+    dismissSuggestion(suggestion.contactId, suggestion.circleLevel);
     markContactSuggested(suggestion.contactId).catch(() => {});
+    persistSuggestionDismissal(suggestion.contactId)
+      .then(() => queryClient.invalidateQueries({ queryKey: ["/api/suggestions/priority"] }))
+      .catch(() => {});
   }, []);
 
   const handleSuggestionRefresh = useCallback(

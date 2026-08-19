@@ -5,6 +5,13 @@ import { getDaysUntilBirthday, getDaysUntilBirthdayInTz, getDaysSince } from "./
 export { getDaysUntilBirthday };
 import { importPKCS8, SignJWT } from "jose";
 import http2 from "http2";
+import {
+  CIRCLE_COOLDOWN_DAYS,
+  ELEVATION_SCORE_BONUS,
+  PRIORITY_COHORT_SIZE,
+  scorePrioritySuggestion,
+  selectSuggestionForDelivery,
+} from "@shared/suggestion-priority";
 
 interface CustomReminder {
   label: string;
@@ -32,6 +39,7 @@ export type ContactRow = {
   lastContacted?: string | null;
   lastHangout?: string | null;
   customReminders?: unknown;
+  createdAt?: string | Date | null;
 };
 
 // Birthday day-of messages — delivered when the hourly run fires on the birthday.
@@ -261,10 +269,12 @@ export async function logNotifiedContacts(userId: string, contactIds: Set<string
 
 async function pruneOldNotificationLog(): Promise<void> {
   try {
-    // Keep suggestion/cycle logs 60 days so pool rotation works across large contact sets.
+    // Keep suggestion delivery/dismissal history 60 days for rotation and cooldowns.
     // All other notification types prune after 7 days.
     await pool.query(
-      `DELETE FROM notification_log WHERE sent_at < NOW() - INTERVAL '7 days' AND notif_type NOT IN ('suggestion', 'suggestion_cycle_reset')`,
+      `DELETE FROM notification_log
+       WHERE sent_at < NOW() - INTERVAL '7 days'
+         AND notif_type NOT IN ('suggestion', 'suggestion_push', 'suggestion_dismissed')`,
     );
     await pool.query(
       `DELETE FROM notification_log WHERE sent_at < NOW() - INTERVAL '60 days'`,
@@ -630,7 +640,7 @@ export async function sendRemindersForUser(
        FROM notification_log nl
        JOIN contacts c ON c.id = nl.contact_id AND c.user_id = $1
        WHERE nl.user_id = $1
-         AND nl.notif_type IN ('suggestion', 'elevation')
+         AND nl.notif_type IN ('suggestion_dismissed', 'suggestion', 'elevation')
          AND (
            (c.circle_level = 1 AND nl.sent_at > NOW() - INTERVAL '7 days')  OR
            (c.circle_level = 2 AND nl.sent_at > NOW() - INTERVAL '5 days')  OR
@@ -824,46 +834,119 @@ export async function sendHangoutFinalizedNotifications(
 
 // ─── Suggestion nudges ────────────────────────────────────────────────────────
 //
-// Full-pool rotation: contacts are nudged in score order (highest first) within
-// a "cycle". Once every contact in the pool has been nudged at least once, a new
-// cycle starts. This prevents the same high-scorer from dominating indefinitely.
-//
-// Cycle boundary is tracked via a 'suggestion_cycle_reset' entry in notification_log.
-// Suggestion entries are retained for 60 days (vs 7 days for reminders) so the full
-// pool can rotate even for users with many contacts.
-//
-// Scoring mirrors lib/suggestion-scheduler.ts scoreSuggestion() exactly:
-//   base (C1=1200 C2=1300 C3=1100) + cooldown bonus + recency bonus
+// The server owns a top-three priority cohort which Home also renders. A
+// successful push skips the previous two successful deliveries, so a still-high
+// contact can return after two other cohort members have been delivered.
 
-function scoreSuggestionServer(
-  circleLevel: number,
-  daysSinceLastPushed: number | null,
-  daysSinceContact: number | null,
-): number {
-  let score = circleLevel === 2 ? 1300 : circleLevel === 1 ? 1200 : 1100;
+type SuggestionEventRow = {
+  contact_id: string | null;
+  notif_type: string;
+  sent_at: string | Date;
+};
 
-  // Cooldown bonus: lower cap so real-world recency dominates
-  if (daysSinceLastPushed === null) {
-    score += 150;
-  } else {
-    score += Math.min(daysSinceLastPushed * 12, 150);
-  }
+export type PrioritySuggestionContact = ContactRow & {
+  score: number;
+};
 
-  // Recency bonus: primary signal — how long since you actually spoke to them
-  if (daysSinceContact !== null) {
-    score += Math.min(daysSinceContact * 2, 250);
-  } else {
-    score += 40; // never contacted
-  }
-
-  return score;
+function isWithinNewContactGrace(contact: ContactRow, now: Date): boolean {
+  if (contact.lastContacted || !contact.createdAt) return false;
+  return now.getTime() - new Date(contact.createdAt).getTime() < 2 * 86_400_000;
 }
 
-// Returns the dedup window in hours based on user frequency.
-function dedupWindowHours(frequency: string): number {
-  if (frequency === "3x_week") return 60;  // 2.5 days
-  if (frequency === "weekly") return 144;  // 6 days
-  return 23;                               // daily
+function hasHomeReminder(contact: ContactRow, timezone: string, now: Date): boolean {
+  const circle = contact.circleLevel as 1 | 2 | 3;
+  if (![1, 2, 3].includes(circle)) return false;
+
+  const daysSinceContact = getDaysSince(contact.lastContacted);
+  const checkinThreshold = { 1: 14, 2: 45, 3: 75 }[circle];
+  const hasCheckinReminder =
+    circle === 3
+      ? daysSinceContact !== null && daysSinceContact > checkinThreshold
+      : !isWithinNewContactGrace(contact, now) &&
+        (daysSinceContact === null || daysSinceContact > checkinThreshold);
+  if (hasCheckinReminder) return true;
+
+  const reminderWindow = { 1: 30, 2: 7, 3: 0 }[circle];
+  const birthdayDays = getDaysUntilBirthdayInTz(contact.birthday, timezone);
+  if (birthdayDays !== null && birthdayDays >= 0 && birthdayDays <= reminderWindow) {
+    return true;
+  }
+
+  const customReminders = Array.isArray(contact.customReminders)
+    ? (contact.customReminders as CustomReminder[])
+    : [];
+  return customReminders.some((reminder) => {
+    const days = getDaysUntilBirthdayInTz(reminder.date, timezone);
+    return days !== null && days >= 0 && days <= reminderWindow;
+  });
+}
+
+export async function getPrioritySuggestionCohort(
+  userId: string,
+  timezone = "UTC",
+  now = new Date(),
+): Promise<PrioritySuggestionContact[]> {
+  const [userContacts, eventResult] = await Promise.all([
+    db.select().from(contacts).where(eq(contacts.userId, userId)),
+    pool.query<SuggestionEventRow>(
+      `SELECT contact_id, notif_type, sent_at
+       FROM notification_log
+       WHERE user_id = $1
+         AND notif_type IN ('suggestion_dismissed', 'elevation')
+         AND sent_at > NOW() - INTERVAL '15 days'
+       ORDER BY sent_at DESC`,
+      [userId],
+    ),
+  ]);
+
+  const latestDismissal = new Map<string, Date>();
+  const latestElevation = new Map<string, Date>();
+  for (const event of eventResult.rows) {
+    if (!event.contact_id) continue;
+    const target =
+      event.notif_type === "suggestion_dismissed" ? latestDismissal : latestElevation;
+    if (!target.has(event.contact_id)) target.set(event.contact_id, new Date(event.sent_at));
+  }
+
+  return (userContacts as ContactRow[])
+    .filter((contact) => {
+      const circle = contact.circleLevel as 1 | 2 | 3;
+      if (![1, 2, 3].includes(circle) || hasHomeReminder(contact, timezone, now)) {
+        return false;
+      }
+
+      const dismissedAt = latestDismissal.get(contact.id);
+      if (!dismissedAt) return true;
+      const elapsedDays = (now.getTime() - dismissedAt.getTime()) / 86_400_000;
+      return elapsedDays >= CIRCLE_COOLDOWN_DAYS[circle];
+    })
+    .map((contact) => {
+      const circle = contact.circleLevel as 1 | 2 | 3;
+      const elevatedAt = latestElevation.get(contact.id);
+      const elevationAgeHours = elevatedAt
+        ? (now.getTime() - elevatedAt.getTime()) / 3_600_000
+        : null;
+      const elevationDelay = { 1: 24, 2: 48, 3: 72 }[circle];
+      const elevationLifetime = { 1: 6, 2: 7, 3: 8 }[circle] * 24;
+      const elevationBonus =
+        elevationAgeHours !== null &&
+        elevationAgeHours >= elevationDelay &&
+        elevationAgeHours < elevationLifetime
+          ? ELEVATION_SCORE_BONUS[circle]
+          : 0;
+
+      return {
+        ...contact,
+        score: scorePrioritySuggestion(
+          circle,
+          null,
+          getDaysSince(contact.lastContacted),
+          elevationBonus,
+        ),
+      };
+    })
+    .sort((a, b) => b.score - a.score || a.name.localeCompare(b.name) || a.id.localeCompare(b.id))
+    .slice(0, PRIORITY_COHORT_SIZE);
 }
 
 // ─── Profile completion weekly push (Sunday 9am local) ───────────────────────
@@ -971,6 +1054,22 @@ export async function sendSuggestionNudges() {
         continue;
       }
 
+      // Serialize selection and delivery per user across all server processes.
+      // A dedicated connection is required because PostgreSQL advisory locks are
+      // scoped to the session that acquired them.
+      const lockClient = await pool.connect();
+      let userLockAcquired = false;
+      try {
+        const advisoryResult = await lockClient.query<{ acquired: boolean }>(
+          `SELECT pg_try_advisory_lock(hashtext($1)) AS acquired`,
+          [`bridges:suggestion:${user.id}`],
+        );
+        userLockAcquired = advisoryResult.rows[0]?.acquired === true;
+        if (!userLockAcquired) {
+          console.log(`[push]   → skip: another process is handling this user's suggestion window`);
+          continue;
+        }
+
       // ── Per-user window lock ───────────────────────────────────────────────
       // The scheduler ticks every 15 minutes. Without this guard, all 4 ticks
       // in a 60-minute preferred-hour window (e.g. 17:00–17:59) would each pick
@@ -983,7 +1082,7 @@ export async function sendSuggestionNudges() {
         const windowLockResult = await pool.query<{ count: string }>(
           `SELECT COUNT(*) AS count FROM notification_log
            WHERE user_id = $1
-             AND notif_type = 'suggestion'
+               AND notif_type IN ('suggestion_claim', 'suggestion_push', 'suggestion')
              AND sent_at >= (date_trunc('hour', NOW() AT TIME ZONE $2) AT TIME ZONE $2)`,
           [user.id, tz],
         );
@@ -998,134 +1097,31 @@ export async function sendSuggestionNudges() {
         console.warn(`[push]   window lock check failed (non-fatal):`, lockErr);
       }
 
-      // Frequency-matched dedup window — only suggestion + elevation types.
-      // Reminder-type entries are intentionally excluded so daily reminders at 9am
-      // do not suppress the suggestion nudge that fires immediately after.
-      const windowHours = dedupWindowHours(freq);
-      const recentResult = await pool.query<{ contact_id: string }>(
-        `SELECT DISTINCT contact_id FROM notification_log
-         WHERE user_id = $1 AND sent_at > NOW() - make_interval(hours => $2)
-           AND notif_type IN ('suggestion', 'elevation')`,
-        [user.id, windowHours],
-      );
-      const recentContactIds = new Set(recentResult.rows.map((r) => r.contact_id));
-
-      const contactsResult = await pool.query<{
-        id: string;
-        name: string;
-        circle_level: number;
-        last_contacted: string | null;
-      }>(
-        `SELECT id, name, circle_level, last_contacted FROM contacts WHERE user_id = $1`,
-        [user.id],
-      );
-      if (contactsResult.rows.length === 0) {
-        console.log(`[push]   → skip: no contacts`);
+      const priorityCohort = await getPrioritySuggestionCohort(user.id, tz);
+      if (priorityCohort.length === 0) {
+        console.log(`[push]   → skip: no eligible contacts in priority cohort`);
         continue;
       }
 
-      // ── Full-pool cycle tracking ──────────────────────────────────────────
-      // A "cycle" ends when every contact in the pool has received at least one
-      // suggestion push. When the cycle completes, we insert a cycle-reset marker
-      // and begin a new cycle. This prevents high-scorers from repeating forever.
-
-      const cycleResetResult = await pool.query<{ sent_at: string }>(
-        `SELECT MAX(sent_at) AS sent_at FROM notification_log
-         WHERE user_id = $1 AND notif_type = 'suggestion_cycle_reset'`,
+      const lastSuccessfulResult = await pool.query<{ contact_id: string }>(
+        `SELECT contact_id
+         FROM notification_log
+         WHERE user_id = $1
+           AND notif_type = 'suggestion_push'
+         ORDER BY sent_at DESC
+         LIMIT 2`,
         [user.id],
       );
-      const cycleStartAt = cycleResetResult.rows[0]?.sent_at ?? null;
-
-      // Contacts already nudged in the current cycle
-      const cycleResult2 = cycleStartAt
-        ? await pool.query<{ contact_id: string }>(
-            `SELECT DISTINCT contact_id FROM notification_log
-             WHERE user_id = $1 AND notif_type = 'suggestion' AND sent_at > $2`,
-            [user.id, cycleStartAt],
-          )
-        : await pool.query<{ contact_id: string }>(
-            `SELECT DISTINCT contact_id FROM notification_log
-             WHERE user_id = $1 AND notif_type = 'suggestion'`,
-            [user.id],
-          );
-      const alreadyNudgedInCycle = new Set(cycleResult2.rows.map((r) => r.contact_id));
-
-      const allContactIds = new Set(contactsResult.rows.map((c) => c.id));
-      const allNudgedThisCycle = [...allContactIds].every((id) => alreadyNudgedInCycle.has(id));
-
-      if (allNudgedThisCycle) {
-        console.log(`[push]   → cycle complete (${allContactIds.size} contacts nudged) — starting new cycle`);
-        // Insert reset marker so the next query sees an empty cycle
-        try {
-          await pool.query(
-            `INSERT INTO notification_log (user_id, contact_id, notif_type) VALUES ($1, $2, 'suggestion_cycle_reset')`,
-            [user.id, [...allContactIds][0] ?? "system"],
-          );
-        } catch {
-          // Non-fatal
-        }
-        alreadyNudgedInCycle.clear();
-      }
-
-      // Last-pushed timestamp per contact (used for tie-breaking within the cycle)
-      const lastPushedResult = await pool.query<{ contact_id: string; last_sent: string }>(
-        `SELECT contact_id, MAX(sent_at) AS last_sent
-         FROM notification_log WHERE user_id = $1 AND notif_type = 'suggestion' GROUP BY contact_id`,
-        [user.id],
+      const bestContact = selectSuggestionForDelivery(
+        priorityCohort,
+        lastSuccessfulResult.rows.map((row) => row.contact_id),
       );
-      const lastPushedMap = new Map(
-        lastPushedResult.rows.map((r) => [r.contact_id, r.last_sent]),
-      );
-
-      // Score every contact in the pool
-      const scored: { id: string; name: string; score: number; inCycle: boolean; lastPushedAt: number }[] = [];
-      let skippedDedup = 0;
-      let skippedCycle = 0;
-
-      for (const c of contactsResult.rows) {
-        const inDedup = recentContactIds.has(c.id);
-        const inCycle = alreadyNudgedInCycle.has(c.id);
-
-        if (inDedup) { skippedDedup++; continue; }
-        if (inCycle) { skippedCycle++; continue; }
-
-        const lastPushed = lastPushedMap.get(c.id);
-        const daysSinceLastPushed = lastPushed
-          ? Math.floor((Date.now() - new Date(lastPushed).getTime()) / (1000 * 60 * 60 * 24))
-          : null;
-
-        const daysSinceContact = c.last_contacted
-          ? Math.floor((Date.now() - new Date(c.last_contacted).getTime()) / (1000 * 60 * 60 * 24))
-          : null;
-
-        const score = scoreSuggestionServer(c.circle_level, daysSinceLastPushed, daysSinceContact);
-        scored.push({
-          id: c.id,
-          name: c.name,
-          score,
-          inCycle,
-          lastPushedAt: lastPushed ? new Date(lastPushed).getTime() : 0,
-        });
-      }
+      if (!bestContact) continue;
 
       console.log(
-        `[push]   → pool: ${contactsResult.rows.length} total, ${scored.length} eligible this cycle, ${skippedDedup} in dedup window, ${skippedCycle} already nudged this cycle`,
+        `[push]   → cohort: ${priorityCohort.map((contact) => contact.name).join(", ")}; ` +
+        `sending "${bestContact.name}" score=${bestContact.score}`,
       );
-
-      if (scored.length === 0) {
-        console.log(`[push]   → skip: no eligible contacts in current cycle`);
-        continue;
-      }
-
-      // Within the eligible set, pick highest score. If tied, prefer least-recently-pushed.
-      scored.sort((a, b) => {
-        if (b.score !== a.score) return b.score - a.score;
-        return a.lastPushedAt - b.lastPushedAt;
-      });
-      const bestContact = { id: scored[0].id, name: scored[0].name };
-      const bestScore = scored[0].score;
-
-      console.log(`[push]   → sending to user ${user.id.slice(0, 8)} for contact "${bestContact.id.slice(0, 8)}" score=${bestScore} (${scored.length} eligible in cycle)`);
 
       // Vary the copy so the same body doesn't repeat — deterministic per contact+day
       const nudgeTemplates: { title: (n: string) => string; body: (n: string) => string }[] = [
@@ -1139,6 +1135,17 @@ export async function sendSuggestionNudges() {
       for (const ch of `${bestContact.id}${dayKey}`) hash = (hash * 31 + ch.charCodeAt(0)) >>> 0;
       const template = nudgeTemplates[hash % nudgeTemplates.length];
 
+      // Claim the window before the external APNs/Expo call. If this process dies
+      // after Apple accepts the push but before success is logged, the claim keeps
+      // a restart from sending an uncertain duplicate in the same hour.
+      const claimResult = await pool.query<{ id: string }>(
+        `INSERT INTO notification_log (user_id, contact_id, notif_type)
+         VALUES ($1, $2, 'suggestion_claim')
+         RETURNING id`,
+        [user.id, bestContact.id],
+      );
+      const claimId = claimResult.rows[0].id;
+
       const result = await sendPush(
         user.push_token,
         template.title(bestContact.name),
@@ -1146,14 +1153,29 @@ export async function sendSuggestionNudges() {
         { contactId: bestContact.id },
       );
       if (result === "expired") {
+        await pool.query(`DELETE FROM notification_log WHERE id = $1`, [claimId]);
         await clearExpiredPushToken(user.id, user.push_token);
         console.log(`[push]   → token expired; cleared from DB`);
       } else if (result) {
-        await logNotifiedContacts(user.id, new Set([bestContact.id]), "suggestion");
+        await pool.query(
+          `UPDATE notification_log
+           SET notif_type = 'suggestion_push', sent_at = NOW()
+           WHERE id = $1`,
+          [claimId],
+        );
         sent++;
         console.log(`[push]   → delivered OK`);
       } else {
+        await pool.query(`DELETE FROM notification_log WHERE id = $1`, [claimId]);
         console.log(`[push]   → delivery failed (Expo push service error)`);
+      }
+      } finally {
+        if (userLockAcquired) {
+          await lockClient
+            .query(`SELECT pg_advisory_unlock(hashtext($1))`, [`bridges:suggestion:${user.id}`])
+            .catch((err) => console.warn("[push] Failed to release suggestion advisory lock:", err));
+        }
+        lockClient.release();
       }
     }
 

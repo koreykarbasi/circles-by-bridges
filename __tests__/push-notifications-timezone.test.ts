@@ -17,6 +17,11 @@ jest.mock("../server/db", () => ({
   pool: { query: jest.fn() },
 }));
 
+jest.mock("jose", () => ({
+  importPKCS8: jest.fn(),
+  SignJWT: jest.fn(),
+}));
+
 jest.mock("drizzle-orm", () => ({
   isNotNull: jest.fn(),
   eq: jest.fn(),

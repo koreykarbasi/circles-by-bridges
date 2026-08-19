@@ -20,6 +20,11 @@ jest.mock("../server/db", () => ({
   pool: { query: jest.fn() },
 }));
 
+jest.mock("jose", () => ({
+  importPKCS8: jest.fn(),
+  SignJWT: jest.fn(),
+}));
+
 // drizzle-orm helpers used at module scope inside push-notifications.ts
 jest.mock("drizzle-orm", () => ({
   isNotNull: jest.fn(),

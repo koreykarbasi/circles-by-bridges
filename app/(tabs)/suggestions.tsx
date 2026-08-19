@@ -14,7 +14,7 @@ import { generateReminders, CHECKIN_THRESHOLDS, ELEVATION_PUSH_DELAY_HOURS, ELEV
 import { setElevation, getElevations, getExpiredElevations, clearElevation, ELEVATION_SCORE_BONUS, invalidateElevationCache } from "@/lib/checkin-state";
 import { snoozeContact, getSnoozedContacts, SNOOZE_DAYS } from "@/lib/reminder-snooze";
 import { getDaysSinceLastSuggestedSync, scoreSuggestion, isInCooldown } from "@/lib/suggestion-scheduler";
-import { useDismissedSuggestions, dismissSuggestion, clearDismissedSuggestions, useSchedulerDates, markContactSuggested, getCachedPrompt, setCachedPrompt, clearPromptCache } from "@/lib/suggestions-store";
+import { useDismissedSuggestions, dismissSuggestion, flushPendingSuggestionDismissals, persistSuggestionDismissal, useSchedulerDates, markContactSuggested, getCachedPrompt, setCachedPrompt, clearPromptCache } from "@/lib/suggestions-store";
 import { useDismissedReminders, dismissReminder, clearDismissedReminders } from "@/lib/dismissed-reminders-store";
 import type { Contact } from "@/lib/types";
 import type { Reminder } from "@/lib/reminders";
@@ -26,6 +26,8 @@ import { useAuth } from "@/lib/auth-context";
 import { scheduleReminderNotifications } from "@/lib/reminder-notifications";
 import { NoPhoneSheet } from "@/components/NoPhoneSheet";
 import * as BirthdayText from "@/lib/birthday-text";
+import { queryClient } from "@/lib/query-client";
+import { useQuery } from "@tanstack/react-query";
 
 interface GeneratedSuggestion {
   contact: Contact;
@@ -34,6 +36,12 @@ interface GeneratedSuggestion {
   urgency: "overdue" | "soon" | "ok";
   birthdayLabel?: string;
   lastContactedLabel?: string;
+}
+
+interface PrioritySuggestionResponse {
+  contactIds: string[];
+  dismissedContactIds: string[];
+  generatedAt: string;
 }
 
 function buildSuggestion(contact: Contact): GeneratedSuggestion {
@@ -94,6 +102,12 @@ export default function SuggestionsScreen() {
   const [refreshKey, setRefreshKey] = useState(0);
   const [shuffleJitter, setShuffleJitter] = useState<Record<string, number>>({});
   const completedIds = useDismissedSuggestions();
+  const { data: prioritySuggestions } = useQuery<PrioritySuggestionResponse>({
+    queryKey: ["/api/suggestions/priority"],
+    enabled: !!user,
+    staleTime: 0,
+    refetchOnMount: "always",
+  });
   const lastSuggestedDates = useSchedulerDates();
   const completedReminderIds = useDismissedReminders();
   const [cardPrompts, setCardPrompts] = useState<Record<string, GeneratedSuggestion>>({});
@@ -114,6 +128,9 @@ export default function SuggestionsScreen() {
 
   useEffect(() => {
     loadSyncedPrompts();
+    flushPendingSuggestionDismissals().then((synced) => {
+      if (synced) queryClient.invalidateQueries({ queryKey: ["/api/suggestions/priority"] });
+    });
     getSnoozedContacts().then(setSnoozedContacts);
     const now = Date.now();
     getElevations().then((elevations) => {
@@ -207,6 +224,9 @@ export default function SuggestionsScreen() {
   }, [contacts, filterCircle, completedReminderIds, elevatedContactTypes, snoozedContacts]);
 
   const rankedContacts = useMemo(() => {
+    const serverDismissedIds = new Set(prioritySuggestions?.dismissedContactIds ?? []);
+    const isDismissed = (contactId: string) =>
+      completedIds.has(contactId) || serverDismissedIds.has(contactId);
     const filtered = filterCircle
       ? contacts.filter((c) => c.circleLevel === filterCircle)
       : contacts;
@@ -219,7 +239,7 @@ export default function SuggestionsScreen() {
       return isInCooldown(c.circleLevel as 1 | 2 | 3, daysSinceLastSug);
     };
 
-    const base = filtered.filter((c) => !isSessionSkipped(c) && !completedIds.has(c.id));
+    const base = filtered.filter((c) => !isSessionSkipped(c) && !isDismissed(c.id));
     const eligible = base.filter((c) => !inCooldown(c));
 
     const rankContact = (c: typeof contacts[0]) => {
@@ -250,7 +270,7 @@ export default function SuggestionsScreen() {
     return [...rankedEligible, ...rankedCooldown]
       .slice(0, SUGGESTION_MAX)
       .map((x) => x.contact);
-  }, [contacts, filterCircle, lastSuggestedDates, elevationMap, sessionSkippedIds, completedIds]);
+  }, [contacts, filterCircle, lastSuggestedDates, elevationMap, sessionSkippedIds, completedIds, prioritySuggestions]);
 
   useEffect(() => {
     const next: Record<string, number> = {};
@@ -292,11 +312,14 @@ export default function SuggestionsScreen() {
   }, [rankedContacts, cardPrompts]);
 
   const suggestions = useMemo(() => {
+    const serverDismissedIds = new Set(prioritySuggestions?.dismissedContactIds ?? []);
     return rankedContacts
-      .filter((contact) => !completedIds.has(contact.id))
+      .filter((contact) => (
+        !completedIds.has(contact.id) && !serverDismissedIds.has(contact.id)
+      ))
       .map((contact) => cardPrompts[contact.id])
       .filter((s): s is GeneratedSuggestion => !!s);
-  }, [rankedContacts, completedIds, cardPrompts]);
+  }, [rankedContacts, completedIds, cardPrompts, prioritySuggestions]);
 
   const suggestionKeyRef = useRef<string>("");
   useEffect(() => {
@@ -364,23 +387,23 @@ export default function SuggestionsScreen() {
       // if (cardPrompts[contactId]?.type === "hangout") {
       //   markHangout(contactId);
       // }
-      dismissSuggestion(contactId);
+      const circleLevel = contacts.find((contact) => contact.id === contactId)?.circleLevel;
+      dismissSuggestion(contactId, circleLevel === 1 || circleLevel === 2 ? circleLevel : 3);
       setSessionSkippedIds((prev) => new Set(prev).add(contactId));
       markContactSuggested(contactId).catch(() => {});
     },
-    [markContacted, cardPrompts],
+    [markContacted, cardPrompts, contacts],
   );
 
   const handleSwipeDismiss = useCallback((contactId: string) => {
-    dismissSuggestion(contactId);
+    const circleLevel = contacts.find((contact) => contact.id === contactId)?.circleLevel;
+    dismissSuggestion(contactId, circleLevel === 1 || circleLevel === 2 ? circleLevel : 3);
     markContactSuggested(contactId).catch(() => {});
     // Tell the server so the push-notification picker respects the cooldown too
-    fetch("/api/suggestions/dismiss", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ contactId }),
-    }).catch(() => {});
-  }, []);
+    persistSuggestionDismissal(contactId)
+      .then(() => queryClient.invalidateQueries({ queryKey: ["/api/suggestions/priority"] }))
+      .catch(() => {});
+  }, [contacts]);
 
   useEffect(() => {
     return () => {
@@ -576,7 +599,6 @@ export default function SuggestionsScreen() {
           onPress={() => {
             Haptics.selectionAsync();
             setFilterCircle(null);
-            clearDismissedSuggestions();
             clearDismissedReminders();
             setCardPrompts({});
           }}
@@ -603,7 +625,6 @@ export default function SuggestionsScreen() {
               onPress={() => {
                 Haptics.selectionAsync();
                 setFilterCircle(level);
-                clearDismissedSuggestions();
                 clearDismissedReminders();
                 setCardPrompts({});
               }}

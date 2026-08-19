@@ -8,9 +8,16 @@ import rateLimit from "express-rate-limit";
 import crypto from "crypto";
 import { pool } from "./db";
 import { getPrompts, syncFromSheet } from "./prompts-sync";
-import { sendHangoutFinalizedNotifications, sendSuggestionNudges, sendDailyReminders, sendRemindersForUser } from "./push-notifications";
+import {
+  getPrioritySuggestionCohort,
+  sendHangoutFinalizedNotifications,
+  sendSuggestionNudges,
+  sendDailyReminders,
+  sendRemindersForUser,
+} from "./push-notifications";
 import { sendPasswordResetEmail, sendHangoutCalendarInvite } from "./email";
 import type { InsertContact } from "@shared/schema";
+import { CIRCLE_COOLDOWN_DAYS } from "@shared/suggestion-priority";
 import * as chrono from "chrono-node";
 import { createRemoteJWKSet, jwtVerify } from "jose";
 
@@ -987,6 +994,51 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  app.get("/api/suggestions/priority", requireAuth, async (req, res) => {
+    try {
+      const userId = req.session.userId!;
+      const timezoneResult = await pool.query<{ notification_timezone: string | null }>(
+        `SELECT notification_timezone FROM users WHERE id = $1`,
+        [userId],
+      );
+      const timezone = timezoneResult.rows[0]?.notification_timezone ?? "UTC";
+      const [cohort, dismissalResult] = await Promise.all([
+        getPrioritySuggestionCohort(userId, timezone),
+        pool.query<{
+          contact_id: string;
+          circle_level: number;
+          dismissed_at: string | Date;
+        }>(
+          `SELECT nl.contact_id, c.circle_level, MAX(nl.sent_at) AS dismissed_at
+           FROM notification_log nl
+           INNER JOIN contacts c ON c.id = nl.contact_id AND c.user_id = nl.user_id
+           WHERE nl.user_id = $1
+             AND nl.notif_type = 'suggestion_dismissed'
+             AND nl.sent_at > NOW() - INTERVAL '15 days'
+           GROUP BY nl.contact_id, c.circle_level`,
+          [userId],
+        ),
+      ]);
+      const now = Date.now();
+      const dismissedContactIds = dismissalResult.rows
+        .filter((row) => {
+          const circle = row.circle_level as 1 | 2 | 3;
+          if (![1, 2, 3].includes(circle)) return false;
+          const ageMs = now - new Date(row.dismissed_at).getTime();
+          return ageMs < CIRCLE_COOLDOWN_DAYS[circle] * 86_400_000;
+        })
+        .map((row) => row.contact_id);
+      res.json({
+        contactIds: cohort.map((contact) => contact.id),
+        dismissedContactIds,
+        generatedAt: new Date().toISOString(),
+      });
+    } catch (err) {
+      console.error("Error loading priority suggestions:", err);
+      res.status(500).json({ message: "Failed to load priority suggestions" });
+    }
+  });
+
   // Records a client-side swipe-dismiss so the server's push-notification picker
   // respects the same cooldown window and doesn't re-surface the contact immediately.
   app.post("/api/suggestions/dismiss", requireAuth, async (req, res) => {
@@ -996,7 +1048,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return bad(res, "contactId is required");
       }
       await pool.query(
-        `INSERT INTO notification_log (user_id, contact_id, notif_type) VALUES ($1, $2, 'suggestion')`,
+        `INSERT INTO notification_log (user_id, contact_id, notif_type) VALUES ($1, $2, 'suggestion_dismissed')`,
         [req.session.userId!, contactId.trim()],
       );
       res.json({ ok: true });

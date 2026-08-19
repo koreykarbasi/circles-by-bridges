@@ -36,7 +36,7 @@ async function getCooldownBlockedIds(userId: string): Promise<Set<string>> {
      FROM notification_log nl
      JOIN contacts c ON c.id = nl.contact_id AND c.user_id = $1
      WHERE nl.user_id = $1
-       AND nl.notif_type IN ('suggestion', 'elevation')
+       AND nl.notif_type IN ('suggestion_dismissed', 'suggestion', 'elevation')
        AND (
          (c.circle_level = 1 AND nl.sent_at > NOW() - INTERVAL '7 days')  OR
          (c.circle_level = 2 AND nl.sent_at > NOW() - INTERVAL '5 days')  OR
@@ -84,7 +84,7 @@ async function main() {
   if (testContactIds.length > 0) {
     await pool.query(
       `DELETE FROM notification_log
-       WHERE user_id = $1 AND contact_id = ANY($2) AND notif_type = 'suggestion'
+       WHERE user_id = $1 AND contact_id = ANY($2) AND notif_type = 'suggestion_dismissed'
          AND sent_at > NOW() - INTERVAL '20 days'`,
       [userId, testContactIds],
     );
@@ -146,7 +146,7 @@ async function main() {
     // Update the C1 entry to 8 days ago
     await pool.query(
       `UPDATE notification_log SET sent_at = NOW() - INTERVAL '8 days'
-       WHERE user_id = $1 AND contact_id = $2 AND notif_type = 'suggestion'`,
+       WHERE user_id = $1 AND contact_id = $2 AND notif_type = 'suggestion_dismissed'`,
       [userId, byCircle[1]],
     );
     const blocked = await getCooldownBlockedIds(userId);
@@ -158,7 +158,7 @@ async function main() {
   // ── Cleanup ────────────────────────────────────────────────────────────────
   await pool.query(
     `DELETE FROM notification_log
-     WHERE user_id = $1 AND contact_id = ANY($2) AND notif_type = 'suggestion'
+     WHERE user_id = $1 AND contact_id = ANY($2) AND notif_type = 'suggestion_dismissed'
        AND sent_at > NOW() - INTERVAL '20 days'`,
     [userId, testContactIds],
   );

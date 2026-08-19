@@ -1,20 +1,20 @@
 import { Platform } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import {
+  CIRCLE_COOLDOWN_DAYS,
+  isSuggestionInCooldown,
+  scorePrioritySuggestion,
+} from "@shared/suggestion-priority";
 
 const SCHEDULER_KEY = "bridges_suggestion_scheduler_v2";
 
-export const CIRCLE_COOLDOWN_DAYS: Record<1 | 2 | 3, number> = {
-  1: 7,
-  2: 5,
-  3: 15,
-};
+export { CIRCLE_COOLDOWN_DAYS };
 
 export function isInCooldown(
   circleLevel: 1 | 2 | 3,
   daysSinceLastSuggested: number | null,
 ): boolean {
-  if (daysSinceLastSuggested === null) return false;
-  return daysSinceLastSuggested < CIRCLE_COOLDOWN_DAYS[circleLevel];
+  return isSuggestionInCooldown(circleLevel, daysSinceLastSuggested);
 }
 
 interface SchedulerData {
@@ -112,40 +112,10 @@ export function scoreSuggestion(
   _daysUntilBirthday: number | null,
   elevationBonus?: number,
 ): number {
-  let score = 0;
-
-  // C2 = most frequent (short 3d cooldown + highest base); C1 slightly above C3
-  // Gaps are narrow so recency/cooldown factors can easily override circle level
-  if (circleLevel === 2) score += 1150;
-  else if (circleLevel === 1) score += 1100;
-  else score += 1000;
-
-  // Cooldown bonus: rewards contacts not recently surfaced in the suggestions UI.
-  // Capped lower so it doesn't dominate over real-world recency.
-  if (daysSinceLastSuggested === null) {
-    score += 150;
-  } else {
-    score += Math.min(daysSinceLastSuggested * 12, 150);
-  }
-
-  // Fresh-contact penalty: contacts spoken to very recently don't need attention.
-  // Kicks in only within a circle-appropriate window; tapers linearly to zero at
-  // the window edge so there's no cliff. C2 contacted today loses 250pts — a C3
-  // not spoken to in 10+ days will rank above them.
-  const FRESH_THRESHOLD: Record<1 | 2 | 3, number> = { 1: 2, 2: 5, 3: 10 };
-  const freshThreshold = FRESH_THRESHOLD[circleLevel];
-  if (daysSinceContact !== null && daysSinceContact < freshThreshold) {
-    score -= (freshThreshold - daysSinceContact) * 50;
-  }
-
-  // Recency bonus: primary signal — how long since you actually spoke to this person.
-  if (daysSinceContact !== null) {
-    score += Math.min(daysSinceContact * 6, 450);
-  } else {
-    score += 40;
-  }
-
-  if (elevationBonus) score += elevationBonus;
-
-  return score;
+  return scorePrioritySuggestion(
+    circleLevel,
+    daysSinceLastSuggested,
+    daysSinceContact,
+    elevationBonus ?? 0,
+  );
 }

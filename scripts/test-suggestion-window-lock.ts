@@ -58,7 +58,7 @@ async function main() {
     await pool.query(
       `DELETE FROM notification_log
        WHERE user_id = $1
-         AND notif_type = 'suggestion'
+         AND notif_type IN ('suggestion_push', 'suggestion')
          AND sent_at >= (date_trunc('hour', NOW() AT TIME ZONE $2) AT TIME ZONE $2)`,
       [user.id, tz],
     );
@@ -66,7 +66,7 @@ async function main() {
     const r = await pool.query<{ count: string }>(
       `SELECT COUNT(*) AS count FROM notification_log
        WHERE user_id = $1
-         AND notif_type = 'suggestion'
+          AND notif_type IN ('suggestion_push', 'suggestion')
          AND sent_at >= (date_trunc('hour', NOW() AT TIME ZONE $2) AT TIME ZONE $2)`,
       [user.id, tz],
     );
@@ -85,14 +85,14 @@ async function main() {
     insertedContactId = contactResult.rows[0]?.id ?? "test-contact-id";
 
     await pool.query(
-      `INSERT INTO notification_log (user_id, contact_id, notif_type) VALUES ($1, $2, 'suggestion')`,
+      `INSERT INTO notification_log (user_id, contact_id, notif_type) VALUES ($1, $2, 'suggestion_push')`,
       [user.id, insertedContactId],
     );
 
     const r = await pool.query<{ count: string }>(
       `SELECT COUNT(*) AS count FROM notification_log
        WHERE user_id = $1
-         AND notif_type = 'suggestion'
+          AND notif_type IN ('suggestion_push', 'suggestion')
          AND sent_at >= (date_trunc('hour', NOW() AT TIME ZONE $2) AT TIME ZONE $2)`,
       [user.id, tz],
     );
@@ -108,20 +108,20 @@ async function main() {
     await pool.query(
       `DELETE FROM notification_log
        WHERE user_id = $1
-         AND notif_type = 'suggestion'
+          AND notif_type IN ('suggestion_push', 'suggestion')
          AND sent_at >= (date_trunc('hour', NOW() AT TIME ZONE $2) AT TIME ZONE $2)`,
       [user.id, tz],
     );
     await pool.query(
       `INSERT INTO notification_log (user_id, contact_id, notif_type, sent_at)
-       VALUES ($1, $2, 'suggestion', NOW() - INTERVAL '2 hours')`,
+       VALUES ($1, $2, 'suggestion_push', NOW() - INTERVAL '2 hours')`,
       [user.id, insertedContactId],
     );
 
     const r = await pool.query<{ count: string }>(
       `SELECT COUNT(*) AS count FROM notification_log
        WHERE user_id = $1
-         AND notif_type = 'suggestion'
+          AND notif_type IN ('suggestion_push', 'suggestion')
          AND sent_at >= (date_trunc('hour', NOW() AT TIME ZONE $2) AT TIME ZONE $2)`,
       [user.id, tz],
     );
@@ -133,7 +133,7 @@ async function main() {
   await pool.query(
     `DELETE FROM notification_log
      WHERE user_id = $1
-       AND notif_type = 'suggestion'
+        AND notif_type = 'suggestion_push'
        AND contact_id = $2
        AND sent_at > NOW() - INTERVAL '3 hours'`,
     [user.id, insertedContactId],

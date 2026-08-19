@@ -1134,6 +1134,45 @@ function getDaysUntilBirthdayInTz(birthday, timezone) {
 }
 
 // server/push-notifications.ts
+import { importPKCS8, SignJWT } from "jose";
+import http2 from "http2";
+
+// shared/suggestion-priority.ts
+var PRIORITY_COHORT_SIZE = 3;
+var CIRCLE_COOLDOWN_DAYS = {
+  1: 7,
+  2: 5,
+  3: 15
+};
+var ELEVATION_SCORE_BONUS = {
+  1: 3e3,
+  2: 1500,
+  3: 1001
+};
+function scorePrioritySuggestion(circleLevel, daysSinceLastSuggested, daysSinceContact, elevationBonus = 0) {
+  let score = circleLevel === 2 ? 1150 : circleLevel === 1 ? 1100 : 1e3;
+  if (daysSinceLastSuggested === null) {
+    score += 150;
+  } else {
+    score += Math.min(daysSinceLastSuggested * 12, 150);
+  }
+  const freshThreshold = { 1: 2, 2: 5, 3: 10 };
+  if (daysSinceContact !== null && daysSinceContact < freshThreshold[circleLevel]) {
+    score -= (freshThreshold[circleLevel] - daysSinceContact) * 50;
+  }
+  if (daysSinceContact !== null) {
+    score += Math.min(daysSinceContact * 6, 450);
+  } else {
+    score += 40;
+  }
+  return score + elevationBonus;
+}
+function selectSuggestionForDelivery(priorityCohort, lastSuccessfulContactIds) {
+  const recentlyDelivered = new Set(lastSuccessfulContactIds.slice(0, 2));
+  return priorityCohort.find((contact) => !recentlyDelivered.has(contact.id)) ?? priorityCohort.find((contact) => contact.id !== lastSuccessfulContactIds[0]) ?? priorityCohort[0];
+}
+
+// server/push-notifications.ts
 function buildBirthdayDayOfMessages(contact, timezone) {
   const messages = [];
   const daysUntil = getDaysUntilBirthdayInTz(contact.birthday, timezone);
@@ -1320,7 +1359,9 @@ async function logNotifiedContacts(userId, contactIds, notifType) {
 async function pruneOldNotificationLog() {
   try {
     await pool.query(
-      `DELETE FROM notification_log WHERE sent_at < NOW() - INTERVAL '7 days' AND notif_type NOT IN ('suggestion', 'suggestion_cycle_reset')`
+      `DELETE FROM notification_log
+       WHERE sent_at < NOW() - INTERVAL '7 days'
+         AND notif_type NOT IN ('suggestion', 'suggestion_push', 'suggestion_dismissed')`
     );
     await pool.query(
       `DELETE FROM notification_log WHERE sent_at < NOW() - INTERVAL '60 days'`
@@ -1372,6 +1413,95 @@ async function sendExpoPush(token, title, body, data) {
     console.error("[push] Failed to send notification:", err);
     return false;
   }
+}
+var _apnsJwt = null;
+var _apnsJwtIssuedAt = 0;
+var _apnsClient = null;
+async function getApnsJwt() {
+  const now = Math.floor(Date.now() / 1e3);
+  if (_apnsJwt && now - _apnsJwtIssuedAt < 55 * 60) return _apnsJwt;
+  const keyP8 = process.env.APNS_AUTH_KEY_P8;
+  const keyId = process.env.APNS_KEY_ID ?? "A95GG3Y47Y";
+  const teamId = process.env.APNS_TEAM_ID ?? "5BJJ2KP2X5";
+  if (!keyP8) throw new Error("[push] APNS_AUTH_KEY_P8 secret is not set");
+  const privateKey = await importPKCS8(keyP8, "ES256");
+  _apnsJwt = await new SignJWT({}).setProtectedHeader({ alg: "ES256", kid: keyId }).setIssuedAt().setIssuer(teamId).sign(privateKey);
+  _apnsJwtIssuedAt = now;
+  return _apnsJwt;
+}
+function getApnsClient() {
+  if (!_apnsClient || _apnsClient.destroyed) {
+    _apnsClient = http2.connect("https://api.push.apple.com");
+    _apnsClient.on("error", (err) => {
+      console.error("[push] APNs HTTP/2 connection error:", err);
+      _apnsClient = null;
+    });
+  }
+  return _apnsClient;
+}
+async function sendApnsPush(deviceToken, title, body) {
+  try {
+    const jwt = await getApnsJwt();
+    const bundleId = process.env.APNS_BUNDLE_ID ?? "app.replit.bridges";
+    const client = getApnsClient();
+    const payload = JSON.stringify({ aps: { alert: { title, body }, sound: "default" } });
+    return new Promise((resolve3) => {
+      const req = client.request({
+        ":method": "POST",
+        ":path": `/3/device/${deviceToken}`,
+        ":scheme": "https",
+        ":authority": "api.push.apple.com",
+        "authorization": `bearer ${jwt}`,
+        "apns-topic": bundleId,
+        "apns-push-type": "alert",
+        "content-type": "application/json",
+        "content-length": String(Buffer.byteLength(payload))
+      });
+      let status = 0;
+      let responseBody = "";
+      req.on("response", (h) => {
+        status = h[":status"];
+      });
+      req.on("data", (chunk) => {
+        responseBody += chunk;
+      });
+      req.on("end", () => {
+        if (status === 200) {
+          resolve3(true);
+          return;
+        }
+        try {
+          const json = JSON.parse(responseBody);
+          if (json.reason === "Unregistered" || json.reason === "BadDeviceToken") {
+            console.warn(`[push] APNs ${json.reason} for token ${deviceToken.slice(0, 10)}\u2026`);
+            resolve3("expired");
+          } else {
+            console.error(`[push] APNs error ${status}: ${responseBody}`);
+            resolve3(false);
+          }
+        } catch {
+          console.error(`[push] APNs error ${status}: ${responseBody}`);
+          resolve3(false);
+        }
+      });
+      req.on("error", (err) => {
+        console.error("[push] APNs request error:", err);
+        _apnsClient = null;
+        resolve3(false);
+      });
+      req.write(payload);
+      req.end();
+    });
+  } catch (err) {
+    console.error("[push] sendApnsPush error:", err);
+    return false;
+  }
+}
+async function sendPush(token, title, body, data) {
+  if (token.startsWith("apns:")) {
+    return sendApnsPush(token.slice(5), title, body);
+  }
+  return sendExpoPush(token, title, body, data);
 }
 async function clearExpiredPushToken(userId, token) {
   try {
@@ -1463,7 +1593,7 @@ async function sendRemindersForUser(userId, pushToken, timezone) {
        FROM notification_log nl
        JOIN contacts c ON c.id = nl.contact_id AND c.user_id = $1
        WHERE nl.user_id = $1
-         AND nl.notif_type IN ('suggestion', 'elevation')
+         AND nl.notif_type IN ('suggestion_dismissed', 'suggestion', 'elevation')
          AND (
            (c.circle_level = 1 AND nl.sent_at > NOW() - INTERVAL '7 days')  OR
            (c.circle_level = 2 AND nl.sent_at > NOW() - INTERVAL '5 days')  OR
@@ -1528,7 +1658,7 @@ async function sendRemindersForUser(userId, pushToken, timezone) {
   const notifiedByType = /* @__PURE__ */ new Map();
   let sent = 0;
   for (const msg of toSend) {
-    const result = await sendExpoPush(
+    const result = await sendPush(
       pushToken,
       msg.title,
       msg.body,
@@ -1594,24 +1724,74 @@ async function sendHangoutFinalizedNotifications(planId, organizerUserId) {
     console.error("[push] Error sending hangout finalized notifications:", err);
   }
 }
-function scoreSuggestionServer(circleLevel, daysSinceLastPushed, daysSinceContact) {
-  let score = circleLevel === 2 ? 1300 : circleLevel === 1 ? 1200 : 1100;
-  if (daysSinceLastPushed === null) {
-    score += 150;
-  } else {
-    score += Math.min(daysSinceLastPushed * 12, 150);
-  }
-  if (daysSinceContact !== null) {
-    score += Math.min(daysSinceContact * 2, 250);
-  } else {
-    score += 40;
-  }
-  return score;
+function isWithinNewContactGrace(contact, now) {
+  if (contact.lastContacted || !contact.createdAt) return false;
+  return now.getTime() - new Date(contact.createdAt).getTime() < 2 * 864e5;
 }
-function dedupWindowHours(frequency) {
-  if (frequency === "3x_week") return 60;
-  if (frequency === "weekly") return 144;
-  return 23;
+function hasHomeReminder(contact, timezone, now) {
+  const circle = contact.circleLevel;
+  if (![1, 2, 3].includes(circle)) return false;
+  const daysSinceContact = getDaysSince(contact.lastContacted);
+  const checkinThreshold = { 1: 14, 2: 45, 3: 75 }[circle];
+  const hasCheckinReminder = circle === 3 ? daysSinceContact !== null && daysSinceContact > checkinThreshold : !isWithinNewContactGrace(contact, now) && (daysSinceContact === null || daysSinceContact > checkinThreshold);
+  if (hasCheckinReminder) return true;
+  const reminderWindow = { 1: 30, 2: 7, 3: 0 }[circle];
+  const birthdayDays = getDaysUntilBirthdayInTz(contact.birthday, timezone);
+  if (birthdayDays !== null && birthdayDays >= 0 && birthdayDays <= reminderWindow) {
+    return true;
+  }
+  const customReminders = Array.isArray(contact.customReminders) ? contact.customReminders : [];
+  return customReminders.some((reminder) => {
+    const days = getDaysUntilBirthdayInTz(reminder.date, timezone);
+    return days !== null && days >= 0 && days <= reminderWindow;
+  });
+}
+async function getPrioritySuggestionCohort(userId, timezone = "UTC", now = /* @__PURE__ */ new Date()) {
+  const [userContacts, eventResult] = await Promise.all([
+    db.select().from(contacts).where(eq2(contacts.userId, userId)),
+    pool.query(
+      `SELECT contact_id, notif_type, sent_at
+       FROM notification_log
+       WHERE user_id = $1
+         AND notif_type IN ('suggestion_dismissed', 'elevation')
+         AND sent_at > NOW() - INTERVAL '15 days'
+       ORDER BY sent_at DESC`,
+      [userId]
+    )
+  ]);
+  const latestDismissal = /* @__PURE__ */ new Map();
+  const latestElevation = /* @__PURE__ */ new Map();
+  for (const event of eventResult.rows) {
+    if (!event.contact_id) continue;
+    const target = event.notif_type === "suggestion_dismissed" ? latestDismissal : latestElevation;
+    if (!target.has(event.contact_id)) target.set(event.contact_id, new Date(event.sent_at));
+  }
+  return userContacts.filter((contact) => {
+    const circle = contact.circleLevel;
+    if (![1, 2, 3].includes(circle) || hasHomeReminder(contact, timezone, now)) {
+      return false;
+    }
+    const dismissedAt = latestDismissal.get(contact.id);
+    if (!dismissedAt) return true;
+    const elapsedDays = (now.getTime() - dismissedAt.getTime()) / 864e5;
+    return elapsedDays >= CIRCLE_COOLDOWN_DAYS[circle];
+  }).map((contact) => {
+    const circle = contact.circleLevel;
+    const elevatedAt = latestElevation.get(contact.id);
+    const elevationAgeHours = elevatedAt ? (now.getTime() - elevatedAt.getTime()) / 36e5 : null;
+    const elevationDelay = { 1: 24, 2: 48, 3: 72 }[circle];
+    const elevationLifetime = { 1: 6, 2: 7, 3: 8 }[circle] * 24;
+    const elevationBonus = elevationAgeHours !== null && elevationAgeHours >= elevationDelay && elevationAgeHours < elevationLifetime ? ELEVATION_SCORE_BONUS[circle] : 0;
+    return {
+      ...contact,
+      score: scorePrioritySuggestion(
+        circle,
+        null,
+        getDaysSince(contact.lastContacted),
+        elevationBonus
+      )
+    };
+  }).sort((a, b) => b.score - a.score || a.name.localeCompare(b.name) || a.id.localeCompare(b.id)).slice(0, PRIORITY_COHORT_SIZE);
 }
 async function sendProfileCompletionPushes() {
   try {
@@ -1639,7 +1819,7 @@ async function sendProfileCompletionPushes() {
       );
       const missingCount = parseInt(c1NoBirthday.rows[0]?.count ?? "0", 10);
       if (missingCount === 0) continue;
-      const result = await sendExpoPush(
+      const result = await sendPush(
         user.pushToken,
         "Complete your Bridges profile",
         "Some of your Core contacts are missing birthdays \u2014 add them to unlock reminders."
@@ -1696,140 +1876,101 @@ async function sendSuggestionNudges() {
         console.log(`[push]   \u2192 skip: weekly day mismatch (day ${localDayOfWeek})`);
         continue;
       }
+      const lockClient = await pool.connect();
+      let userLockAcquired = false;
       try {
-        const windowLockResult = await pool.query(
-          `SELECT COUNT(*) AS count FROM notification_log
-           WHERE user_id = $1
-             AND notif_type = 'suggestion'
-             AND sent_at >= (date_trunc('hour', NOW() AT TIME ZONE $2) AT TIME ZONE $2)`,
-          [user.id, tz]
+        const advisoryResult = await lockClient.query(
+          `SELECT pg_try_advisory_lock(hashtext($1)) AS acquired`,
+          [`bridges:suggestion:${user.id}`]
         );
-        const alreadySentThisWindow = parseInt(windowLockResult.rows[0]?.count ?? "0", 10) > 0;
-        if (alreadySentThisWindow) {
-          console.log(`[push]   \u2192 skip: suggestion already sent in this ${preferredHour}:xx window`);
+        userLockAcquired = advisoryResult.rows[0]?.acquired === true;
+        if (!userLockAcquired) {
+          console.log(`[push]   \u2192 skip: another process is handling this user's suggestion window`);
           continue;
         }
-      } catch (lockErr) {
-        console.warn(`[push]   window lock check failed (non-fatal):`, lockErr);
-      }
-      const windowHours = dedupWindowHours(freq);
-      const recentResult = await pool.query(
-        `SELECT DISTINCT contact_id FROM notification_log
-         WHERE user_id = $1 AND sent_at > NOW() - make_interval(hours => $2)
-           AND notif_type IN ('suggestion', 'elevation')`,
-        [user.id, windowHours]
-      );
-      const recentContactIds = new Set(recentResult.rows.map((r) => r.contact_id));
-      const contactsResult = await pool.query(
-        `SELECT id, name, circle_level, last_contacted FROM contacts WHERE user_id = $1`,
-        [user.id]
-      );
-      if (contactsResult.rows.length === 0) {
-        console.log(`[push]   \u2192 skip: no contacts`);
-        continue;
-      }
-      const cycleResetResult = await pool.query(
-        `SELECT MAX(sent_at) AS sent_at FROM notification_log
-         WHERE user_id = $1 AND notif_type = 'suggestion_cycle_reset'`,
-        [user.id]
-      );
-      const cycleStartAt = cycleResetResult.rows[0]?.sent_at ?? null;
-      const cycleResult2 = cycleStartAt ? await pool.query(
-        `SELECT DISTINCT contact_id FROM notification_log
-             WHERE user_id = $1 AND notif_type = 'suggestion' AND sent_at > $2`,
-        [user.id, cycleStartAt]
-      ) : await pool.query(
-        `SELECT DISTINCT contact_id FROM notification_log
-             WHERE user_id = $1 AND notif_type = 'suggestion'`,
-        [user.id]
-      );
-      const alreadyNudgedInCycle = new Set(cycleResult2.rows.map((r) => r.contact_id));
-      const allContactIds = new Set(contactsResult.rows.map((c) => c.id));
-      const allNudgedThisCycle = [...allContactIds].every((id) => alreadyNudgedInCycle.has(id));
-      if (allNudgedThisCycle) {
-        console.log(`[push]   \u2192 cycle complete (${allContactIds.size} contacts nudged) \u2014 starting new cycle`);
         try {
-          await pool.query(
-            `INSERT INTO notification_log (user_id, contact_id, notif_type) VALUES ($1, $2, 'suggestion_cycle_reset')`,
-            [user.id, [...allContactIds][0] ?? "system"]
+          const windowLockResult = await pool.query(
+            `SELECT COUNT(*) AS count FROM notification_log
+           WHERE user_id = $1
+               AND notif_type IN ('suggestion_claim', 'suggestion_push', 'suggestion')
+             AND sent_at >= (date_trunc('hour', NOW() AT TIME ZONE $2) AT TIME ZONE $2)`,
+            [user.id, tz]
           );
-        } catch {
+          const alreadySentThisWindow = parseInt(windowLockResult.rows[0]?.count ?? "0", 10) > 0;
+          if (alreadySentThisWindow) {
+            console.log(`[push]   \u2192 skip: suggestion already sent in this ${preferredHour}:xx window`);
+            continue;
+          }
+        } catch (lockErr) {
+          console.warn(`[push]   window lock check failed (non-fatal):`, lockErr);
         }
-        alreadyNudgedInCycle.clear();
-      }
-      const lastPushedResult = await pool.query(
-        `SELECT contact_id, MAX(sent_at) AS last_sent
-         FROM notification_log WHERE user_id = $1 AND notif_type = 'suggestion' GROUP BY contact_id`,
-        [user.id]
-      );
-      const lastPushedMap = new Map(
-        lastPushedResult.rows.map((r) => [r.contact_id, r.last_sent])
-      );
-      const scored = [];
-      let skippedDedup = 0;
-      let skippedCycle = 0;
-      for (const c of contactsResult.rows) {
-        const inDedup = recentContactIds.has(c.id);
-        const inCycle = alreadyNudgedInCycle.has(c.id);
-        if (inDedup) {
-          skippedDedup++;
+        const priorityCohort = await getPrioritySuggestionCohort(user.id, tz);
+        if (priorityCohort.length === 0) {
+          console.log(`[push]   \u2192 skip: no eligible contacts in priority cohort`);
           continue;
         }
-        if (inCycle) {
-          skippedCycle++;
-          continue;
+        const lastSuccessfulResult = await pool.query(
+          `SELECT contact_id
+         FROM notification_log
+         WHERE user_id = $1
+           AND notif_type = 'suggestion_push'
+         ORDER BY sent_at DESC
+         LIMIT 2`,
+          [user.id]
+        );
+        const bestContact = selectSuggestionForDelivery(
+          priorityCohort,
+          lastSuccessfulResult.rows.map((row) => row.contact_id)
+        );
+        if (!bestContact) continue;
+        console.log(
+          `[push]   \u2192 cohort: ${priorityCohort.map((contact) => contact.name).join(", ")}; sending "${bestContact.name}" score=${bestContact.score}`
+        );
+        const nudgeTemplates = [
+          { title: (n) => `Time to reach out to ${n}`, body: () => "Open the app to see what to say." },
+          { title: (n) => `${n} is due for a check-in`, body: (n) => `It's been a while since you connected with ${n} \u2014 open Bridges for a suggestion.` },
+          { title: () => "A friendly nudge", body: (n) => `Thinking of ${n}? Open Bridges for a quick way to reach out.` },
+          { title: (n) => `Say hi to ${n}`, body: () => "Open Bridges for a suggestion on what to say." }
+        ];
+        const dayKey = (/* @__PURE__ */ new Date()).toISOString().slice(0, 10);
+        let hash = 0;
+        for (const ch of `${bestContact.id}${dayKey}`) hash = hash * 31 + ch.charCodeAt(0) >>> 0;
+        const template = nudgeTemplates[hash % nudgeTemplates.length];
+        const claimResult = await pool.query(
+          `INSERT INTO notification_log (user_id, contact_id, notif_type)
+         VALUES ($1, $2, 'suggestion_claim')
+         RETURNING id`,
+          [user.id, bestContact.id]
+        );
+        const claimId = claimResult.rows[0].id;
+        const result2 = await sendPush(
+          user.push_token,
+          template.title(bestContact.name),
+          template.body(bestContact.name),
+          { contactId: bestContact.id }
+        );
+        if (result2 === "expired") {
+          await pool.query(`DELETE FROM notification_log WHERE id = $1`, [claimId]);
+          await clearExpiredPushToken(user.id, user.push_token);
+          console.log(`[push]   \u2192 token expired; cleared from DB`);
+        } else if (result2) {
+          await pool.query(
+            `UPDATE notification_log
+           SET notif_type = 'suggestion_push', sent_at = NOW()
+           WHERE id = $1`,
+            [claimId]
+          );
+          sent++;
+          console.log(`[push]   \u2192 delivered OK`);
+        } else {
+          await pool.query(`DELETE FROM notification_log WHERE id = $1`, [claimId]);
+          console.log(`[push]   \u2192 delivery failed (Expo push service error)`);
         }
-        const lastPushed = lastPushedMap.get(c.id);
-        const daysSinceLastPushed = lastPushed ? Math.floor((Date.now() - new Date(lastPushed).getTime()) / (1e3 * 60 * 60 * 24)) : null;
-        const daysSinceContact = c.last_contacted ? Math.floor((Date.now() - new Date(c.last_contacted).getTime()) / (1e3 * 60 * 60 * 24)) : null;
-        const score = scoreSuggestionServer(c.circle_level, daysSinceLastPushed, daysSinceContact);
-        scored.push({
-          id: c.id,
-          name: c.name,
-          score,
-          inCycle,
-          lastPushedAt: lastPushed ? new Date(lastPushed).getTime() : 0
-        });
-      }
-      console.log(
-        `[push]   \u2192 pool: ${contactsResult.rows.length} total, ${scored.length} eligible this cycle, ${skippedDedup} in dedup window, ${skippedCycle} already nudged this cycle`
-      );
-      if (scored.length === 0) {
-        console.log(`[push]   \u2192 skip: no eligible contacts in current cycle`);
-        continue;
-      }
-      scored.sort((a, b) => {
-        if (b.score !== a.score) return b.score - a.score;
-        return a.lastPushedAt - b.lastPushedAt;
-      });
-      const bestContact = { id: scored[0].id, name: scored[0].name };
-      const bestScore = scored[0].score;
-      console.log(`[push]   \u2192 sending to user ${user.id.slice(0, 8)} for contact "${bestContact.id.slice(0, 8)}" score=${bestScore} (${scored.length} eligible in cycle)`);
-      const nudgeTemplates = [
-        { title: (n) => `Time to reach out to ${n}`, body: () => "Open the app to see what to say." },
-        { title: (n) => `${n} is due for a check-in`, body: (n) => `It's been a while since you connected with ${n} \u2014 open Bridges for a suggestion.` },
-        { title: () => "A friendly nudge", body: (n) => `Thinking of ${n}? Open Bridges for a quick way to reach out.` },
-        { title: (n) => `Say hi to ${n}`, body: () => "Open Bridges for a suggestion on what to say." }
-      ];
-      const dayKey = (/* @__PURE__ */ new Date()).toISOString().slice(0, 10);
-      let hash = 0;
-      for (const ch of `${bestContact.id}${dayKey}`) hash = hash * 31 + ch.charCodeAt(0) >>> 0;
-      const template = nudgeTemplates[hash % nudgeTemplates.length];
-      const result2 = await sendExpoPush(
-        user.push_token,
-        template.title(bestContact.name),
-        template.body(bestContact.name),
-        { contactId: bestContact.id }
-      );
-      if (result2 === "expired") {
-        await clearExpiredPushToken(user.id, user.push_token);
-        console.log(`[push]   \u2192 token expired; cleared from DB`);
-      } else if (result2) {
-        await logNotifiedContacts(user.id, /* @__PURE__ */ new Set([bestContact.id]), "suggestion");
-        sent++;
-        console.log(`[push]   \u2192 delivered OK`);
-      } else {
-        console.log(`[push]   \u2192 delivery failed (Expo push service error)`);
+      } finally {
+        if (userLockAcquired) {
+          await lockClient.query(`SELECT pg_advisory_unlock(hashtext($1))`, [`bridges:suggestion:${user.id}`]).catch((err) => console.warn("[push] Failed to release suggestion advisory lock:", err));
+        }
+        lockClient.release();
       }
     }
     console.log(`[push] Suggestion nudge run complete: ${sent} sent`);
@@ -2036,7 +2177,7 @@ var APPLE_JWKS = createRemoteJWKSet(
   new URL("https://appleid.apple.com/auth/keys"),
   { cacheMaxAge: 10 * 60 * 1e3 }
 );
-var APPLE_BUNDLE_ID = "com.bridges.app";
+var APPLE_BUNDLE_ID = "app.replit.bridges";
 function requireAuth(req, res, next) {
   if (!req.session.userId) {
     return res.status(401).json({ message: "Not authenticated" });
@@ -3102,6 +3243,44 @@ async function registerRoutes(app2) {
       res.status(500).json({ message: "Failed to log notification" });
     }
   });
+  app2.get("/api/suggestions/priority", requireAuth, async (req, res) => {
+    try {
+      const userId = req.session.userId;
+      const timezoneResult = await pool.query(
+        `SELECT notification_timezone FROM users WHERE id = $1`,
+        [userId]
+      );
+      const timezone = timezoneResult.rows[0]?.notification_timezone ?? "UTC";
+      const [cohort, dismissalResult] = await Promise.all([
+        getPrioritySuggestionCohort(userId, timezone),
+        pool.query(
+          `SELECT nl.contact_id, c.circle_level, MAX(nl.sent_at) AS dismissed_at
+           FROM notification_log nl
+           INNER JOIN contacts c ON c.id = nl.contact_id AND c.user_id = nl.user_id
+           WHERE nl.user_id = $1
+             AND nl.notif_type = 'suggestion_dismissed'
+             AND nl.sent_at > NOW() - INTERVAL '15 days'
+           GROUP BY nl.contact_id, c.circle_level`,
+          [userId]
+        )
+      ]);
+      const now = Date.now();
+      const dismissedContactIds = dismissalResult.rows.filter((row) => {
+        const circle = row.circle_level;
+        if (![1, 2, 3].includes(circle)) return false;
+        const ageMs = now - new Date(row.dismissed_at).getTime();
+        return ageMs < CIRCLE_COOLDOWN_DAYS[circle] * 864e5;
+      }).map((row) => row.contact_id);
+      res.json({
+        contactIds: cohort.map((contact) => contact.id),
+        dismissedContactIds,
+        generatedAt: (/* @__PURE__ */ new Date()).toISOString()
+      });
+    } catch (err) {
+      console.error("Error loading priority suggestions:", err);
+      res.status(500).json({ message: "Failed to load priority suggestions" });
+    }
+  });
   app2.post("/api/suggestions/dismiss", requireAuth, async (req, res) => {
     try {
       const { contactId } = req.body;
@@ -3109,7 +3288,7 @@ async function registerRoutes(app2) {
         return bad(res, "contactId is required");
       }
       await pool.query(
-        `INSERT INTO notification_log (user_id, contact_id, notif_type) VALUES ($1, $2, 'suggestion')`,
+        `INSERT INTO notification_log (user_id, contact_id, notif_type) VALUES ($1, $2, 'suggestion_dismissed')`,
         [req.session.userId, contactId.trim()]
       );
       res.json({ ok: true });
