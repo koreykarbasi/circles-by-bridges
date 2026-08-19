@@ -5,11 +5,11 @@ description: Durable rules for keeping Home suggestions, push rotation, swipe co
 
 ## Authoritative priority cohort
 
-**Rule:** Home and scheduled suggestion pushes must use the same server-owned priority cohort and shared pure scoring formula. Reminder contacts stay outside that cohort.
+**Rule:** Home owns and renders its own three-card suggestion ranking, then publishes that exact order as a one-way snapshot. API push IDs must never replace, reorder, or truncate Home cards.
 
-**Why:** Separate client/server ranking and full-contact rotation caused pushes for contacts who were not among the suggestions the user could see on Home.
+**Why:** Making Home render a push-only server cohort caused it to show only two cards and disagree with the Suggestions tab when push eligibility excluded reminder contacts.
 
-**How to apply:** Any new ranking signal or reminder exclusion must be available to both surfaces through the shared cohort rather than copied into a second scorer.
+**How to apply:** Share scoring rules, not UI ownership. The scheduler reads Home's durable snapshot and applies reminder conflicts only afterward. Snapshot state must be exempt from historical notification-log pruning.
 
 ## Rotation and event identity
 

@@ -28,7 +28,7 @@ import { getTextCopyMessage } from "@/components/SuggestionCard";
 import * as Clipboard from "expo-clipboard";
 import { router, useFocusEffect } from "expo-router";
 import { useQuery } from "@tanstack/react-query";
-import { queryClient } from "@/lib/query-client";
+import { apiRequest, queryClient } from "@/lib/query-client";
 import { getViewedTimestamps, hasUnreadVotes } from "@/lib/hangout-notifications";
 import { useSequentialHints, HINT_TEXT } from "@/lib/hints-store";
 import { HintTooltip } from "@/components/HintTooltip";
@@ -319,17 +319,12 @@ export default function HomeScreen() {
   );
 
   const suggestions = useMemo(() => {
-    if (prioritySuggestions) {
-      const contactsById = new Map(contacts.map((contact) => [contact.id, contact]));
-      return prioritySuggestions.contactIds
-        .map((contactId) => contactsById.get(contactId))
-        .filter((contact): contact is typeof contacts[0] => (
-          !!contact && !dismissedSuggestions.has(contact.id)
-        ))
-        .slice(0, MAX_SUGGESTIONS)
-        .map((contact) => getSuggestionForContact(contact));
-    }
-
+    // Home owns its visible ranking. The server response is used only to keep
+    // swipe dismissals in sync across sessions/devices; its push-delivery
+    // contactIds must never replace or truncate the Home cards.
+    const serverDismissedIds = new Set(prioritySuggestions?.dismissedContactIds ?? []);
+    const isDismissed = (contactId: string) =>
+      dismissedSuggestions.has(contactId) || serverDismissedIds.has(contactId);
     const reminderContactIds = new Set(visibleReminders.map((r) => r.contactId));
 
     const eligible = contacts.filter((c) => {
@@ -371,12 +366,43 @@ export default function HomeScreen() {
     });
 
     const visible = [...rankedEligible, ...rankedCooldown]
-      .filter((x) => !dismissedSuggestions.has(x.contact.id))
+      .filter((x) => !isDismissed(x.contact.id))
       .slice(0, MAX_SUGGESTIONS)
       .map((x) => x.contact);
 
     return visible.map((c) => getSuggestionForContact(c));
   }, [contacts, dismissedSuggestions, visibleReminders, getSuggestionForContact, lastSuggestedDates, elevationMap, prioritySuggestions]);
+
+  // Publish the exact visible order so the closed-app scheduler can rotate only
+  // within what Home actually showed. Home still owns the UI; this is a one-way
+  // snapshot and the GET response never drives the cards.
+  const publishedPriorityKeyRef = useRef("");
+  useEffect(() => {
+    if (!user || suggestions.length === 0) return;
+    const contactIds = suggestions.map((suggestion) => suggestion.contactId);
+    const key = contactIds.join(",");
+    if (key === publishedPriorityKeyRef.current) return;
+
+    let cancelled = false;
+    let retryTimer: ReturnType<typeof setTimeout> | null = null;
+    const publish = (attempt: number) => {
+      apiRequest("POST", "/api/suggestions/priority", { contactIds })
+        .then(() => {
+          if (!cancelled) publishedPriorityKeyRef.current = key;
+        })
+        .catch(() => {
+          if (!cancelled && attempt < 2) {
+            retryTimer = setTimeout(() => publish(attempt + 1), 1000 * (attempt + 1));
+          }
+        });
+    };
+    publish(0);
+
+    return () => {
+      cancelled = true;
+      if (retryTimer) clearTimeout(retryTimer);
+    };
+  }, [suggestions, user]);
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);

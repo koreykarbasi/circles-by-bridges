@@ -1361,10 +1361,23 @@ async function pruneOldNotificationLog() {
     await pool.query(
       `DELETE FROM notification_log
        WHERE sent_at < NOW() - INTERVAL '7 days'
-         AND notif_type NOT IN ('suggestion', 'suggestion_push', 'suggestion_dismissed')`
+         AND notif_type NOT IN (
+           'suggestion',
+           'suggestion_push',
+           'suggestion_dismissed',
+           'suggestion_priority_1',
+           'suggestion_priority_2',
+           'suggestion_priority_3'
+         )`
     );
     await pool.query(
-      `DELETE FROM notification_log WHERE sent_at < NOW() - INTERVAL '60 days'`
+      `DELETE FROM notification_log
+       WHERE sent_at < NOW() - INTERVAL '60 days'
+         AND notif_type NOT IN (
+           'suggestion_priority_1',
+           'suggestion_priority_2',
+           'suggestion_priority_3'
+         )`
     );
   } catch {
   }
@@ -1746,8 +1759,8 @@ function hasHomeReminder(contact, timezone, now) {
     return days !== null && days >= 0 && days <= reminderWindow;
   });
 }
-async function getPrioritySuggestionCohort(userId, timezone = "UTC", now = /* @__PURE__ */ new Date()) {
-  const [userContacts, eventResult] = await Promise.all([
+async function getPrioritySuggestionCohort(userId, _timezone = "UTC", now = /* @__PURE__ */ new Date()) {
+  const [userContacts, eventResult, snapshotResult] = await Promise.all([
     db.select().from(contacts).where(eq2(contacts.userId, userId)),
     pool.query(
       `SELECT contact_id, notif_type, sent_at
@@ -1756,6 +1769,18 @@ async function getPrioritySuggestionCohort(userId, timezone = "UTC", now = /* @_
          AND notif_type IN ('suggestion_dismissed', 'elevation')
          AND sent_at > NOW() - INTERVAL '15 days'
        ORDER BY sent_at DESC`,
+      [userId]
+    ),
+    pool.query(
+      `SELECT contact_id, notif_type
+       FROM notification_log
+       WHERE user_id = $1
+         AND notif_type IN (
+           'suggestion_priority_1',
+           'suggestion_priority_2',
+           'suggestion_priority_3'
+         )
+       ORDER BY notif_type ASC`,
       [userId]
     )
   ]);
@@ -1766,11 +1791,9 @@ async function getPrioritySuggestionCohort(userId, timezone = "UTC", now = /* @_
     const target = event.notif_type === "suggestion_dismissed" ? latestDismissal : latestElevation;
     if (!target.has(event.contact_id)) target.set(event.contact_id, new Date(event.sent_at));
   }
-  return userContacts.filter((contact) => {
+  const rankedContacts = userContacts.filter((contact) => {
     const circle = contact.circleLevel;
-    if (![1, 2, 3].includes(circle) || hasHomeReminder(contact, timezone, now)) {
-      return false;
-    }
+    if (![1, 2, 3].includes(circle)) return false;
     const dismissedAt = latestDismissal.get(contact.id);
     if (!dismissedAt) return true;
     const elapsedDays = (now.getTime() - dismissedAt.getTime()) / 864e5;
@@ -1791,7 +1814,21 @@ async function getPrioritySuggestionCohort(userId, timezone = "UTC", now = /* @_
         elevationBonus
       )
     };
-  }).sort((a, b) => b.score - a.score || a.name.localeCompare(b.name) || a.id.localeCompare(b.id)).slice(0, PRIORITY_COHORT_SIZE);
+  }).sort((a, b) => b.score - a.score || a.name.localeCompare(b.name) || a.id.localeCompare(b.id));
+  const rankedById = new Map(rankedContacts.map((contact) => [contact.id, contact]));
+  const publishedContacts = [];
+  const publishedIds = /* @__PURE__ */ new Set();
+  for (const row of snapshotResult.rows) {
+    const contact = rankedById.get(row.contact_id);
+    if (contact && !publishedIds.has(contact.id)) {
+      publishedContacts.push(contact);
+      publishedIds.add(contact.id);
+    }
+  }
+  return [
+    ...publishedContacts,
+    ...rankedContacts.filter((contact) => !publishedIds.has(contact.id))
+  ].slice(0, PRIORITY_COHORT_SIZE);
 }
 async function sendProfileCompletionPushes() {
   try {
@@ -1909,6 +1946,15 @@ async function sendSuggestionNudges() {
           console.log(`[push]   \u2192 skip: no eligible contacts in priority cohort`);
           continue;
         }
+        const pushCandidates = priorityCohort.filter(
+          (contact) => !hasHomeReminder(contact, tz, /* @__PURE__ */ new Date())
+        );
+        if (pushCandidates.length === 0) {
+          console.log(
+            `[push]   \u2192 skip: all top-three priority contacts already have reminders`
+          );
+          continue;
+        }
         const lastSuccessfulResult = await pool.query(
           `SELECT contact_id
          FROM notification_log
@@ -1919,12 +1965,12 @@ async function sendSuggestionNudges() {
           [user.id]
         );
         const bestContact = selectSuggestionForDelivery(
-          priorityCohort,
+          pushCandidates,
           lastSuccessfulResult.rows.map((row) => row.contact_id)
         );
         if (!bestContact) continue;
         console.log(
-          `[push]   \u2192 cohort: ${priorityCohort.map((contact) => contact.name).join(", ")}; sending "${bestContact.name}" score=${bestContact.score}`
+          `[push]   \u2192 cohort: ${priorityCohort.map((contact) => contact.name).join(", ")}; push-eligible: ${pushCandidates.map((contact) => contact.name).join(", ")}; sending "${bestContact.name}" score=${bestContact.score}`
         );
         const nudgeTemplates = [
           { title: (n) => `Time to reach out to ${n}`, body: () => "Open the app to see what to say." },
@@ -3279,6 +3325,62 @@ async function registerRoutes(app2) {
     } catch (err) {
       console.error("Error loading priority suggestions:", err);
       res.status(500).json({ message: "Failed to load priority suggestions" });
+    }
+  });
+  app2.post("/api/suggestions/priority", requireAuth, async (req, res) => {
+    try {
+      const { contactIds } = req.body;
+      if (!Array.isArray(contactIds) || contactIds.length < 1 || contactIds.length > 3 || !contactIds.every((id) => typeof id === "string" && id.trim().length > 0)) {
+        return bad(res, "contactIds must contain 1 to 3 contact IDs");
+      }
+      const normalizedIds = contactIds.map((id) => id.trim());
+      if (new Set(normalizedIds).size !== normalizedIds.length) {
+        return bad(res, "contactIds must be unique");
+      }
+      const userId = req.session.userId;
+      const ownedContacts = await pool.query(
+        `SELECT id FROM contacts WHERE user_id = $1 AND id = ANY($2::varchar[])`,
+        [userId, normalizedIds]
+      );
+      if (ownedContacts.rows.length !== normalizedIds.length) {
+        return res.status(403).json({ message: "One or more contacts do not belong to this user" });
+      }
+      const client = await pool.connect();
+      try {
+        await client.query("BEGIN");
+        await client.query(
+          `SELECT pg_advisory_xact_lock(hashtext($1))`,
+          [`bridges:priority-snapshot:${userId}`]
+        );
+        await client.query(
+          `DELETE FROM notification_log
+           WHERE user_id = $1
+             AND notif_type IN (
+               'suggestion_priority_1',
+               'suggestion_priority_2',
+               'suggestion_priority_3'
+             )`,
+          [userId]
+        );
+        for (let index = 0; index < normalizedIds.length; index += 1) {
+          await client.query(
+            `INSERT INTO notification_log (user_id, contact_id, notif_type)
+             VALUES ($1, $2, $3)`,
+            [userId, normalizedIds[index], `suggestion_priority_${index + 1}`]
+          );
+        }
+        await client.query("COMMIT");
+        res.json({ ok: true });
+      } catch (err) {
+        await client.query("ROLLBACK").catch(() => {
+        });
+        throw err;
+      } finally {
+        client.release();
+      }
+    } catch (err) {
+      console.error("Error saving priority suggestion snapshot:", err);
+      res.status(500).json({ message: "Failed to save priority suggestions" });
     }
   });
   app2.post("/api/suggestions/dismiss", requireAuth, async (req, res) => {

@@ -1,4 +1,4 @@
 - [Supabase DB vs local PG](supabase-db-routing.md) — server/db.ts uses SUPABASE_URL first; migrations must target SUPABASE_URL, not just DATABASE_URL.
-- [Suggestion push priority](suggestion-scoring-overhaul.md) — Home and pushes share one cohort; only confirmed deliveries advance rotation, while swipes start cooldowns.
+- [Suggestion push priority](suggestion-scoring-overhaul.md) — Home owns its cards and publishes their order; pushes rotate only within that durable snapshot.
 - [Public voting token identity](public-voting-token-identity.md) — name-only invitee matching is forgeable; use unforgeable per-invitee tokens to prove voter identity on public links.
 - [Direct APNs push](apns-direct-push.md) — bypass Expo push service; standalone iOS uses getDevicePushTokenAsync → "apns:" prefix; server sends via APNs HTTP/2 + JWT.

@@ -45,9 +45,11 @@ import {
   buildBirthdayDayOfMessages,
   buildReminderMessages,
   logNotifiedContacts,
+  pruneOldNotificationLog,
   type PushMessage,
   type ContactRow,
 } from "../server/push-notifications";
+import { pool } from "../server/db";
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -88,6 +90,22 @@ describe("dedupMessages — empty inputs", () => {
     const msgs = [birthdayMsg("c1"), birthdayMsg("c2")];
     const recent = new Set(["c1", "c2"]);
     expect(dedupMessages(msgs, recent)).toEqual([]);
+  });
+});
+
+describe("priority snapshot retention", () => {
+  test("general log pruning never deletes the current Home priority snapshot", async () => {
+    const query = pool.query as jest.Mock;
+    query.mockResolvedValue({ rows: [] });
+
+    await pruneOldNotificationLog();
+
+    expect(query).toHaveBeenCalledTimes(2);
+    for (const [sql] of query.mock.calls) {
+      expect(sql).toContain("suggestion_priority_1");
+      expect(sql).toContain("suggestion_priority_2");
+      expect(sql).toContain("suggestion_priority_3");
+    }
   });
 });
 

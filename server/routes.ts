@@ -1039,6 +1039,69 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  app.post("/api/suggestions/priority", requireAuth, async (req, res) => {
+    try {
+      const { contactIds } = req.body;
+      if (
+        !Array.isArray(contactIds) ||
+        contactIds.length < 1 ||
+        contactIds.length > 3 ||
+        !contactIds.every((id) => typeof id === "string" && id.trim().length > 0)
+      ) {
+        return bad(res, "contactIds must contain 1 to 3 contact IDs");
+      }
+      const normalizedIds = contactIds.map((id: string) => id.trim());
+      if (new Set(normalizedIds).size !== normalizedIds.length) {
+        return bad(res, "contactIds must be unique");
+      }
+
+      const userId = req.session.userId!;
+      const ownedContacts = await pool.query<{ id: string }>(
+        `SELECT id FROM contacts WHERE user_id = $1 AND id = ANY($2::varchar[])`,
+        [userId, normalizedIds],
+      );
+      if (ownedContacts.rows.length !== normalizedIds.length) {
+        return res.status(403).json({ message: "One or more contacts do not belong to this user" });
+      }
+
+      const client = await pool.connect();
+      try {
+        await client.query("BEGIN");
+        await client.query(
+          `SELECT pg_advisory_xact_lock(hashtext($1))`,
+          [`bridges:priority-snapshot:${userId}`],
+        );
+        await client.query(
+          `DELETE FROM notification_log
+           WHERE user_id = $1
+             AND notif_type IN (
+               'suggestion_priority_1',
+               'suggestion_priority_2',
+               'suggestion_priority_3'
+             )`,
+          [userId],
+        );
+        for (let index = 0; index < normalizedIds.length; index += 1) {
+          await client.query(
+            `INSERT INTO notification_log (user_id, contact_id, notif_type)
+             VALUES ($1, $2, $3)`,
+            [userId, normalizedIds[index], `suggestion_priority_${index + 1}`],
+          );
+        }
+        await client.query("COMMIT");
+        res.json({ ok: true });
+      } catch (err) {
+        await client.query("ROLLBACK").catch(() => {});
+        throw err;
+      } finally {
+        client.release();
+      }
+    } catch (err) {
+      console.error("Error saving priority suggestion snapshot:", err);
+      res.status(500).json({ message: "Failed to save priority suggestions" });
+    }
+  });
+
   // Records a client-side swipe-dismiss so the server's push-notification picker
   // respects the same cooldown window and doesn't re-surface the contact immediately.
   app.post("/api/suggestions/dismiss", requireAuth, async (req, res) => {
