@@ -20,3 +20,9 @@ Scheduled pushes are delivered at the user's selected local `:00` with a two-min
 **Why:** A restarted process at 9:10 produced visibly late suggestion/reminder pushes. A Circle 2 one-week birthday milestone was built but deferred to 5 PM, contrary to the expected morning reminder.
 
 **How to apply:** Keep the scheduler aligned to the quarter-hour; use the explicit local delivery-start predicate for reminders, suggestions, and profile pushes. Do not move birthday milestones out of the 9 AM selection without an intentional product decision.
+
+The in-process scheduler needs a live server. Autoscale has no scheduled minimum-instance setting; a heartbeat is only a best-effort wake-up, and covering many user time zones can require near-continuous traffic. A Reserved VM is the reliable production target for scheduler-backed releases.
+
+**Why:** Production was terminated during a Toronto delivery window while deployed on Autoscale, so the exact-window gate correctly skipped the missed notification after restart.
+
+**How to apply:** Use a lightweight public health endpoint only as a temporary Autoscale workaround. Before broad release, switch the deployment target to Reserved VM and republish; no client/TestFlight rebuild is required for that server-only change.

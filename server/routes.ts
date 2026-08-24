@@ -372,6 +372,13 @@ const emailInviteRateLimiter = rateLimit({
 export async function registerRoutes(app: Express): Promise<Server> {
   app.set("trust proxy", 1);
 
+  // Public liveness endpoint for the Autoscale heartbeat. Keep this before
+  // session setup so wake-up checks never create session or database work.
+  app.get("/api/health", (_req, res) => {
+    res.setHeader("Cache-Control", "no-store");
+    res.status(200).json({ ok: true });
+  });
+
   const sessionSecret = process.env.SESSION_SECRET;
   if (!sessionSecret && process.env.NODE_ENV === "production") {
     throw new Error(

@@ -2580,6 +2580,10 @@ var emailInviteRateLimiter = rateLimit({
 });
 async function registerRoutes(app2) {
   app2.set("trust proxy", 1);
+  app2.get("/api/health", (_req, res) => {
+    res.setHeader("Cache-Control", "no-store");
+    res.status(200).json({ ok: true });
+  });
   const sessionSecret = process.env.SESSION_SECRET;
   if (!sessionSecret && process.env.NODE_ENV === "production") {
     throw new Error(
