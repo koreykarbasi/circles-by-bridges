@@ -21,7 +21,7 @@ import Colors from "@/constants/colors";
 import * as Notifications from "expo-notifications";
 import Constants from "expo-constants";
 import { apiRequest } from "@/lib/query-client";
-import { scheduleSuggestionNudge } from "@/lib/reminder-notifications";
+import { cancelAllLegacyLocalNotifications, scheduleSuggestionNudge } from "@/lib/reminder-notifications";
 
 SplashScreen.preventAutoHideAsync();
 
@@ -104,6 +104,12 @@ function RootLayoutNav() {
   // Using user !== null as a shortcut would redirect authenticated users away from
   // onboarding before they finish adding their contacts.
   const onboardingDone = hasCompletedOnboarding === true && !isReplayRequested;
+
+  // Previous TestFlight builds could leave elevation and reminder jobs queued in
+  // iOS. Remove them before this build registers its server-controlled push path.
+  useEffect(() => {
+    cancelAllLegacyLocalNotifications().catch(() => {});
+  }, []);
 
   // Startup suggestion-nudge guarantee: schedule as soon as auth + onboarding are resolved
   // so the daily nudge notification is always set on cold start, even before contacts load.

@@ -1,5 +1,9 @@
 import type { Contact } from "./types";
 import { getDaysSince, getDaysUntilBirthday, formatLastContacted } from "./helpers";
+import {
+  CHECKIN_THRESHOLDS as sharedCheckinThresholds,
+  isCheckinQuickPickEligible,
+} from "@shared/reminder-thresholds";
 
 export type ReminderType =
   | "birthday"
@@ -24,7 +28,7 @@ export interface Reminder {
   persistent?: boolean;
 }
 
-export const CHECKIN_THRESHOLDS: Record<1 | 2 | 3, number> = { 1: 14, 2: 45, 3: 75 };
+export const CHECKIN_THRESHOLDS = sharedCheckinThresholds;
 export const HANGOUT_THRESHOLDS: Record<1 | 2 | 3, number> = { 1: 21, 2: 60, 3: 90 };
 export const ELEVATION_PUSH_DELAY_HOURS: Record<1 | 2 | 3, number> = { 1: 24, 2: 48, 3: 72 };
 export const ELEVATION_CLEANUP_DAYS: Record<1 | 2 | 3, { checkin: number; hangout: number }> = {
@@ -204,12 +208,7 @@ function generateCircle1Reminders(contact: Contact): Reminder[] {
 
   const daysSinceContact = getDaysSince(contact.lastContacted ?? undefined);
   const daysSinceCreated = getDaysSince(contact.createdAt ?? undefined);
-  // Grace period: if lastContacted is null and the contact was added within 7 days, suppress the
-  // "You haven't reached out yet" reminder so it doesn't fire immediately on day one.
-  const withinNewContactGrace =
-    daysSinceContact === null &&
-    (daysSinceCreated === null || daysSinceCreated <= 7);
-  if (!withinNewContactGrace && (daysSinceContact === null || daysSinceContact > CHECKIN_THRESHOLDS[1])) {
+  if (isCheckinQuickPickEligible(1, daysSinceContact, daysSinceCreated)) {
     const severity = daysSinceContact === null
       ? 80
       : Math.min(80, 30 + Math.floor((daysSinceContact - CHECKIN_THRESHOLDS[1]) * 3));
@@ -282,12 +281,7 @@ function generateCircle2Reminders(contact: Contact): Reminder[] {
 
   const daysSinceContact = getDaysSince(contact.lastContacted ?? undefined);
   const daysSinceCreated = getDaysSince(contact.createdAt ?? undefined);
-  // Grace period: if lastContacted is null and the contact was added within 7 days, suppress the
-  // "You haven't reached out yet" reminder so it doesn't fire immediately on day one.
-  const withinNewContactGrace =
-    daysSinceContact === null &&
-    (daysSinceCreated === null || daysSinceCreated <= 7);
-  if (!withinNewContactGrace && (daysSinceContact === null || daysSinceContact > CHECKIN_THRESHOLDS[2])) {
+  if (isCheckinQuickPickEligible(2, daysSinceContact, daysSinceCreated)) {
     const severity = daysSinceContact === null
       ? 60
       : Math.min(60, 20 + Math.floor((daysSinceContact - CHECKIN_THRESHOLDS[2]) * 1.2));
@@ -346,8 +340,8 @@ function generateCircle3Reminders(contact: Contact): Reminder[] {
   reminders.push(...generateCustomReminders(contact, 3));
 
   const daysSinceContact = getDaysSince(contact.lastContacted ?? undefined);
-  if (daysSinceContact !== null && daysSinceContact > CHECKIN_THRESHOLDS[3]) {
-    const severity = Math.min(30, Math.floor((daysSinceContact - CHECKIN_THRESHOLDS[3]) * 0.4));
+  if (isCheckinQuickPickEligible(3, daysSinceContact, getDaysSince(contact.createdAt ?? undefined))) {
+    const severity = Math.min(30, Math.floor(((daysSinceContact ?? CHECKIN_THRESHOLDS[3]) - CHECKIN_THRESHOLDS[3]) * 0.4));
     reminders.push({
       id: `checkin-${contact.id}`,
       contactId: contact.id,

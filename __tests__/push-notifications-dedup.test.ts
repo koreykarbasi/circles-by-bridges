@@ -45,7 +45,9 @@ import {
   buildBirthdayDayOfMessages,
   buildReminderMessages,
   logNotifiedContacts,
+  millisecondsUntilNextQuarterHour,
   pruneOldNotificationLog,
+  selectSuggestionPushCandidates,
   type PushMessage,
   type ContactRow,
 } from "../server/push-notifications";
@@ -78,6 +80,57 @@ function milestoneMsg(contactId: string): PushMessage {
 
 // Fixed "today" used across date-sensitive tests: 2024-03-15 (Friday, noon local)
 const FIXED_TODAY = new Date(2024, 2, 15, 12, 0, 0);
+
+describe("daily suggestion and reminder coexistence", () => {
+  test("retains the daily suggestion when every Home priority contact is a quick-pick", () => {
+    const cohort = [
+      {
+        ...contact({
+          id: "c1",
+          name: "Ava",
+          circleLevel: 1,
+          lastContacted: null,
+          createdAt: "2026-08-01",
+        }),
+        score: 1200,
+      },
+      { ...contact({ id: "c2", name: "Ben", circleLevel: 2, lastContacted: "2020-01-01" }), score: 1100 },
+      { ...contact({ id: "c3", name: "Cam", circleLevel: 3, lastContacted: "2020-01-01" }), score: 1000 },
+    ];
+
+    expect(selectSuggestionPushCandidates(cohort, "UTC", new Date("2026-08-24T09:00:00Z")))
+      .toEqual(cohort);
+  });
+
+  test("prefers a Home-priority suggestion without a quick-pick when available", () => {
+    const cohort = [
+      {
+        ...contact({
+          id: "overdue",
+          name: "Ava",
+          circleLevel: 1,
+          lastContacted: null,
+          createdAt: "2026-08-01",
+        }),
+        score: 1200,
+      },
+      { ...contact({ id: "fresh", name: "Ben", circleLevel: 2, lastContacted: "2026-08-23" }), score: 1100 },
+    ];
+
+    expect(selectSuggestionPushCandidates(cohort, "UTC", new Date("2026-08-24T09:00:00Z")))
+      .toEqual([cohort[1]]);
+  });
+});
+
+describe("scheduler boundary alignment", () => {
+  test("runs immediately when the process starts exactly on a quarter-hour", () => {
+    expect(millisecondsUntilNextQuarterHour(Date.parse("2026-08-24T09:00:00.000Z"))).toBe(0);
+  });
+
+  test("waits only for the next quarter-hour from an in-between startup", () => {
+    expect(millisecondsUntilNextQuarterHour(Date.parse("2026-08-24T09:07:30.000Z"))).toBe(450_000);
+  });
+});
 
 // ── dedupMessages — core dedup logic ─────────────────────────────────────────
 
@@ -311,6 +364,66 @@ describe("buildReminderMessages — birthday milestone notifType is 'milestone'"
     jest.useRealTimers();
   });
 
+  test("uses the visible Circle 1 threshold and compact contact-first title", () => {
+    const c = contact({ id: "c1", name: "Ava", circleLevel: 1, lastContacted: "2024-02-29" });
+    const reminder = buildReminderMessages(c, "UTC").find((message) => message.notifType === "reminder");
+
+    expect(reminder).toEqual(expect.objectContaining({
+      contactId: "c1",
+      title: "Check in with Ava",
+    }));
+  });
+
+  test("keeps a never-contacted new Circle 1 contact out of server reminders during grace", () => {
+    const messages = buildReminderMessages(
+      contact({
+        id: "new-c1",
+        name: "New Ava",
+        circleLevel: 1,
+        lastContacted: null,
+        createdAt: "2024-03-14",
+      }),
+      "UTC",
+    );
+
+    expect(messages.some((message) => message.notifType === "reminder")).toBe(false);
+  });
+
+  test("includes an older never-contacted Circle 2 quick-pick in server reminders", () => {
+    const messages = buildReminderMessages(
+      contact({
+        id: "older-c2",
+        name: "Ben",
+        circleLevel: 2,
+        lastContacted: null,
+        createdAt: "2024-03-07",
+      }),
+      "UTC",
+    );
+
+    expect(messages).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        contactId: "older-c2",
+        notifType: "reminder",
+        title: "Check in with Ben",
+      }),
+    ]));
+  });
+
+  test("uses the recipient's local date at 9am for all Circle thresholds", () => {
+    // 19:00 UTC on June 14 is 09:00 June 15 in UTC+14.
+    jest.setSystemTime(new Date("2024-06-14T19:00:00Z"));
+    const timezone = "Pacific/Kiritimati";
+    const reminders = [
+      contact({ id: "c1", name: "Ava", circleLevel: 1, lastContacted: "2024-05-31" }),
+      contact({ id: "c2", name: "Ben", circleLevel: 2, lastContacted: "2024-04-29" }),
+      contact({ id: "c3", name: "Cam", circleLevel: 3, lastContacted: "2024-03-31" }),
+    ].flatMap((item) => buildReminderMessages(item, timezone));
+
+    expect(reminders.filter((message) => message.notifType === "reminder").map((message) => message.contactId))
+      .toEqual(["c1", "c2", "c3"]);
+  });
+
   test("Circle 1 — 7-day birthday milestone has notifType 'milestone'", () => {
     // Today: March 15 → birthday March 22 = 7 days away
     const c = contact({ id: "c1", circleLevel: 1, birthday: "03/22", lastContacted: "2024-03-14" });
@@ -337,7 +450,7 @@ describe("buildReminderMessages — birthday milestone notifType is 'milestone'"
   });
 
   test("Circle 1 — overdue check-in has notifType 'reminder'", () => {
-    // lastContacted 20 days ago → overdue (threshold > 17)
+    // lastContacted 20 days ago → overdue (threshold > 14)
     const c = contact({ id: "c1", circleLevel: 1, birthday: "08/01", lastContacted: "2024-02-24" });
     const msgs = buildReminderMessages(c, "UTC");
     const reminder = msgs.find((m) => m.notifType === "reminder");

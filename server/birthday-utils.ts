@@ -35,6 +35,64 @@ export function getDaysSince(dateStr?: string | null): number | null {
   return Math.floor((todayMidnight.getTime() - dateMidnight.getTime()) / (1000 * 60 * 60 * 24));
 }
 
+/**
+ * Returns elapsed calendar days using the recipient's local date, rather than
+ * the server's date. Check-in thresholds are evaluated at a user's 9 AM / 5 PM
+ * delivery window, so this prevents a one-day delay in timezones east or west of
+ * the deployment.
+ */
+export function getDaysSinceInTz(
+  dateStr: string | null | undefined,
+  timezone: string,
+): number | null {
+  if (!dateStr) return null;
+
+  let localYear: number;
+  let localMonth: number;
+  let localDay: number;
+  try {
+    const parts = new Intl.DateTimeFormat("en-CA", {
+      timeZone: timezone,
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+    }).formatToParts(new Date());
+    localYear = parseInt(parts.find((part) => part.type === "year")!.value, 10);
+    localMonth = parseInt(parts.find((part) => part.type === "month")!.value, 10) - 1;
+    localDay = parseInt(parts.find((part) => part.type === "day")!.value, 10);
+  } catch {
+    const now = new Date();
+    localYear = now.getUTCFullYear();
+    localMonth = now.getUTCMonth();
+    localDay = now.getUTCDate();
+  }
+
+  let year: number;
+  let month: number;
+  let day: number;
+  const slashParts = dateStr.split("/");
+  if (slashParts.length >= 2) {
+    month = parseInt(slashParts[0], 10) - 1;
+    day = parseInt(slashParts[1], 10);
+    year = slashParts.length >= 3 ? parseInt(slashParts[2], 10) : localYear;
+  } else {
+    const dashParts = dateStr.split("-");
+    if (dashParts.length !== 3) return null;
+    year = parseInt(dashParts[0], 10);
+    month = parseInt(dashParts[1], 10) - 1;
+    day = parseInt(dashParts[2], 10);
+  }
+
+  if (isNaN(year) || isNaN(month) || isNaN(day) || month < 0 || month > 11 || day < 1 || day > 31) {
+    return null;
+  }
+
+  return Math.floor(
+    (Date.UTC(localYear, localMonth, localDay) - Date.UTC(year, month, day)) /
+    (1000 * 60 * 60 * 24),
+  );
+}
+
 // Parses MM/DD, MM/DD/YYYY, or YYYY-MM-DD without UTC timezone shift.
 // Compares as local calendar dates so day-of-birthday is always day 0.
 export function getDaysUntilBirthday(birthday?: string | null): number | null {

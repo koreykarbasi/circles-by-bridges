@@ -1186,8 +1186,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const tz = update.notificationTimezone
         ?? (await storage.getUser(req.session.userId!))?.notificationTimezone;
       if (tz) {
-        sendRemindersForUser(req.session.userId!, trimmedToken, tz)
-          .catch((err) => console.error("[push] Catch-up delivery error after token re-register:", err));
+        Promise.all([
+          sendRemindersForUser(req.session.userId!, trimmedToken, tz),
+          sendSuggestionNudges(req.session.userId!),
+        ]).catch((err) => console.error("[push] Catch-up delivery error after token re-register:", err));
       }
     } catch (err) {
       console.error("Error saving push token:", err);

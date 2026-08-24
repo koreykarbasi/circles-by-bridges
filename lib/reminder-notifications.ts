@@ -45,6 +45,22 @@ async function cancelNotif(notifId: string): Promise<void> {
 let reminderScheduleInFlight: Promise<void> | null = null;
 
 /**
+ * Removes every legacy device-local notification at app startup. Remote APNs /
+ * Expo pushes are unaffected. This intentionally also catches unknown jobs from
+ * older TestFlight builds that were never written to this version's storage.
+ */
+export async function cancelAllLegacyLocalNotifications(): Promise<void> {
+  if (Platform.OS === "web") return;
+  try {
+    await Notifications.cancelAllScheduledNotificationsAsync();
+  } catch (err) {
+    console.warn("[notifications] Could not cancel legacy local notifications:", err);
+  }
+  await _cancelAllLocalReminderNotifications();
+  await AsyncStorage.removeItem(SUGGESTION_NUDGE_KEY).catch(() => {});
+}
+
+/**
  * Schedules local notifications for all active reminders (birthday milestones,
  * custom date reminders, overdue check-ins, overdue hangouts). Derives notifications
  * from the same logic as generateReminders() in lib/reminders.ts so thresholds are

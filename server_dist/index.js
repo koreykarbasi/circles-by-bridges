@@ -1064,8 +1064,27 @@ init_schema();
 import { isNotNull, eq as eq2 } from "drizzle-orm";
 
 // server/birthday-utils.ts
-function getDaysSince(dateStr) {
+function getDaysSinceInTz(dateStr, timezone) {
   if (!dateStr) return null;
+  let localYear;
+  let localMonth;
+  let localDay;
+  try {
+    const parts = new Intl.DateTimeFormat("en-CA", {
+      timeZone: timezone,
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit"
+    }).formatToParts(/* @__PURE__ */ new Date());
+    localYear = parseInt(parts.find((part) => part.type === "year").value, 10);
+    localMonth = parseInt(parts.find((part) => part.type === "month").value, 10) - 1;
+    localDay = parseInt(parts.find((part) => part.type === "day").value, 10);
+  } catch {
+    const now = /* @__PURE__ */ new Date();
+    localYear = now.getUTCFullYear();
+    localMonth = now.getUTCMonth();
+    localDay = now.getUTCDate();
+  }
   let year;
   let month;
   let day;
@@ -1073,22 +1092,20 @@ function getDaysSince(dateStr) {
   if (slashParts.length >= 2) {
     month = parseInt(slashParts[0], 10) - 1;
     day = parseInt(slashParts[1], 10);
-    year = slashParts.length >= 3 ? parseInt(slashParts[2], 10) : (/* @__PURE__ */ new Date()).getFullYear();
+    year = slashParts.length >= 3 ? parseInt(slashParts[2], 10) : localYear;
   } else {
     const dashParts = dateStr.split("-");
-    if (dashParts.length === 3) {
-      year = parseInt(dashParts[0], 10);
-      month = parseInt(dashParts[1], 10) - 1;
-      day = parseInt(dashParts[2], 10);
-    } else {
-      return null;
-    }
+    if (dashParts.length !== 3) return null;
+    year = parseInt(dashParts[0], 10);
+    month = parseInt(dashParts[1], 10) - 1;
+    day = parseInt(dashParts[2], 10);
   }
-  if (isNaN(year) || isNaN(month) || isNaN(day) || month < 0 || month > 11 || day < 1 || day > 31) return null;
-  const now = /* @__PURE__ */ new Date();
-  const todayMidnight = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-  const dateMidnight = new Date(year, month, day);
-  return Math.floor((todayMidnight.getTime() - dateMidnight.getTime()) / (1e3 * 60 * 60 * 24));
+  if (isNaN(year) || isNaN(month) || isNaN(day) || month < 0 || month > 11 || day < 1 || day > 31) {
+    return null;
+  }
+  return Math.floor(
+    (Date.UTC(localYear, localMonth, localDay) - Date.UTC(year, month, day)) / (1e3 * 60 * 60 * 24)
+  );
 }
 function getDaysUntilBirthdayInTz(birthday, timezone) {
   if (!birthday) return null;
@@ -1172,7 +1189,43 @@ function selectSuggestionForDelivery(priorityCohort, lastSuccessfulContactIds) {
   return priorityCohort.find((contact) => !recentlyDelivered.has(contact.id)) ?? priorityCohort.find((contact) => contact.id !== lastSuccessfulContactIds[0]) ?? priorityCohort[0];
 }
 
+// shared/reminder-thresholds.ts
+var CHECKIN_THRESHOLDS = {
+  1: 14,
+  2: 45,
+  3: 75
+};
+var NEW_CONTACT_GRACE_DAYS = 7;
+function isCheckinQuickPickEligible(circleLevel, daysSinceContact, daysSinceCreated) {
+  if (circleLevel === 3) {
+    return daysSinceContact !== null && daysSinceContact > CHECKIN_THRESHOLDS[3];
+  }
+  const isNewUncontactedContact = daysSinceContact === null && (daysSinceCreated === null || daysSinceCreated <= NEW_CONTACT_GRACE_DAYS);
+  if (isNewUncontactedContact) return false;
+  return daysSinceContact === null || daysSinceContact > CHECKIN_THRESHOLDS[circleLevel];
+}
+
 // server/push-notifications.ts
+function getContactDaysSince(value, timezone) {
+  if (!value) return null;
+  if (value instanceof Date) {
+    try {
+      const parts = new Intl.DateTimeFormat("en-CA", {
+        timeZone: timezone,
+        year: "numeric",
+        month: "2-digit",
+        day: "2-digit"
+      }).formatToParts(value);
+      const year = parts.find((part) => part.type === "year").value;
+      const month = parts.find((part) => part.type === "month").value;
+      const day = parts.find((part) => part.type === "day").value;
+      return getDaysSinceInTz(`${year}-${month}-${day}`, timezone);
+    } catch {
+      return getDaysSinceInTz(value.toISOString().slice(0, 10), timezone);
+    }
+  }
+  return getDaysSinceInTz(value, timezone);
+}
 function buildBirthdayDayOfMessages(contact, timezone) {
   const messages = [];
   const daysUntil = getDaysUntilBirthdayInTz(contact.birthday, timezone);
@@ -1198,10 +1251,11 @@ function buildReminderMessages(contact, timezone) {
   const messages = [];
   const daysUntilBirthday = getDaysUntilBirthdayInTz(contact.birthday, timezone);
   if (contact.circleLevel === 1) {
-    const daysSinceContact = getDaysSince(contact.lastContacted);
-    if (daysSinceContact === null || daysSinceContact > 17) {
+    const daysSinceContact = getContactDaysSince(contact.lastContacted, timezone);
+    const daysSinceCreated = getContactDaysSince(contact.createdAt, timezone);
+    if (isCheckinQuickPickEligible(1, daysSinceContact, daysSinceCreated)) {
       messages.push({
-        title: `Time to check in with ${contact.name}`,
+        title: `Check in with ${contact.name}`,
         body: `Open the app to confirm when you last spoke.`,
         contactId: contact.id,
         notifType: "reminder"
@@ -1233,10 +1287,11 @@ function buildReminderMessages(contact, timezone) {
     }
     buildCustomReminderMessages(contact, [30, 14, 7, 0], timezone, messages);
   } else if (contact.circleLevel === 2) {
-    const daysSinceContact = getDaysSince(contact.lastContacted);
-    if (daysSinceContact !== null && daysSinceContact > 48) {
+    const daysSinceContact = getContactDaysSince(contact.lastContacted, timezone);
+    const daysSinceCreated = getContactDaysSince(contact.createdAt, timezone);
+    if (isCheckinQuickPickEligible(2, daysSinceContact, daysSinceCreated)) {
       messages.push({
-        title: `Time to check in with ${contact.name}`,
+        title: `Check in with ${contact.name}`,
         body: `Open the app to confirm when you last spoke.`,
         contactId: contact.id,
         notifType: "reminder"
@@ -1252,10 +1307,11 @@ function buildReminderMessages(contact, timezone) {
     }
     buildCustomReminderMessages(contact, [7, 0], timezone, messages);
   } else if (contact.circleLevel === 3) {
-    const daysSinceContact3 = getDaysSince(contact.lastContacted);
-    if (daysSinceContact3 !== null && daysSinceContact3 > 78) {
+    const daysSinceContact3 = getContactDaysSince(contact.lastContacted, timezone);
+    const daysSinceCreated = getContactDaysSince(contact.createdAt, timezone);
+    if (isCheckinQuickPickEligible(3, daysSinceContact3, daysSinceCreated)) {
       messages.push({
-        title: `Time to check in with ${contact.name}`,
+        title: `Check in with ${contact.name}`,
         body: `Open the app to confirm when you last spoke.`,
         contactId: contact.id,
         notifType: "reminder"
@@ -1333,29 +1389,6 @@ async function getRecentlySentContactIds(userId, types) {
     return /* @__PURE__ */ new Set();
   }
 }
-async function logNotifiedContacts(userId, contactIds, notifType) {
-  for (const contactId of contactIds) {
-    let inserted = false;
-    for (let attempt = 1; attempt <= 2; attempt++) {
-      try {
-        await pool.query(
-          `INSERT INTO notification_log (user_id, contact_id, notif_type) VALUES ($1, $2, $3)`,
-          [userId, contactId, notifType]
-        );
-        inserted = true;
-        break;
-      } catch (err) {
-        if (attempt === 2) {
-          console.warn(
-            `[push-notifications] logNotifiedContacts: failed to insert dedup record after 2 attempts`,
-            { userId, contactId, notifType, error: err instanceof Error ? err.message : String(err) }
-          );
-        }
-      }
-    }
-    void inserted;
-  }
-}
 async function pruneOldNotificationLog() {
   try {
     await pool.query(
@@ -1411,7 +1444,8 @@ async function sendExpoPush(token, title, body, data) {
           `[push] *** CREDENTIAL FAILURE *** InvalidCredentials for token ${token.slice(0, 30)}\u2026
 [push] This means the APNs credentials for the app bundle registered with Expo have expired or are missing.
 [push] Full Expo response: ${JSON.stringify(ticket)}
-[push] FIX: A new EAS build under the correct bundle ID with valid APNs credentials must be installed on the device.`
+[push] Token retained: this is an app-wide credential problem, not a device-specific token failure.
+[push] FIX: Repair the Expo/APNs credential configuration and send again.`
         );
         return false;
       }
@@ -1568,7 +1602,7 @@ function isNineAmLocalNow(timezone) {
 function isFivePmLocalNow(timezone) {
   return getLocalHour(timezone) === 17;
 }
-async function sendRemindersForUser(userId, pushToken, timezone) {
+async function sendRemindersForUserUnlocked(userId, pushToken, timezone) {
   const tz = timezone || "UTC";
   const isNineAm = isNineAmLocalNow(tz);
   const isFivePm = isFivePmLocalNow(tz);
@@ -1600,6 +1634,27 @@ async function sendRemindersForUser(userId, pushToken, timezone) {
       }
     }
   }
+  const contactsById = new Map(
+    userContacts.map((contact) => [contact.id, contact])
+  );
+  const reminderPriority = (msg) => {
+    const contact = msg.contactId ? contactsById.get(msg.contactId) : void 0;
+    if (!contact) return 0;
+    const circle = contact.circleLevel;
+    const days = getContactDaysSince(contact.lastContacted, tz);
+    if (circle === 1) {
+      return 100 + (days === null ? 80 : Math.min(80, 30 + Math.floor((days - CHECKIN_THRESHOLDS[1]) * 3)));
+    }
+    if (circle === 2) {
+      return 60 + (days === null ? 60 : Math.min(60, 20 + Math.floor((days - CHECKIN_THRESHOLDS[2]) * 1.2)));
+    }
+    return 30 + (days === null ? 0 : Math.min(30, Math.floor((days - CHECKIN_THRESHOLDS[3]) * 0.4)));
+  };
+  const sortRemindersByVisiblePriority = (messages) => messages.sort(
+    (a, b) => reminderPriority(b) - reminderPriority(a) || a.title.localeCompare(b.title) || (a.contactId ?? "").localeCompare(b.contactId ?? "")
+  );
+  sortRemindersByVisiblePriority(nineAmReminderMsgs);
+  sortRemindersByVisiblePriority(fivePmReminderMsgs);
   try {
     const cooldownResult = await pool.query(
       `SELECT DISTINCT nl.contact_id
@@ -1630,10 +1685,10 @@ async function sendRemindersForUser(userId, pushToken, timezone) {
   } catch (cooldownErr) {
     console.warn(`[push]   swipe-cooldown check failed (non-fatal):`, cooldownErr);
   }
-  const recentBirthdayIds = await getRecentlySentContactIds(userId, ["birthday"]);
-  const recentCustomIds = await getRecentlySentContactIds(userId, ["custom"]);
-  const recentReminderIds = await getRecentlySentContactIds(userId, ["reminder", "elevation"]);
-  const recentMilestoneIds = await getRecentlySentContactIds(userId, ["milestone"]);
+  const recentBirthdayIds = await getRecentlySentContactIds(userId, ["birthday", "birthday_claim"]);
+  const recentCustomIds = await getRecentlySentContactIds(userId, ["custom", "custom_claim"]);
+  const recentReminderIds = await getRecentlySentContactIds(userId, ["reminder", "reminder_claim", "elevation"]);
+  const recentMilestoneIds = await getRecentlySentContactIds(userId, ["milestone", "milestone_claim"]);
   const nineAmMsgs = [];
   if (isNineAm) {
     const filteredBirthdays = dedupMessages(nineAmBirthdayMsgs, recentBirthdayIds);
@@ -1668,30 +1723,66 @@ async function sendRemindersForUser(userId, pushToken, timezone) {
   console.log(
     `[push]   user ${userId.slice(0, 8)}: sending ${toSend.length} notification(s) [${toSend.map((m) => `${m.notifType}@${(m.contactId ?? "?").slice(0, 8)}`).join(", ")}]`
   );
-  const notifiedByType = /* @__PURE__ */ new Map();
   let sent = 0;
   for (const msg of toSend) {
+    if (!msg.contactId) continue;
+    const claimType = `${msg.notifType}_claim`;
+    const claimResult = await pool.query(
+      `INSERT INTO notification_log (user_id, contact_id, notif_type)
+       VALUES ($1, $2, $3)
+       RETURNING id`,
+      [userId, msg.contactId, claimType]
+    );
+    const claimId = claimResult.rows[0]?.id;
+    if (!claimId) {
+      throw new Error(`[push] Unable to create ${claimType} delivery claim`);
+    }
     const result = await sendPush(
       pushToken,
       msg.title,
       msg.body,
-      msg.contactId ? { contactId: msg.contactId } : void 0
+      { contactId: msg.contactId }
     );
     if (result === "expired") {
+      await pool.query(`DELETE FROM notification_log WHERE id = $1`, [claimId]);
       await clearExpiredPushToken(userId, pushToken);
-      return 0;
+      return sent;
     }
-    if (result && msg.contactId) {
-      if (!notifiedByType.has(msg.notifType)) notifiedByType.set(msg.notifType, /* @__PURE__ */ new Set());
-      notifiedByType.get(msg.notifType).add(msg.contactId);
+    if (result) {
+      await pool.query(
+        `UPDATE notification_log
+         SET notif_type = $2, sent_at = NOW()
+         WHERE id = $1`,
+        [claimId, msg.notifType]
+      );
       sent++;
       console.log(`[push]     sent [${msg.notifType}] "${msg.title.slice(0, 50)}" \u2192 contact ${msg.contactId.slice(0, 8)}`);
+    } else {
+      await pool.query(`DELETE FROM notification_log WHERE id = $1`, [claimId]);
     }
   }
-  for (const [type, ids] of notifiedByType.entries()) {
-    await logNotifiedContacts(userId, ids, type);
-  }
   return sent;
+}
+async function sendRemindersForUser(userId, pushToken, timezone) {
+  const lockClient = await pool.connect();
+  let lockAcquired = false;
+  try {
+    const result = await lockClient.query(
+      `SELECT pg_try_advisory_lock(hashtext($1)) AS acquired`,
+      [`bridges:reminder:${userId}`]
+    );
+    lockAcquired = result.rows[0]?.acquired === true;
+    if (!lockAcquired) {
+      console.log(`[push]   user ${userId.slice(0, 8)}: reminder delivery already in progress`);
+      return 0;
+    }
+    return await sendRemindersForUserUnlocked(userId, pushToken, timezone);
+  } finally {
+    if (lockAcquired) {
+      await lockClient.query(`SELECT pg_advisory_unlock(hashtext($1))`, [`bridges:reminder:${userId}`]).catch((err) => console.warn("[push] Failed to release reminder advisory lock:", err));
+    }
+    lockClient.release();
+  }
 }
 async function sendDailyReminders() {
   console.log("[push] Checking per-user reminders (9am and 5pm windows; 1 push per window per user)\u2026");
@@ -1737,17 +1828,12 @@ async function sendHangoutFinalizedNotifications(planId, organizerUserId) {
     console.error("[push] Error sending hangout finalized notifications:", err);
   }
 }
-function isWithinNewContactGrace(contact, now) {
-  if (contact.lastContacted || !contact.createdAt) return false;
-  return now.getTime() - new Date(contact.createdAt).getTime() < 2 * 864e5;
-}
 function hasHomeReminder(contact, timezone, now) {
   const circle = contact.circleLevel;
   if (![1, 2, 3].includes(circle)) return false;
-  const daysSinceContact = getDaysSince(contact.lastContacted);
-  const checkinThreshold = { 1: 14, 2: 45, 3: 75 }[circle];
-  const hasCheckinReminder = circle === 3 ? daysSinceContact !== null && daysSinceContact > checkinThreshold : !isWithinNewContactGrace(contact, now) && (daysSinceContact === null || daysSinceContact > checkinThreshold);
-  if (hasCheckinReminder) return true;
+  const daysSinceContact = getContactDaysSince(contact.lastContacted, timezone);
+  const daysSinceCreated = getContactDaysSince(contact.createdAt, timezone);
+  if (isCheckinQuickPickEligible(circle, daysSinceContact, daysSinceCreated)) return true;
   const reminderWindow = { 1: 30, 2: 7, 3: 0 }[circle];
   const birthdayDays = getDaysUntilBirthdayInTz(contact.birthday, timezone);
   if (birthdayDays !== null && birthdayDays >= 0 && birthdayDays <= reminderWindow) {
@@ -1758,6 +1844,12 @@ function hasHomeReminder(contact, timezone, now) {
     const days = getDaysUntilBirthdayInTz(reminder.date, timezone);
     return days !== null && days >= 0 && days <= reminderWindow;
   });
+}
+function selectSuggestionPushCandidates(priorityCohort, timezone, now = /* @__PURE__ */ new Date()) {
+  const reminderFree = priorityCohort.filter(
+    (contact) => !hasHomeReminder(contact, timezone, now)
+  );
+  return reminderFree.length > 0 ? reminderFree : priorityCohort;
 }
 async function getPrioritySuggestionCohort(userId, _timezone = "UTC", now = /* @__PURE__ */ new Date()) {
   const [userContacts, eventResult, snapshotResult] = await Promise.all([
@@ -1810,7 +1902,7 @@ async function getPrioritySuggestionCohort(userId, _timezone = "UTC", now = /* @
       score: scorePrioritySuggestion(
         circle,
         null,
-        getDaysSince(contact.lastContacted),
+        getContactDaysSince(contact.lastContacted, _timezone),
         elevationBonus
       )
     };
@@ -1880,7 +1972,7 @@ async function sendProfileCompletionPushes() {
     console.error("[push] Error sending profile completion pushes:", err);
   }
 }
-async function sendSuggestionNudges() {
+async function sendSuggestionNudges(userId) {
   const nowUtc = (/* @__PURE__ */ new Date()).toISOString();
   console.log(`[push] sendSuggestionNudges running at ${nowUtc}`);
   try {
@@ -1890,7 +1982,9 @@ async function sendSuggestionNudges() {
               suggestion_notif_time
        FROM users
        WHERE push_token IS NOT NULL
-         AND COALESCE(suggestion_notif_frequency, 'daily') != 'off'`
+         AND COALESCE(suggestion_notif_frequency, 'daily') != 'off'
+         ${userId ? "AND id = $1" : ""}`,
+      userId ? [userId] : []
     );
     console.log(`[push] Suggestion nudge candidates: ${result.rows.length} user(s) with token + freq != off`);
     let sent = 0;
@@ -1946,15 +2040,8 @@ async function sendSuggestionNudges() {
           console.log(`[push]   \u2192 skip: no eligible contacts in priority cohort`);
           continue;
         }
-        const pushCandidates = priorityCohort.filter(
-          (contact) => !hasHomeReminder(contact, tz, /* @__PURE__ */ new Date())
-        );
-        if (pushCandidates.length === 0) {
-          console.log(
-            `[push]   \u2192 skip: all top-three priority contacts already have reminders`
-          );
-          continue;
-        }
+        const pushCandidates = selectSuggestionPushCandidates(priorityCohort, tz);
+        const usingReminderFallback = pushCandidates.length === priorityCohort.length && pushCandidates.every((contact, index) => contact.id === priorityCohort[index]?.id) && priorityCohort.every((contact) => hasHomeReminder(contact, tz, /* @__PURE__ */ new Date()));
         const lastSuccessfulResult = await pool.query(
           `SELECT contact_id
          FROM notification_log
@@ -1970,7 +2057,7 @@ async function sendSuggestionNudges() {
         );
         if (!bestContact) continue;
         console.log(
-          `[push]   \u2192 cohort: ${priorityCohort.map((contact) => contact.name).join(", ")}; push-eligible: ${pushCandidates.map((contact) => contact.name).join(", ")}; sending "${bestContact.name}" score=${bestContact.score}`
+          `[push]   \u2192 cohort: ${priorityCohort.map((contact) => contact.name).join(", ")}; push-eligible: ${pushCandidates.map((contact) => contact.name).join(", ")}; sending "${bestContact.name}" score=${bestContact.score}` + (usingReminderFallback ? " (all priority contacts are quick-picks; daily suggestion retained)" : "")
         );
         const nudgeTemplates = [
           { title: (n) => `Time to reach out to ${n}`, body: () => "Open the app to see what to say." },
@@ -2027,10 +2114,6 @@ async function sendSuggestionNudges() {
 var schedulerRunning = false;
 function scheduleDailyNotifications() {
   const MS_PER_15MIN = 15 * 60 * 1e3;
-  function msUntilNext15Min() {
-    const now = Date.now();
-    return MS_PER_15MIN - now % MS_PER_15MIN;
-  }
   async function runTick() {
     if (schedulerRunning) {
       console.log("[push] Scheduler tick skipped \u2014 previous run still in progress");
@@ -2038,9 +2121,11 @@ function scheduleDailyNotifications() {
     }
     schedulerRunning = true;
     try {
-      await sendDailyReminders().catch((err) => console.error("[push] Uncaught:", err));
-      await sendSuggestionNudges().catch((err) => console.error("[push] Uncaught:", err));
-      await sendProfileCompletionPushes().catch((err) => console.error("[push] Uncaught:", err));
+      await Promise.all([
+        sendDailyReminders().catch((err) => console.error("[push] Reminder dispatch failed:", err)),
+        sendSuggestionNudges().catch((err) => console.error("[push] Suggestion dispatch failed:", err)),
+        sendProfileCompletionPushes().catch((err) => console.error("[push] Profile dispatch failed:", err))
+      ]);
     } finally {
       schedulerRunning = false;
     }
@@ -2051,8 +2136,13 @@ function scheduleDailyNotifications() {
   setTimeout(() => {
     runTick();
     setInterval(runTick, MS_PER_15MIN);
-  }, msUntilNext15Min());
+  }, millisecondsUntilNextQuarterHour());
   console.log("[push] Notification scheduler started (delivers at 9am/5pm per user timezone)");
+}
+function millisecondsUntilNextQuarterHour(now = Date.now()) {
+  const MS_PER_15MIN = 15 * 60 * 1e3;
+  const remainder = now % MS_PER_15MIN;
+  return remainder === 0 ? 0 : MS_PER_15MIN - remainder;
 }
 
 // server/email.ts
@@ -3452,7 +3542,10 @@ async function registerRoutes(app2) {
       res.json({ ok: true });
       const tz = update.notificationTimezone ?? (await storage.getUser(req.session.userId))?.notificationTimezone;
       if (tz) {
-        sendRemindersForUser(req.session.userId, trimmedToken, tz).catch((err) => console.error("[push] Catch-up delivery error after token re-register:", err));
+        Promise.all([
+          sendRemindersForUser(req.session.userId, trimmedToken, tz),
+          sendSuggestionNudges(req.session.userId)
+        ]).catch((err) => console.error("[push] Catch-up delivery error after token re-register:", err));
       }
     } catch (err) {
       console.error("Error saving push token:", err);

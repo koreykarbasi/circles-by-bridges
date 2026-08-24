@@ -59,86 +59,10 @@ async function tryCancelNotification(notifId: string | undefined): Promise<void>
   } catch {}
 }
 
-// Re-sorts all active elevations by priority score and reschedules their
-// notifications with at least a 1-day gap between each. Called whenever
-// the elevation store changes (add or remove).
-//
-// Priority order: highest ELEVATION_SCORE_BONUS first (C1 > C2 > C3);
-// tie-break by elevatedAt ascending (first tapped = fires first).
-// Entries whose scheduled fire time would fall after their cleanupDue are
-// skipped — the elevation will have expired before the notification fires.
-async function rescheduleElevationNotifications(store: ElevationStore): Promise<void> {
-  const now = new Date();
-  const ONE_DAY_MS = 24 * 60 * 60 * 1000;
-
-  // Only schedule for entries that are still within their cleanup window
-  const activeEntries = Object.values(store).filter(
-    (e) => new Date(e.cleanupDue) > now,
-  );
-
-  // Sort: highest score first, earliest elevatedAt breaks ties
-  const sorted = [...activeEntries].sort((a, b) => {
-    const scoreA = ELEVATION_SCORE_BONUS[a.circleLevel];
-    const scoreB = ELEVATION_SCORE_BONUS[b.circleLevel];
-    if (scoreB !== scoreA) return scoreB - scoreA;
-    return new Date(a.elevatedAt).getTime() - new Date(b.elevatedAt).getTime();
-  });
-
-  // Cancel every existing notification before re-scheduling
-  for (const entry of sorted) {
-    if (entry.scheduledNotifId) {
-      await tryCancelNotification(entry.scheduledNotifId);
-      const key = storeKey(entry.contactId, entry.type);
-      if (store[key]) store[key] = { ...store[key], scheduledNotifId: undefined };
-    }
-  }
-
-  let nextFireTime: Date | null = null;
-
-  for (const entry of sorted) {
-    const key = storeKey(entry.contactId, entry.type);
-    if (!store[key]) continue;
-
-    const fireAt =
-      nextFireTime === null
-        ? new Date(entry.pushDue)
-        : new Date(nextFireTime.getTime() + ONE_DAY_MS);
-
-    nextFireTime = fireAt;
-
-    // Skip if fire time is already in the past
-    if (fireAt <= now) {
-      store[key] = { ...store[key], scheduledNotifId: undefined };
-      continue;
-    }
-
-    // If the queue pushes this notification past the original cleanupDue, extend
-    // it so the contact stays active until their turn fires. Cleanup is set to
-    // 2 hours after the scheduled fire time as a grace window for the user to act.
-    const cleanupDate = new Date(entry.cleanupDue);
-    if (fireAt >= cleanupDate) {
-      const extendedCleanup = new Date(fireAt.getTime() + 2 * 60 * 60 * 1000);
-      store[key] = { ...store[key], cleanupDue: extendedCleanup.toISOString() };
-    }
-
-    const title =
-      entry.type === "hangout"
-        ? `Plan a hangout with ${entry.contactName}`
-        : `Spoken to ${entry.contactName} lately?`;
-    const body =
-      entry.type === "hangout"
-        ? `It's been a while since you hung out with ${entry.contactName} — open the app to set up a hangout.`
-        : `When was the last time you contacted ${entry.contactName}? Open the app to submit or get suggestions on what to say.`;
-
-    const id = await Notifications.scheduleNotificationAsync({
-      content: { title, body, sound: true },
-      trigger: {
-        type: Notifications.SchedulableTriggerInputTypes.DATE,
-        date: fireAt,
-      },
-    }).catch(() => undefined);
-
-    store[key] = { ...store[key], scheduledNotifId: id };
+async function cancelTrackedElevationNotifications(store: ElevationStore): Promise<void> {
+  for (const [key, entry] of Object.entries(store)) {
+    await tryCancelNotification(entry.scheduledNotifId);
+    store[key] = { ...entry, scheduledNotifId: undefined };
   }
 }
 
@@ -146,26 +70,22 @@ export async function setElevation(entry: Omit<ElevationEntry, "scheduledNotifId
   const store = await load();
   const now = new Date();
 
-  // If this exact contact+type already has a future scheduled notification,
-  // leave it — avoids double-fire when the same contact appears on both
-  // Home and Suggestions tabs.
-  for (const v of Object.values(store)) {
-    if (
-      v.contactId === entry.contactId &&
-      v.type === entry.type &&
-      v.scheduledNotifId &&
-      new Date(v.pushDue) > now
-    ) {
-      return;
-    }
+  // Preserve the first elevation while it is active, even if both Home and
+  // Suggestions report the same action. Elevations only affect server-side
+  // ranking now; they must never create a device-local push.
+  const key = storeKey(entry.contactId, entry.type);
+  const existing = store[key];
+  if (existing && new Date(existing.cleanupDue) > now) {
+    await tryCancelNotification(existing.scheduledNotifId);
+    store[key] = { ...existing, scheduledNotifId: undefined };
+    await persist();
+    return;
   }
 
-  // Store the entry; reschedule assigns the scheduledNotifId
-  const key = storeKey(entry.contactId, entry.type);
+  // Retain elevation state for priority scoring and remove any job left by an
+  // older build. The server is the only authority that may deliver a push.
   store[key] = { ...entry, scheduledNotifId: undefined };
-
-  // Re-sort all active elevations and assign notification times
-  await rescheduleElevationNotifications(store);
+  await cancelTrackedElevationNotifications(store);
   await persist();
 
   // Always log to server so server-push dedup doesn't double-notify this contact
@@ -192,8 +112,6 @@ export async function clearElevation(contactId: string, type: ElevationType): Pr
   delete store[key];
   _cache = store;
 
-  // Reschedule remaining elevations — removing one may allow others to move up
-  await rescheduleElevationNotifications(store);
   await persist();
 }
 

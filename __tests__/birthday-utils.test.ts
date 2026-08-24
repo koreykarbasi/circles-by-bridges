@@ -1,4 +1,4 @@
-import { getDaysUntilBirthday, getDaysSince } from "../server/birthday-utils";
+import { getDaysUntilBirthday, getDaysSince, getDaysSinceInTz } from "../server/birthday-utils";
 
 // Pin "today" to a fixed local date for all tests: 2024-03-15 (a Friday)
 const FIXED_TODAY = new Date(2024, 2, 15, 12, 0, 0); // March 15 2024, noon local time
@@ -282,5 +282,19 @@ describe("getDaysSince — UTC midnight off-by-one regression", () => {
 
   test("YYYY-MM-DD yesterday is exactly 1, not 0 or 2", () => {
     expect(getDaysSince("2024-03-14")).toBe(1);
+  });
+});
+
+describe("getDaysSinceInTz — recipient calendar boundaries", () => {
+  test("uses the next local day for a UTC+14 recipient at their 9am window", () => {
+    // 2024-06-14 19:00 UTC is June 15 at 09:00 in Pacific/Kiritimati.
+    jest.setSystemTime(new Date("2024-06-14T19:00:00Z"));
+    expect(getDaysSinceInTz("2024-06-01", "Pacific/Kiritimati")).toBe(14);
+  });
+
+  test("uses the prior local day for a negative-offset recipient", () => {
+    // 2024-06-15 04:00 UTC is still June 14 in America/Los_Angeles.
+    jest.setSystemTime(new Date("2024-06-15T04:00:00Z"));
+    expect(getDaysSinceInTz("2024-06-01", "America/Los_Angeles")).toBe(13);
   });
 });

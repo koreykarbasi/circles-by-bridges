@@ -59,12 +59,20 @@ function makeDbMock(contactList: object[]) {
 
 // pool.query mock: empty dedup set (all messages eligible), no-op for inserts/deletes.
 function makePoolMock() {
-  return {
-    query: jest.fn().mockImplementation((sql: string) => {
-      if (typeof sql === "string" && sql.includes("SELECT")) {
-        return Promise.resolve({ rows: [] });
-      }
+  const query = jest.fn().mockImplementation((sql: string) => {
+    if (typeof sql === "string" && sql.includes("RETURNING id")) {
+      return Promise.resolve({ rows: [{ id: "claim-1" }] });
+    }
+    if (typeof sql === "string" && sql.includes("SELECT")) {
       return Promise.resolve({ rows: [] });
+    }
+    return Promise.resolve({ rows: [] });
+  });
+  return {
+    query,
+    connect: jest.fn().mockResolvedValue({
+      query: jest.fn().mockResolvedValue({ rows: [{ acquired: true }] }),
+      release: jest.fn(),
     }),
   };
 }

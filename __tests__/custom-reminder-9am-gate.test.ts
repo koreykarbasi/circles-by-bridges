@@ -78,14 +78,23 @@ function makeDbMock(contacts: object[]) {
 // pool.query mock: return empty sets for dedup (all msgs eligible) and
 // handle pruning/logging with no-ops.
 function makePoolMock() {
-  return {
-    query: jest.fn().mockImplementation((sql: string) => {
-      // Dedup SELECT → empty result (nothing recently sent)
-      if (typeof sql === "string" && sql.includes("SELECT")) {
-        return Promise.resolve({ rows: [] });
-      }
-      // INSERT / DELETE → no-op
+  const query = jest.fn().mockImplementation((sql: string) => {
+    // A reminder pre-send claim needs a durable row ID.
+    if (typeof sql === "string" && sql.includes("RETURNING id")) {
+      return Promise.resolve({ rows: [{ id: "claim-1" }] });
+    }
+    // Dedup SELECT → empty result (nothing recently sent)
+    if (typeof sql === "string" && sql.includes("SELECT")) {
       return Promise.resolve({ rows: [] });
+    }
+    // INSERT / DELETE → no-op
+    return Promise.resolve({ rows: [] });
+  });
+  return {
+    query,
+    connect: jest.fn().mockResolvedValue({
+      query: jest.fn().mockResolvedValue({ rows: [{ acquired: true }] }),
+      release: jest.fn(),
     }),
   };
 }
@@ -136,9 +145,8 @@ function contact(overrides: Partial<ContactRow> & { id: string; circleLevel: num
 
 // ── Part 1: buildReminderMessages — pure function notifType checks ─────────────
 //
-// The 9am gate in sendDailyReminders is triggered by notifType === "birthday"
-// on messages that come back from buildReminderMessages. These tests pin that
-// contract so a future refactor cannot silently change the type assignment.
+// Custom dates have their own notifType and are intentionally delivered only in
+// the morning window, so they do not compete with the 5pm quick-pick reminder.
 
 describe("buildReminderMessages — custom reminder notifType contract", () => {
   beforeEach(() => {
@@ -150,9 +158,9 @@ describe("buildReminderMessages — custom reminder notifType contract", () => {
     jest.useRealTimers();
   });
 
-  // ── Day-of (daysUntil===0) → notifType "birthday" (9am-gated) ────────────
+  // ── Day-of (daysUntil===0) → notifType "custom" (9am-gated) ──────────────
 
-  test("C1 custom reminder day-of produces notifType 'birthday' (9am gate applies)", () => {
+  test("C1 custom reminder day-of produces notifType 'custom' (9am gate applies)", () => {
     const c = contact({
       id: FAKE_CONTACT_ID,
       circleLevel: 1,
@@ -163,11 +171,11 @@ describe("buildReminderMessages — custom reminder notifType contract", () => {
     const msgs = buildReminderMessages(c, "UTC");
     const dayOf = msgs.filter((m) => m.title.includes("Anniversary") || m.body.includes("Anniversary"));
     expect(dayOf).toHaveLength(1);
-    expect(dayOf[0].notifType).toBe("birthday");
+    expect(dayOf[0].notifType).toBe("custom");
     expect(dayOf[0].contactId).toBe(FAKE_CONTACT_ID);
   });
 
-  test("C2 custom reminder day-of produces notifType 'birthday' (9am gate applies)", () => {
+  test("C2 custom reminder day-of produces notifType 'custom' (9am gate applies)", () => {
     const c = contact({
       id: FAKE_CONTACT_ID,
       circleLevel: 2,
@@ -177,10 +185,10 @@ describe("buildReminderMessages — custom reminder notifType contract", () => {
     const msgs = buildReminderMessages(c, "UTC");
     const dayOf = msgs.filter((m) => m.body.includes("Work anniversary"));
     expect(dayOf).toHaveLength(1);
-    expect(dayOf[0].notifType).toBe("birthday");
+    expect(dayOf[0].notifType).toBe("custom");
   });
 
-  test("C3 custom reminder day-of produces notifType 'birthday' (9am gate applies)", () => {
+  test("C3 custom reminder day-of produces notifType 'custom' (9am gate applies)", () => {
     const c = contact({
       id: FAKE_CONTACT_ID,
       circleLevel: 3,
@@ -190,12 +198,12 @@ describe("buildReminderMessages — custom reminder notifType contract", () => {
     const msgs = buildReminderMessages(c, "UTC");
     const dayOf = msgs.filter((m) => m.body.includes("Friendiversary"));
     expect(dayOf).toHaveLength(1);
-    expect(dayOf[0].notifType).toBe("birthday");
+    expect(dayOf[0].notifType).toBe("custom");
   });
 
-  // ── Advance milestones → notifType "milestone" (no 9am gate) ─────────────
+  // ── Advance custom dates → notifType "custom" (9am-gated) ────────────────
 
-  test("C1 custom reminder 7 days away produces notifType 'milestone' (not gated)", () => {
+  test("C1 custom reminder 7 days away produces notifType 'custom' (9am-gated)", () => {
     const c = contact({
       id: FAKE_CONTACT_ID,
       circleLevel: 1,
@@ -205,10 +213,10 @@ describe("buildReminderMessages — custom reminder notifType contract", () => {
     const msgs = buildReminderMessages(c, "UTC");
     const advance = msgs.filter((m) => m.title.includes("Anniversary") || m.body.includes("Anniversary"));
     expect(advance).toHaveLength(1);
-    expect(advance[0].notifType).toBe("milestone");
+    expect(advance[0].notifType).toBe("custom");
   });
 
-  test("C1 custom reminder 14 days away produces notifType 'milestone' (not gated)", () => {
+  test("C1 custom reminder 14 days away produces notifType 'custom' (9am-gated)", () => {
     const c = contact({
       id: FAKE_CONTACT_ID,
       circleLevel: 1,
@@ -218,10 +226,10 @@ describe("buildReminderMessages — custom reminder notifType contract", () => {
     const msgs = buildReminderMessages(c, "UTC");
     const advance = msgs.filter((m) => m.title.includes("Anniversary") || m.body.includes("Anniversary"));
     expect(advance).toHaveLength(1);
-    expect(advance[0].notifType).toBe("milestone");
+    expect(advance[0].notifType).toBe("custom");
   });
 
-  test("C1 custom reminder 30 days away produces notifType 'milestone' (not gated)", () => {
+  test("C1 custom reminder 30 days away produces notifType 'custom' (9am-gated)", () => {
     const c = contact({
       id: FAKE_CONTACT_ID,
       circleLevel: 1,
@@ -231,10 +239,10 @@ describe("buildReminderMessages — custom reminder notifType contract", () => {
     const msgs = buildReminderMessages(c, "UTC");
     const advance = msgs.filter((m) => m.title.includes("Anniversary") || m.body.includes("Anniversary"));
     expect(advance).toHaveLength(1);
-    expect(advance[0].notifType).toBe("milestone");
+    expect(advance[0].notifType).toBe("custom");
   });
 
-  test("C2 custom reminder 7 days away produces notifType 'milestone' (not gated)", () => {
+  test("C2 custom reminder 7 days away produces notifType 'custom' (9am-gated)", () => {
     const c = contact({
       id: FAKE_CONTACT_ID,
       circleLevel: 2,
@@ -244,24 +252,24 @@ describe("buildReminderMessages — custom reminder notifType contract", () => {
     const msgs = buildReminderMessages(c, "UTC");
     const advance = msgs.filter((m) => m.body.includes("Work anniversary"));
     expect(advance).toHaveLength(1);
-    expect(advance[0].notifType).toBe("milestone");
+    expect(advance[0].notifType).toBe("custom");
   });
 
-  test("contact with both day-of and advance custom reminders: day-of is 'birthday', advance is 'milestone'", () => {
+  test("contact with both day-of and advance custom reminders retains both custom events", () => {
     const c = contact({
       id: FAKE_CONTACT_ID,
       circleLevel: 1,
       lastContacted: "2024-03-14",
       customReminders: [
-        { label: "Big Day", date: DATE_TODAY },   // daysUntil===0 → birthday
-        { label: "Big Day", date: DATE_7D },      // daysUntil===7  → milestone
+        { label: "Big Day", date: DATE_TODAY },
+        { label: "Big Day", date: DATE_7D },
       ],
     });
     const msgs = buildReminderMessages(c, "UTC");
-    const dayOf = msgs.find((m) => m.notifType === "birthday" && m.body.includes("Big Day"));
-    const advance = msgs.find((m) => m.notifType === "milestone" && (m.title.includes("Big Day") || m.body.includes("Big Day")));
-    expect(dayOf).toBeDefined();
-    expect(advance).toBeDefined();
+    const customEvents = msgs.filter(
+      (m) => m.notifType === "custom" && (m.title.includes("Big Day") || m.body.includes("Big Day")),
+    );
+    expect(customEvents).toHaveLength(2);
   });
 });
 
@@ -272,6 +280,7 @@ describe("buildReminderMessages — custom reminder notifType contract", () => {
 
 describe("sendDailyReminders — custom reminder day-of gate", () => {
   let mockFetch: jest.Mock;
+  let pool: ReturnType<typeof makePoolMock>;
 
   const fakeContact = {
     id: FAKE_CONTACT_ID,
@@ -279,7 +288,7 @@ describe("sendDailyReminders — custom reminder day-of gate", () => {
     name: "Alice",
     circleLevel: 1,
     birthday: null,
-    lastContacted: "2024-03-14", // 1 day ago → not overdue (threshold > 17d)
+    lastContacted: "2024-03-14", // 1 day ago → not overdue (threshold > 14d)
     lastHangout: null,
     customReminders: [{ label: "Anniversary", date: DATE_TODAY }], // day-of today
   };
@@ -288,7 +297,7 @@ describe("sendDailyReminders — custom reminder day-of gate", () => {
     jest.useFakeTimers();
 
     // Fresh pool mock per test
-    const pool = makePoolMock();
+    pool = makePoolMock();
 
     // Fresh db mock per test (uses fresh callIdx)
     const db = makeDbMock([fakeContact]);
@@ -312,7 +321,7 @@ describe("sendDailyReminders — custom reminder day-of gate", () => {
     await sendDailyReminders();
 
     expect(mockFetch).toHaveBeenCalledWith(
-      "https://exp.host/api/v2/push/send",
+      "https://exp.host/--/api/v2/push/send",
       expect.objectContaining({ method: "POST" }),
     );
 
@@ -368,11 +377,44 @@ describe("sendDailyReminders — custom reminder day-of gate", () => {
     });
     expect(anniversaryCalls).toHaveLength(0);
   });
+
+  test("does not send when another process already owns this user's reminder window", async () => {
+    jest.setSystemTime(new Date(TODAY_YEAR, TODAY_MONTH, TODAY_DAY, 9, 0, 0));
+    const pool = makePoolMock();
+    pool.connect.mockResolvedValue({
+      query: jest.fn().mockResolvedValue({ rows: [{ acquired: false }] }),
+      release: jest.fn(),
+    });
+    dbModule.pool = pool;
+
+    await sendDailyReminders();
+
+    expect(mockFetch).not.toHaveBeenCalled();
+  });
+
+  test("keeps a user's token when Expo reports app-wide InvalidCredentials", async () => {
+    jest.setSystemTime(new Date(TODAY_YEAR, TODAY_MONTH, TODAY_DAY, 9, 0, 0));
+    mockFetch.mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        data: {
+          status: "error",
+          details: { error: "InvalidCredentials" },
+        },
+      }),
+    });
+
+    await sendDailyReminders();
+
+    expect(pool.query.mock.calls.some(([sql]) =>
+      typeof sql === "string" && sql.includes("UPDATE users") && sql.includes("push_token"),
+    )).toBe(false);
+  });
 });
 
-// ── Part 3: sendDailyReminders — advance milestones bypass the 9am gate ───────
+// ── Part 3: sendDailyReminders — advance custom dates use the 9am gate ───────
 
-describe("sendDailyReminders — advance milestone custom reminders are NOT gated to 9am", () => {
+describe("sendDailyReminders — advance custom reminders are gated to 9am", () => {
   let mockFetch: jest.Mock;
 
   const fakeContactWith7dReminder = {
@@ -383,7 +425,7 @@ describe("sendDailyReminders — advance milestone custom reminders are NOT gate
     birthday: null,
     lastContacted: "2024-03-14",
     lastHangout: null,
-    // 7 days away → notifType 'milestone' → NOT subject to 9am gate
+    // 7 days away → notifType 'custom' → delivered at 9am only
     customReminders: [{ label: "Anniversary", date: DATE_7D }],
   };
 
@@ -404,8 +446,7 @@ describe("sendDailyReminders — advance milestone custom reminders are NOT gate
     jest.restoreAllMocks();
   });
 
-  test("7-day advance custom reminder IS dispatched at 10am (outside the 9am window)", async () => {
-    // Not 9am — if the gate applied to milestones this would produce no push
+  test("7-day advance custom reminder is NOT dispatched at 10am", async () => {
     jest.setSystemTime(new Date(TODAY_YEAR, TODAY_MONTH, TODAY_DAY, 10, 0, 0));
 
     await sendDailyReminders();
@@ -418,10 +459,10 @@ describe("sendDailyReminders — advance milestone custom reminders are NOT gate
         return false;
       }
     });
-    expect(anniversaryCalls).toHaveLength(1);
+    expect(anniversaryCalls).toHaveLength(0);
   });
 
-  test("7-day advance custom reminder IS dispatched at 8am (before the 9am window)", async () => {
+  test("7-day advance custom reminder is NOT dispatched at 8am", async () => {
     jest.setSystemTime(new Date(TODAY_YEAR, TODAY_MONTH, TODAY_DAY, 8, 0, 0));
 
     await sendDailyReminders();
@@ -434,10 +475,10 @@ describe("sendDailyReminders — advance milestone custom reminders are NOT gate
         return false;
       }
     });
-    expect(anniversaryCalls).toHaveLength(1);
+    expect(anniversaryCalls).toHaveLength(0);
   });
 
-  test("7-day advance custom reminder IS dispatched at midnight", async () => {
+  test("7-day advance custom reminder is NOT dispatched at midnight", async () => {
     jest.setSystemTime(new Date(TODAY_YEAR, TODAY_MONTH, TODAY_DAY, 0, 0, 0));
 
     await sendDailyReminders();
@@ -450,10 +491,10 @@ describe("sendDailyReminders — advance milestone custom reminders are NOT gate
         return false;
       }
     });
-    expect(anniversaryCalls).toHaveLength(1);
+    expect(anniversaryCalls).toHaveLength(0);
   });
 
-  test("7-day advance custom reminder IS also dispatched at 9am (just confirming no suppression)", async () => {
+  test("7-day advance custom reminder is dispatched at 9am", async () => {
     jest.setSystemTime(new Date(TODAY_YEAR, TODAY_MONTH, TODAY_DAY, 9, 0, 0));
 
     await sendDailyReminders();
