@@ -231,6 +231,34 @@ describe("sendDailyReminders — birthday day-of gate (UTC user)", () => {
     expect(body.data?.contactId).toBe(FAKE_CONTACT_ID);
   });
 
+  test("Circle 2 one-week birthday reminder is dispatched in the 9am reminder slot", async () => {
+    jest.setSystemTime(new Date(TODAY_YEAR, TODAY_MONTH, TODAY_DAY, 9, 0, 0));
+    dbModule.db = makeDbMock([{
+      ...fakeContact,
+      circleLevel: 2,
+      birthday: "03/22",
+    }]);
+    dbModule.pool = makePoolMock();
+
+    await sendDailyReminders();
+
+    const calls = birthdayPushCalls(mockFetch);
+    expect(calls).toHaveLength(1);
+    const body = JSON.parse(calls[0][1].body);
+    expect(body.title).toContain("coming up");
+    expect(body.body).toContain("week");
+  });
+
+  test("does not send a late 9am push after a 9:10 startup", async () => {
+    jest.setSystemTime(new Date(TODAY_YEAR, TODAY_MONTH, TODAY_DAY, 9, 10, 0));
+    dbModule.db = makeDbMock([fakeContact]);
+    dbModule.pool = makePoolMock();
+
+    await sendDailyReminders();
+
+    expect(birthdayPushCalls(mockFetch)).toHaveLength(0);
+  });
+
   test("birthday push is NOT dispatched at 8am UTC (one hour before the window)", async () => {
     jest.setSystemTime(new Date(TODAY_YEAR, TODAY_MONTH, TODAY_DAY, 8, 0, 0));
     dbModule.db = makeDbMock([fakeContact]);

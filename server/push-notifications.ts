@@ -606,6 +606,31 @@ export function isFivePmLocalNow(timezone: string): boolean {
   return getLocalHour(timezone) === 17;
 }
 
+/**
+ * True only during the first two local minutes of a scheduled hour. The
+ * scheduler is aligned to :00; this small grace handles ordinary startup
+ * latency without turning a 9:10 restart into a late delivery.
+ */
+export function isAtLocalDeliveryStart(
+  timezone: string,
+  targetHour: number,
+  now = new Date(),
+): boolean {
+  try {
+    const parts = new Intl.DateTimeFormat("en-US", {
+      timeZone: timezone,
+      hour: "2-digit",
+      minute: "2-digit",
+      hourCycle: "h23",
+    }).formatToParts(now);
+    const hour = parseIntlHour(parts.find((part) => part.type === "hour")?.value ?? "");
+    const minute = parseInt(parts.find((part) => part.type === "minute")?.value ?? "", 10);
+    return hour === targetHour && minute >= 0 && minute < 2;
+  } catch {
+    return now.getUTCHours() === targetHour && now.getUTCMinutes() < 2;
+  }
+}
+
 // ─── Daily reminder dispatch ──────────────────────────────────────────────────
 
 /**
@@ -623,10 +648,11 @@ async function sendRemindersForUserUnlocked(
   userId: string,
   pushToken: string,
   timezone: string,
+  scheduledAt: Date,
 ): Promise<number> {
   const tz = timezone || "UTC";
-  const isNineAm = isNineAmLocalNow(tz);
-  const isFivePm = isFivePmLocalNow(tz);
+  const isNineAm = isAtLocalDeliveryStart(tz, 9, scheduledAt);
+  const isFivePm = isAtLocalDeliveryStart(tz, 17, scheduledAt);
 
   if (!isNineAm && !isFivePm) return 0;
 
@@ -637,17 +663,17 @@ async function sendRemindersForUserUnlocked(
 
   // ── Build message pools per window ────────────────────────────────────────
   //
-  // 9am (cap*):  day-of birthday (all, uncapped)  OR  1× custom > 1× check-in
-  // 5pm (cap 1): check-in overdue  >  birthday advance milestone (C1/C2)
+  // 9am (cap*): day-of birthday (all, uncapped) OR 1× custom > birthday
+  // milestone > check-in. 5pm (cap 1): check-in overdue.
   //
   // * Multiple contacts can share a birthday — all fire at 9am. If any birthday
   //   fires, custom and check-in are skipped that morning to avoid flooding.
   //
   const nineAmBirthdayMsgs: PushMessage[] = [];
   const nineAmCustomMsgs: PushMessage[] = [];
+  const nineAmMilestoneMsgs: PushMessage[] = [];
   const nineAmReminderMsgs: PushMessage[] = [];
   const fivePmReminderMsgs: PushMessage[] = [];
-  const fivePmMilestoneMsgs: PushMessage[] = [];
 
   for (const contact of userContacts) {
     if (isNineAm) {
@@ -665,7 +691,7 @@ async function sendRemindersForUserUnlocked(
           if (isNineAm) nineAmCustomMsgs.push(msg);
           break;
         case "milestone":
-          if (isFivePm) fivePmMilestoneMsgs.push(msg);
+          if (isNineAm) nineAmMilestoneMsgs.push(msg);
           break;
       }
     }
@@ -737,7 +763,7 @@ async function sendRemindersForUserUnlocked(
       // Only reminder/milestone types are filtered; birthday and custom are not.
       nineAmReminderMsgs.splice(0, Infinity, ...applyCooldown(nineAmReminderMsgs));
       fivePmReminderMsgs.splice(0, Infinity, ...applyCooldown(fivePmReminderMsgs));
-      fivePmMilestoneMsgs.splice(0, Infinity, ...applyCooldown(fivePmMilestoneMsgs));
+      nineAmMilestoneMsgs.splice(0, Infinity, ...applyCooldown(nineAmMilestoneMsgs));
     }
   } catch (cooldownErr) {
     // Non-fatal: if the query fails, proceed without cooldown filtering rather
@@ -760,6 +786,7 @@ async function sendRemindersForUserUnlocked(
     } else {
       const fallback = [
         ...dedupMessages(nineAmCustomMsgs, recentCustomIds),
+        ...dedupMessages(nineAmMilestoneMsgs, recentMilestoneIds),
         ...dedupMessages(nineAmReminderMsgs, recentReminderIds),
       ];
       if (fallback[0]) nineAmMsgs.push(fallback[0]);
@@ -776,15 +803,14 @@ async function sendRemindersForUserUnlocked(
       fivePmReminderMsgs,
       new Set([...recentReminderIds, ...crossTypeBlockIds]),
     );
-    const filteredMilestone = dedupMessages(fivePmMilestoneMsgs, recentMilestoneIds);
-    fivePmMsg = [...filteredReminder, ...filteredMilestone][0] ?? null;
+    fivePmMsg = filteredReminder[0] ?? null;
   }
 
   const toSend = [...nineAmMsgs, ...(fivePmMsg ? [fivePmMsg] : [])];
 
   if (toSend.length === 0) {
     const totalBuilt = nineAmBirthdayMsgs.length + nineAmCustomMsgs.length +
-      nineAmReminderMsgs.length + fivePmReminderMsgs.length + fivePmMilestoneMsgs.length;
+      nineAmMilestoneMsgs.length + nineAmReminderMsgs.length + fivePmReminderMsgs.length;
     if (totalBuilt > 0) {
       console.log(`[push]   user ${userId.slice(0, 8)}: eligible messages exist but all in 24h dedup window`);
     }
@@ -854,6 +880,7 @@ export async function sendRemindersForUser(
   userId: string,
   pushToken: string,
   timezone: string,
+  scheduledAt = new Date(),
 ): Promise<number> {
   const lockClient = await pool.connect();
   let lockAcquired = false;
@@ -867,7 +894,7 @@ export async function sendRemindersForUser(
       console.log(`[push]   user ${userId.slice(0, 8)}: reminder delivery already in progress`);
       return 0;
     }
-    return await sendRemindersForUserUnlocked(userId, pushToken, timezone);
+    return await sendRemindersForUserUnlocked(userId, pushToken, timezone, scheduledAt);
   } finally {
     if (lockAcquired) {
       await lockClient
@@ -893,9 +920,15 @@ export async function sendDailyReminders() {
       .where(isNotNull(users.pushToken));
 
     let sent = 0;
+    const scheduledAt = new Date();
     for (const user of usersWithTokens) {
       if (!user.pushToken) continue;
-      sent += await sendRemindersForUser(user.id, user.pushToken, user.notificationTimezone ?? "UTC");
+      sent += await sendRemindersForUser(
+        user.id,
+        user.pushToken,
+        user.notificationTimezone ?? "UTC",
+        scheduledAt,
+      );
     }
     if (sent > 0) {
       console.log(`[push] sendDailyReminders: sent ${sent} notification(s) total`);
@@ -1111,6 +1144,7 @@ export async function getPrioritySuggestionCohort(
 
 export async function sendProfileCompletionPushes() {
   try {
+    const scheduledAt = new Date();
     const usersWithTokens = await db
       .select({
         id: users.id,
@@ -1126,7 +1160,7 @@ export async function sendProfileCompletionPushes() {
       if (!user.pushToken) continue;
 
       const tz = user.notificationTimezone ?? "UTC";
-      if (!isNineAmLocalNow(tz)) continue;
+      if (!isAtLocalDeliveryStart(tz, 9, scheduledAt)) continue;
       if (getLocalDayOfWeek(tz) !== 0) continue; // 0 = Sunday
 
       if (user.lastProfilePushAt) {
@@ -1173,6 +1207,7 @@ export async function sendSuggestionNudges(userId?: string) {
   const nowUtc = new Date().toISOString();
   console.log(`[push] sendSuggestionNudges running at ${nowUtc}`);
   try {
+    const scheduledAt = new Date();
     const result = await pool.query<{
       id: string;
       push_token: string;
@@ -1200,6 +1235,10 @@ export async function sendSuggestionNudges(userId?: string) {
       console.log(`[push]   user ${user.id.slice(0, 8)} tz=${tz} localHour=${localHour} preferredHour=${preferredHour} freq=${user.suggestion_notif_frequency}`);
       if (localHour !== preferredHour) {
         console.log(`[push]   → skip: hour mismatch (${localHour} != ${preferredHour})`);
+        continue;
+      }
+      if (!isAtLocalDeliveryStart(tz, preferredHour, scheduledAt)) {
+        console.log(`[push]   → skip: outside the ${preferredHour}:00 delivery start`);
         continue;
       }
 

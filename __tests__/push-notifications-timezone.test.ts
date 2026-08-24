@@ -40,6 +40,7 @@ import {
   getLocalHour,
   getLocalDayOfWeek,
   isNineAmLocalNow,
+  isAtLocalDeliveryStart,
 } from "../server/push-notifications";
 
 // ─── Helper ───────────────────────────────────────────────────────────────────
@@ -255,6 +256,24 @@ describe("isNineAmLocalNow", () => {
       setUtcTime("2024-06-15T00:00:00Z");
       expect(isNineAmLocalNow("Australia/Sydney")).toBe(false);
     });
+  });
+});
+
+describe("isAtLocalDeliveryStart", () => {
+  it("allows the exact scheduled minute and a short startup grace", () => {
+    setUtcTime("2024-06-15T09:01:59Z");
+    expect(isAtLocalDeliveryStart("UTC", 9)).toBe(true);
+  });
+
+  it("does not turn a 9:10 server restart into a late 9am push", () => {
+    setUtcTime("2024-06-15T09:10:00Z");
+    expect(isAtLocalDeliveryStart("UTC", 9)).toBe(false);
+  });
+
+  it("uses the recipient timezone for an afternoon delivery", () => {
+    // 21:00 UTC is 17:00 EDT.
+    setUtcTime("2024-06-15T21:00:30Z");
+    expect(isAtLocalDeliveryStart("America/New_York", 17)).toBe(true);
   });
 });
 

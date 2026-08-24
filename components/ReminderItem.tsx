@@ -141,28 +141,33 @@ export function ReminderItem({ reminder, onComplete, onQuickPick, onCalendarPres
   );
 
   return (
-    <Animated.View style={[styles.container, animatedStyle]}>
-      {isProfileCompletion ? (
-        <Pressable
-          onPress={handleProfileCompletionPress}
-          style={({ pressed }) => pressed && { opacity: 0.7 }}
-        >
-          {cardContent}
-        </Pressable>
-      ) : cardContent}
-      {isQuickPick && (
-        <QuickPickRow
-          circleLevel={reminder.circleLevel as 1 | 2 | 3}
-          variant={quickPickVariant}
-          onSelect={handleQuickPick}
-          onCalendarPress={quickPickVariant === "hangout" ? onCalendarPress : undefined}
-        />
-      )}
+    <Animated.View style={[styles.animatedContainer, animatedStyle]}>
+      <View style={styles.container}>
+        {isProfileCompletion ? (
+          <Pressable
+            onPress={handleProfileCompletionPress}
+            style={({ pressed }) => pressed && { opacity: 0.7 }}
+          >
+            {cardContent}
+          </Pressable>
+        ) : cardContent}
+        {isQuickPick && (
+          <QuickPickRow
+            circleLevel={reminder.circleLevel as 1 | 2 | 3}
+            variant={quickPickVariant}
+            onSelect={handleQuickPick}
+            onCalendarPress={quickPickVariant === "hangout" ? onCalendarPress : undefined}
+          />
+        )}
+      </View>
     </Animated.View>
   );
 }
 
 const styles = StyleSheet.create({
+  animatedContainer: {
+    overflow: "hidden",
+  },
   container: {
     backgroundColor: Colors.surface,
     borderRadius: 14,

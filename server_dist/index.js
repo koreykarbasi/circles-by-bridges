@@ -1596,23 +1596,32 @@ function getLocalDayOfWeek(timezone) {
     return (/* @__PURE__ */ new Date()).getDay();
   }
 }
-function isNineAmLocalNow(timezone) {
-  return getLocalHour(timezone) === 9;
+function isAtLocalDeliveryStart(timezone, targetHour, now = /* @__PURE__ */ new Date()) {
+  try {
+    const parts = new Intl.DateTimeFormat("en-US", {
+      timeZone: timezone,
+      hour: "2-digit",
+      minute: "2-digit",
+      hourCycle: "h23"
+    }).formatToParts(now);
+    const hour = parseIntlHour(parts.find((part) => part.type === "hour")?.value ?? "");
+    const minute = parseInt(parts.find((part) => part.type === "minute")?.value ?? "", 10);
+    return hour === targetHour && minute >= 0 && minute < 2;
+  } catch {
+    return now.getUTCHours() === targetHour && now.getUTCMinutes() < 2;
+  }
 }
-function isFivePmLocalNow(timezone) {
-  return getLocalHour(timezone) === 17;
-}
-async function sendRemindersForUserUnlocked(userId, pushToken, timezone) {
+async function sendRemindersForUserUnlocked(userId, pushToken, timezone, scheduledAt) {
   const tz = timezone || "UTC";
-  const isNineAm = isNineAmLocalNow(tz);
-  const isFivePm = isFivePmLocalNow(tz);
+  const isNineAm = isAtLocalDeliveryStart(tz, 9, scheduledAt);
+  const isFivePm = isAtLocalDeliveryStart(tz, 17, scheduledAt);
   if (!isNineAm && !isFivePm) return 0;
   const userContacts = await db.select().from(contacts).where(eq2(contacts.userId, userId));
   const nineAmBirthdayMsgs = [];
   const nineAmCustomMsgs = [];
+  const nineAmMilestoneMsgs = [];
   const nineAmReminderMsgs = [];
   const fivePmReminderMsgs = [];
-  const fivePmMilestoneMsgs = [];
   for (const contact of userContacts) {
     if (isNineAm) {
       for (const msg of buildBirthdayDayOfMessages(contact, tz)) {
@@ -1629,7 +1638,7 @@ async function sendRemindersForUserUnlocked(userId, pushToken, timezone) {
           if (isNineAm) nineAmCustomMsgs.push(msg);
           break;
         case "milestone":
-          if (isFivePm) fivePmMilestoneMsgs.push(msg);
+          if (isNineAm) nineAmMilestoneMsgs.push(msg);
           break;
       }
     }
@@ -1680,7 +1689,7 @@ async function sendRemindersForUserUnlocked(userId, pushToken, timezone) {
       });
       nineAmReminderMsgs.splice(0, Infinity, ...applyCooldown(nineAmReminderMsgs));
       fivePmReminderMsgs.splice(0, Infinity, ...applyCooldown(fivePmReminderMsgs));
-      fivePmMilestoneMsgs.splice(0, Infinity, ...applyCooldown(fivePmMilestoneMsgs));
+      nineAmMilestoneMsgs.splice(0, Infinity, ...applyCooldown(nineAmMilestoneMsgs));
     }
   } catch (cooldownErr) {
     console.warn(`[push]   swipe-cooldown check failed (non-fatal):`, cooldownErr);
@@ -1697,6 +1706,7 @@ async function sendRemindersForUserUnlocked(userId, pushToken, timezone) {
     } else {
       const fallback = [
         ...dedupMessages(nineAmCustomMsgs, recentCustomIds),
+        ...dedupMessages(nineAmMilestoneMsgs, recentMilestoneIds),
         ...dedupMessages(nineAmReminderMsgs, recentReminderIds)
       ];
       if (fallback[0]) nineAmMsgs.push(fallback[0]);
@@ -1709,12 +1719,11 @@ async function sendRemindersForUserUnlocked(userId, pushToken, timezone) {
       fivePmReminderMsgs,
       /* @__PURE__ */ new Set([...recentReminderIds, ...crossTypeBlockIds])
     );
-    const filteredMilestone = dedupMessages(fivePmMilestoneMsgs, recentMilestoneIds);
-    fivePmMsg = [...filteredReminder, ...filteredMilestone][0] ?? null;
+    fivePmMsg = filteredReminder[0] ?? null;
   }
   const toSend = [...nineAmMsgs, ...fivePmMsg ? [fivePmMsg] : []];
   if (toSend.length === 0) {
-    const totalBuilt = nineAmBirthdayMsgs.length + nineAmCustomMsgs.length + nineAmReminderMsgs.length + fivePmReminderMsgs.length + fivePmMilestoneMsgs.length;
+    const totalBuilt = nineAmBirthdayMsgs.length + nineAmCustomMsgs.length + nineAmMilestoneMsgs.length + nineAmReminderMsgs.length + fivePmReminderMsgs.length;
     if (totalBuilt > 0) {
       console.log(`[push]   user ${userId.slice(0, 8)}: eligible messages exist but all in 24h dedup window`);
     }
@@ -1763,7 +1772,7 @@ async function sendRemindersForUserUnlocked(userId, pushToken, timezone) {
   }
   return sent;
 }
-async function sendRemindersForUser(userId, pushToken, timezone) {
+async function sendRemindersForUser(userId, pushToken, timezone, scheduledAt = /* @__PURE__ */ new Date()) {
   const lockClient = await pool.connect();
   let lockAcquired = false;
   try {
@@ -1776,7 +1785,7 @@ async function sendRemindersForUser(userId, pushToken, timezone) {
       console.log(`[push]   user ${userId.slice(0, 8)}: reminder delivery already in progress`);
       return 0;
     }
-    return await sendRemindersForUserUnlocked(userId, pushToken, timezone);
+    return await sendRemindersForUserUnlocked(userId, pushToken, timezone, scheduledAt);
   } finally {
     if (lockAcquired) {
       await lockClient.query(`SELECT pg_advisory_unlock(hashtext($1))`, [`bridges:reminder:${userId}`]).catch((err) => console.warn("[push] Failed to release reminder advisory lock:", err));
@@ -1794,9 +1803,15 @@ async function sendDailyReminders() {
       notificationTimezone: users.notificationTimezone
     }).from(users).where(isNotNull(users.pushToken));
     let sent = 0;
+    const scheduledAt = /* @__PURE__ */ new Date();
     for (const user of usersWithTokens) {
       if (!user.pushToken) continue;
-      sent += await sendRemindersForUser(user.id, user.pushToken, user.notificationTimezone ?? "UTC");
+      sent += await sendRemindersForUser(
+        user.id,
+        user.pushToken,
+        user.notificationTimezone ?? "UTC",
+        scheduledAt
+      );
     }
     if (sent > 0) {
       console.log(`[push] sendDailyReminders: sent ${sent} notification(s) total`);
@@ -1924,6 +1939,7 @@ async function getPrioritySuggestionCohort(userId, _timezone = "UTC", now = /* @
 }
 async function sendProfileCompletionPushes() {
   try {
+    const scheduledAt = /* @__PURE__ */ new Date();
     const usersWithTokens = await db.select({
       id: users.id,
       pushToken: users.pushToken,
@@ -1934,7 +1950,7 @@ async function sendProfileCompletionPushes() {
     for (const user of usersWithTokens) {
       if (!user.pushToken) continue;
       const tz = user.notificationTimezone ?? "UTC";
-      if (!isNineAmLocalNow(tz)) continue;
+      if (!isAtLocalDeliveryStart(tz, 9, scheduledAt)) continue;
       if (getLocalDayOfWeek(tz) !== 0) continue;
       if (user.lastProfilePushAt) {
         const daysSinceLastPush = Math.floor(
@@ -1976,6 +1992,7 @@ async function sendSuggestionNudges(userId) {
   const nowUtc = (/* @__PURE__ */ new Date()).toISOString();
   console.log(`[push] sendSuggestionNudges running at ${nowUtc}`);
   try {
+    const scheduledAt = /* @__PURE__ */ new Date();
     const result = await pool.query(
       `SELECT id, push_token, notification_timezone,
               COALESCE(suggestion_notif_frequency, 'daily') AS suggestion_notif_frequency,
@@ -1995,6 +2012,10 @@ async function sendSuggestionNudges(userId) {
       console.log(`[push]   user ${user.id.slice(0, 8)} tz=${tz} localHour=${localHour} preferredHour=${preferredHour} freq=${user.suggestion_notif_frequency}`);
       if (localHour !== preferredHour) {
         console.log(`[push]   \u2192 skip: hour mismatch (${localHour} != ${preferredHour})`);
+        continue;
+      }
+      if (!isAtLocalDeliveryStart(tz, preferredHour, scheduledAt)) {
+        console.log(`[push]   \u2192 skip: outside the ${preferredHour}:00 delivery start`);
         continue;
       }
       const freq = user.suggestion_notif_frequency;

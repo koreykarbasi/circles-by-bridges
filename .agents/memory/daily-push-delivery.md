@@ -14,3 +14,9 @@ For legacy Expo routes, clear a saved token only for a token-specific response s
 **Why:** Removing valid user tokens during a credential outage makes recovery depend on every affected user reopening the app after the credentials are repaired.
 
 **How to apply:** Return a normal delivery failure for `InvalidCredentials`, leave the token in place, and surface the credential failure in logs for operational repair.
+
+Scheduled pushes are delivered at the user's selected local `:00` with a two-minute startup grace, not at any point in that hour. A scheduled run snapshots its start time so every user in an on-time batch remains eligible even if processing takes more than two minutes. Birthday advance milestones use the normal 9 AM reminder slot, after custom reminders and before ordinary check-ins.
+
+**Why:** A restarted process at 9:10 produced visibly late suggestion/reminder pushes. A Circle 2 one-week birthday milestone was built but deferred to 5 PM, contrary to the expected morning reminder.
+
+**How to apply:** Keep the scheduler aligned to the quarter-hour; use the explicit local delivery-start predicate for reminders, suggestions, and profile pushes. Do not move birthday milestones out of the 9 AM selection without an intentional product decision.
