@@ -1,6 +1,5 @@
 import React, { useCallback } from "react";
 import { View, Text, StyleSheet, Pressable } from "react-native";
-import Animated, { useSharedValue, useAnimatedStyle, withTiming, Easing, runOnJS } from "react-native-reanimated";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import Colors from "@/constants/colors";
 import { CIRCLE_CONFIG } from "@/lib/types";
@@ -57,39 +56,15 @@ export function ReminderItem({ reminder, onComplete, onQuickPick, onCalendarPres
   const quickPickVariant: "checkin" | "hangout" = reminder.type === "hangout-quickpick" ? "hangout" : "checkin";
   const isPersistent = reminder.persistent === true;
 
-  const opacity = useSharedValue(1);
-  const height = useSharedValue<number | undefined>(undefined);
-  const marginBottom = useSharedValue(8);
-
-  const animatedStyle = useAnimatedStyle(() => ({
-    opacity: opacity.value,
-    height: height.value,
-    marginBottom: marginBottom.value,
-    overflow: "hidden" as const,
-  }));
-
   const handleComplete = useCallback(() => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    opacity.value = withTiming(0, { duration: 250, easing: Easing.out(Easing.cubic) }, () => {
-      height.value = withTiming(0, { duration: 200 });
-      marginBottom.value = withTiming(0, { duration: 200 }, () => {
-        runOnJS(onComplete)();
-      });
-    });
+    onComplete();
   }, [onComplete]);
 
   const handleQuickPick = useCallback((date: Date, label: string) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    const callback = () => {
-      if (onQuickPick) onQuickPick(date, label);
-      else onComplete();
-    };
-    opacity.value = withTiming(0, { duration: 250, easing: Easing.out(Easing.cubic) }, () => {
-      height.value = withTiming(0, { duration: 200 });
-      marginBottom.value = withTiming(0, { duration: 200 }, () => {
-        runOnJS(callback)();
-      });
-    });
+    if (onQuickPick) onQuickPick(date, label);
+    else onComplete();
   }, [onQuickPick, onComplete]);
 
   const handleProfileCompletionPress = useCallback(() => {
@@ -141,33 +116,28 @@ export function ReminderItem({ reminder, onComplete, onQuickPick, onCalendarPres
   );
 
   return (
-    <Animated.View style={[styles.animatedContainer, animatedStyle]}>
-      <View style={styles.container}>
-        {isProfileCompletion ? (
-          <Pressable
-            onPress={handleProfileCompletionPress}
-            style={({ pressed }) => pressed && { opacity: 0.7 }}
-          >
-            {cardContent}
-          </Pressable>
-        ) : cardContent}
-        {isQuickPick && (
-          <QuickPickRow
-            circleLevel={reminder.circleLevel as 1 | 2 | 3}
-            variant={quickPickVariant}
-            onSelect={handleQuickPick}
-            onCalendarPress={quickPickVariant === "hangout" ? onCalendarPress : undefined}
-          />
-        )}
-      </View>
-    </Animated.View>
+    <View style={styles.container}>
+      {isProfileCompletion ? (
+        <Pressable
+          onPress={handleProfileCompletionPress}
+          style={({ pressed }) => pressed && { opacity: 0.7 }}
+        >
+          {cardContent}
+        </Pressable>
+      ) : cardContent}
+      {isQuickPick && (
+        <QuickPickRow
+          circleLevel={reminder.circleLevel as 1 | 2 | 3}
+          variant={quickPickVariant}
+          onSelect={handleQuickPick}
+          onCalendarPress={quickPickVariant === "hangout" ? onCalendarPress : undefined}
+        />
+      )}
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  animatedContainer: {
-    overflow: "hidden",
-  },
   container: {
     backgroundColor: Colors.surface,
     borderRadius: 14,

@@ -1,5 +1,5 @@
 import React, { useState, useCallback, useMemo, useEffect, useRef } from "react";
-import { View, Text, StyleSheet, ScrollView, Platform, RefreshControl, Pressable, Image, Animated, Linking, ActivityIndicator, AppState, AppStateStatus } from "react-native";
+import { View, Text, StyleSheet, ScrollView, Platform, RefreshControl, Pressable, Image, Animated, Linking, ActivityIndicator, AppState, AppStateStatus, LayoutAnimation } from "react-native";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
 import Reanimated, { useSharedValue, useAnimatedStyle, withTiming, withSpring, runOnJS } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -37,6 +37,20 @@ import * as BirthdayText from "@/lib/birthday-text";
 
 const MAX_REMINDERS = 5;
 const MAX_SUGGESTIONS = 3;
+
+function animateReminderListChange() {
+  if (Platform.OS === "web") return;
+  LayoutAnimation.configureNext({
+    duration: 220,
+    update: {
+      type: LayoutAnimation.Types.easeInEaseOut,
+    },
+    delete: {
+      type: LayoutAnimation.Types.easeInEaseOut,
+      property: LayoutAnimation.Properties.opacity,
+    },
+  });
+}
 
 function getReminderIcon(reminder: Reminder): string {
   if (reminder.type === "custom-reminder") return "star-outline";
@@ -416,6 +430,7 @@ export default function HomeScreen() {
 
   const handleReminderComplete = useCallback(
     async (reminder: Reminder) => {
+      animateReminderListChange();
       dismissReminder(reminder.id);
       if (
         reminder.type === "birthday" ||
@@ -435,6 +450,7 @@ export default function HomeScreen() {
 
   const handleReminderQuickPick = useCallback(
     async (reminder: Reminder, date: Date, label: string) => {
+      animateReminderListChange();
       dismissReminder(reminder.id);
       if (!reminder.contactId) return;
       const circleLevel = reminder.circleLevel as 1 | 2 | 3;
@@ -478,10 +494,12 @@ export default function HomeScreen() {
   );
 
   const handleReminderSnooze = useCallback((reminder: Reminder) => {
+    animateReminderListChange();
     dismissReminder(reminder.id);
   }, []);
 
   const handleHangoutCalendarPress = useCallback((reminder: Reminder) => {
+    animateReminderListChange();
     dismissReminder(reminder.id);
     router.push({
       pathname: "/create-hangout",
