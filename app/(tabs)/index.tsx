@@ -1,5 +1,5 @@
 import React, { useState, useCallback, useMemo, useEffect, useRef } from "react";
-import { View, Text, StyleSheet, ScrollView, Platform, RefreshControl, Pressable, Image, Animated, Linking, ActivityIndicator, AppState, AppStateStatus, LayoutAnimation } from "react-native";
+import { View, Text, StyleSheet, ScrollView, Platform, RefreshControl, Pressable, Image, Animated, Linking, ActivityIndicator, AppState, AppStateStatus } from "react-native";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
 import Reanimated, { useSharedValue, useAnimatedStyle, withTiming, withSpring, runOnJS } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -37,20 +37,6 @@ import * as BirthdayText from "@/lib/birthday-text";
 
 const MAX_REMINDERS = 5;
 const MAX_SUGGESTIONS = 3;
-
-function animateReminderListChange() {
-  if (Platform.OS === "web") return;
-  LayoutAnimation.configureNext({
-    duration: 220,
-    update: {
-      type: LayoutAnimation.Types.easeInEaseOut,
-    },
-    delete: {
-      type: LayoutAnimation.Types.easeInEaseOut,
-      property: LayoutAnimation.Properties.opacity,
-    },
-  });
-}
 
 function getReminderIcon(reminder: Reminder): string {
   if (reminder.type === "custom-reminder") return "star-outline";
@@ -430,19 +416,24 @@ export default function HomeScreen() {
 
   const handleReminderComplete = useCallback(
     async (reminder: Reminder) => {
-      animateReminderListChange();
-      dismissReminder(reminder.id);
       if (
         reminder.type === "birthday" ||
         reminder.type === "custom-reminder" ||
         reminder.type.startsWith("profile-completion") ||
         !reminder.contactId
-      ) return;
+      ) {
+        dismissReminder(reminder.id);
+        return;
+      }
       // DISABLED: hangout tracking
       // if (reminder.type === "hangout-quickpick") {
       //   await markHangout(reminder.contactId);
       // } else {
-        await markContacted(reminder.contactId);
+        const saveContact = markContacted(reminder.contactId);
+        // Keep the contact and reminder state changes in the same React update.
+        // Separate updates resize the section twice and make the ScrollView jump.
+        dismissReminder(reminder.id);
+        await saveContact;
       // }
     },
     [markContacted],
@@ -450,13 +441,15 @@ export default function HomeScreen() {
 
   const handleReminderQuickPick = useCallback(
     async (reminder: Reminder, date: Date, label: string) => {
-      animateReminderListChange();
-      dismissReminder(reminder.id);
       if (!reminder.contactId) return;
       const circleLevel = reminder.circleLevel as 1 | 2 | 3;
 
       if (reminder.type === "check-in-quickpick") {
-        await markContacted(reminder.contactId, date, label);
+        const saveContact = markContacted(reminder.contactId, date, label);
+        // See handleReminderComplete: batch both visual state changes so Home
+        // moves directly to its final layout rather than reflowing twice.
+        dismissReminder(reminder.id);
+        await saveContact;
         const daysSince = Math.floor((Date.now() - date.getTime()) / (1000 * 60 * 60 * 24));
         if (daysSince > CHECKIN_THRESHOLDS[circleLevel]) {
           await setElevation({
@@ -494,12 +487,10 @@ export default function HomeScreen() {
   );
 
   const handleReminderSnooze = useCallback((reminder: Reminder) => {
-    animateReminderListChange();
     dismissReminder(reminder.id);
   }, []);
 
   const handleHangoutCalendarPress = useCallback((reminder: Reminder) => {
-    animateReminderListChange();
     dismissReminder(reminder.id);
     router.push({
       pathname: "/create-hangout",
