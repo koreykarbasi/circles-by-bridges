@@ -4,3 +4,4 @@
 - [Direct APNs push](apns-direct-push.md) — bypass Expo push service; standalone iOS uses getDevicePushTokenAsync → "apns:" prefix; server sends via APNs HTTP/2 + JWT.
 - [Daily push delivery invariants](daily-push-delivery.md) — quick-pick and suggestion co-deliver independently; eligibility and thresholds follow the recipient’s local calendar.
 - [Native reminder-list animation](native-reminder-list-animation.md) — remove Home reminder cards with one parent layout transition; nested animated heights leave a transient blank gap in Expo Go.
+- [GitHub automation access](github-automation-access.md) — verify an Actions workflow is actually published; connector metadata access may not imply repository writes succeed.

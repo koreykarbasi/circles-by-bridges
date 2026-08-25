@@ -49,6 +49,10 @@ args = "Start Frontend"
 task = "workflow.run"
 args = "profile-completion-test"
 
+[[workflows.workflow.tasks]]
+task = "workflow.run"
+args = "Temporary Toronto production heartbeat"
+
 [[workflows.workflow]]
 name = "Start App"
 author = "agent"
@@ -95,6 +99,17 @@ args = "npx tsx scripts/test-profile-completion.ts"
 
 [workflows.workflow.metadata]
 isValidation = true
+
+[[workflows.workflow]]
+name = "Temporary Toronto production heartbeat"
+author = "agent"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "bash -c 'set -euo pipefail; while true; do hour=$(TZ=America/Toronto date +%H); if [ \"$hour\" -lt 16 ] || [ \"$hour\" -ge 18 ]; then echo \"Toronto heartbeat window closed; stopping.\"; exit 0; fi; echo \"$(TZ=America/Toronto date -Iseconds) pinging production health\"; curl --fail --silent --show-error --location --retry 2 --retry-delay 2 --max-time 20 https://circles-bridges.replit.app/api/health; echo; sleep 300; done'"
+
+[workflows.workflow.metadata]
+outputType = "console"
 
 [postMerge]
 path = "scripts/post-merge.sh"
