@@ -1,0 +1,38 @@
+name: Keep Toronto notification windows awake
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - ".github/workflows/toronto-autoscale-heartbeat.yml"
+  schedule:
+    # Runs every 10 minutes around the Toronto test windows. The script below
+    # checks America/Toronto directly, so daylight-saving changes are safe.
+    - cron: "*/10 11-14,19-22 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  heartbeat:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check whether Toronto is in a notification window
+        id: window
+        shell: bash
+        run: |
+          local_hour="$(TZ=America/Toronto date +%H)"
+          if [[ "$local_hour" == "08" || "$local_hour" == "09" || "$local_hour" == "16" || "$local_hour" == "17" ]]; then
+            echo "should_ping=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "should_ping=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Wake the production deployment
+        if: steps.window.outputs.should_ping == 'true'
+        run: |
+          curl --fail --silent --show-error --location \
+            --retry 2 --retry-delay 2 --max-time 20 \
+            https://circles-bridges.replit.app/api/health
