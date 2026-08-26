@@ -65,7 +65,7 @@
       [
         "expo-router",
         {
-          "origin": "https://circles-bridges.replit.app/"
+          "origin": "https://circles-by-bridges.replit.app/"
         }
       ],
       "expo-font",
@@ -93,7 +93,7 @@
       "expo-apple-authentication"
     ],
     "extra": {
-      "apiUrl": "https://circles-bridges.replit.app",
+      "apiUrl": "https://circles-by-bridges.replit.app",
       "eas": {
         "projectId": "603f7533-c3a7-487e-b378-d076df17514a"
       }
