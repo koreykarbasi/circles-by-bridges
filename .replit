@@ -104,12 +104,12 @@ isValidation = true
 name = "Production Autoscale Heartbeat"
 author = "agent"
 
-[[workflows.workflow.tasks]]
-task = "shell.exec"
-args = """bash -c 'set -u; while true; do now=$(TZ=America/Toronto date -Iseconds); echo "$now pinging production health"; if curl --fail --silent --show-error --location --max-time 20 https://circles-bridges.replit.app/api/health; then echo "$now production health OK"; else echo "$now production health unavailable; retrying in five minutes" >&2; fi; sleep 300; done'"""
-
 [workflows.workflow.metadata]
 outputType = "console"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "bash scripts/production-autoscale-heartbeat.sh"
 
 [postMerge]
 path = "scripts/post-merge.sh"
