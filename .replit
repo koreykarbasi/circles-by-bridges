@@ -6,7 +6,7 @@ channel = "stable-24_05"
 packages = ["freetype", "lcms2", "libimagequant", "libjpeg", "libtiff", "libwebp", "libxcrypt", "openjpeg", "tcl", "tk", "zlib"]
 
 [deployment]
-deploymentTarget = "vm"
+deploymentTarget = "autoscale"
 build = ["sh", "-c", "npm run expo:static:build && npm run server:build"]
 run = ["npm", "run", "server:prod"]
 
@@ -51,7 +51,7 @@ args = "profile-completion-test"
 
 [[workflows.workflow.tasks]]
 task = "workflow.run"
-args = "Temporary Toronto production heartbeat"
+args = "Production Autoscale Heartbeat"
 
 [[workflows.workflow]]
 name = "Start App"
@@ -101,12 +101,12 @@ args = "npx tsx scripts/test-profile-completion.ts"
 isValidation = true
 
 [[workflows.workflow]]
-name = "Temporary Toronto production heartbeat"
+name = "Production Autoscale Heartbeat"
 author = "agent"
 
 [[workflows.workflow.tasks]]
 task = "shell.exec"
-args = "bash -c 'set -euo pipefail; while true; do hour=$(TZ=America/Toronto date +%H); if [ \"$hour\" -lt 16 ] || [ \"$hour\" -ge 18 ]; then echo \"Toronto heartbeat window closed; stopping.\"; exit 0; fi; echo \"$(TZ=America/Toronto date -Iseconds) pinging production health\"; curl --fail --silent --show-error --location --retry 2 --retry-delay 2 --max-time 20 https://circles-bridges.replit.app/api/health; echo; sleep 300; done'"
+args = """bash -c 'set -u; while true; do now=$(TZ=America/Toronto date -Iseconds); echo "$now pinging production health"; if curl --fail --silent --show-error --location --max-time 20 https://circles-bridges.replit.app/api/health; then echo "$now production health OK"; else echo "$now production health unavailable; retrying in five minutes" >&2; fi; sleep 300; done'"""
 
 [workflows.workflow.metadata]
 outputType = "console"
