@@ -4,7 +4,7 @@
 # The workflow itself stays alive between windows so it is ready for the next one.
 set -u
 
-readonly PRODUCTION_HEALTH_URL="https://circles-bridges.replit.app/api/health"
+readonly PRODUCTION_HEALTH_URL="https://circles-by-bridges.replit.app/api/health"
 readonly POLL_SECONDS=300
 
 while true; do

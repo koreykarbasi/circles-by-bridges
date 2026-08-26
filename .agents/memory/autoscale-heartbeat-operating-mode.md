@@ -7,4 +7,4 @@ Use Autoscale for production and run a continuous five-minute health check to ke
 
 **Why:** A Reserved VM was considered too expensive for this app, while scheduled push delivery requires the server to be available at the recipient’s local delivery window.
 
-**How to apply:** After each publish, confirm the health endpoint returns successfully from the heartbeat. Treat this as best-effort: a workspace workflow is not an independently hosted uptime monitor and may not run if the development workspace is asleep. Prefer a verified external monitor if reliable unattended delivery is required.
+**How to apply:** After each publish, confirm the health endpoint returns successfully from the heartbeat and recheck the generated production URL, which can change. Treat this as best-effort: a workspace workflow is not an independently hosted uptime monitor and may not run if the development workspace is asleep. Prefer a verified external monitor if reliable unattended delivery is required.
