@@ -6,3 +6,4 @@
 - [Native reminder-list animation](native-reminder-list-animation.md) — remove Home reminder cards with one parent layout transition; nested animated heights leave a transient blank gap in Expo Go.
 - [GitHub automation access](github-automation-access.md) — verify an Actions workflow is actually published; connector metadata access may not imply repository writes succeed.
 - [Autoscale heartbeat operating mode](autoscale-heartbeat-operating-mode.md) — five-minute workspace health checks keep Autoscale warm, but are not a substitute for an external monitor.
+- [iOS build-number authority](ios-build-number-authority.md) — use Apple’s highest accepted build as the baseline; EAS history can lag after failed uploads.
