@@ -15,5 +15,12 @@ const isExternalDb = connectionString.includes("supabase.com") ||
 export const pool = new Pool({
   connectionString,
   ...(isExternalDb ? { ssl: { rejectUnauthorized: false } } : {}),
+  // Supabase's session pool is capped at 15 clients. Autoscale may briefly
+  // run several server instances during cold starts, so the pg default of
+  // 10 clients per instance can exhaust the shared pool and make ordinary
+  // API requests and notification jobs fail.
+  max: isExternalDb ? 3 : 10,
+  idleTimeoutMillis: 30_000,
+  connectionTimeoutMillis: 10_000,
 });
 export const db = drizzle(pool, { schema });

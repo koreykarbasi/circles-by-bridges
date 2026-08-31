@@ -170,7 +170,14 @@ var init_db = __esm({
     isExternalDb = connectionString.includes("supabase.com") || connectionString.includes("neon.tech") || connectionString.includes("sslmode=require");
     pool = new Pool({
       connectionString,
-      ...isExternalDb ? { ssl: { rejectUnauthorized: false } } : {}
+      ...isExternalDb ? { ssl: { rejectUnauthorized: false } } : {},
+      // Supabase's session pool is capped at 15 clients. Autoscale may briefly
+      // run several server instances during cold starts, so the pg default of
+      // 10 clients per instance can exhaust the shared pool and make ordinary
+      // API requests and notification jobs fail.
+      max: isExternalDb ? 3 : 10,
+      idleTimeoutMillis: 3e4,
+      connectionTimeoutMillis: 1e4
     });
     db = drizzle(pool, { schema: schema_exports });
   }

@@ -7,3 +7,4 @@
 - [GitHub automation access](github-automation-access.md) — verify an Actions workflow is actually published; connector metadata access may not imply repository writes succeed.
 - [Autoscale heartbeat operating mode](autoscale-heartbeat-operating-mode.md) — five-minute workspace health checks keep Autoscale warm, but are not a substitute for an external monitor.
 - [iOS build-number authority](ios-build-number-authority.md) — use Apple’s highest accepted build as the baseline; EAS history can lag after failed uploads.
+- [Supabase pool limits on Autoscale](supabase-autoscale-pool.md) — cap each instance well below Supabase’s session limit or scale-outs break API reads and scheduled pushes.
