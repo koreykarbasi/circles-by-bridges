@@ -607,9 +607,13 @@ export function isFivePmLocalNow(timezone: string): boolean {
 }
 
 /**
- * True only during the first two local minutes of a scheduled hour. The
- * scheduler is aligned to :00; this small grace handles ordinary startup
- * latency without turning a 9:10 restart into a late delivery.
+ * True throughout the scheduled local hour.
+ *
+ * Autoscale may not start an instance at exactly :00 even when the heartbeat
+ * begins before the delivery window. Keeping the full hour eligible lets the
+ * startup catch-up and quarter-hour ticks recover from a delayed cold start.
+ * Durable pre-send claims, per-user advisory locks, and delivery logs prevent
+ * repeated ticks or concurrent instances from sending duplicates.
  */
 export function isAtLocalDeliveryStart(
   timezone: string,
@@ -624,10 +628,9 @@ export function isAtLocalDeliveryStart(
       hourCycle: "h23",
     }).formatToParts(now);
     const hour = parseIntlHour(parts.find((part) => part.type === "hour")?.value ?? "");
-    const minute = parseInt(parts.find((part) => part.type === "minute")?.value ?? "", 10);
-    return hour === targetHour && minute >= 0 && minute < 2;
+    return hour === targetHour;
   } catch {
-    return now.getUTCHours() === targetHour && now.getUTCMinutes() < 2;
+    return now.getUTCHours() === targetHour;
   }
 }
 

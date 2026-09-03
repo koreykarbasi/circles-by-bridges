@@ -48,6 +48,7 @@ import {
   millisecondsUntilNextQuarterHour,
   pruneOldNotificationLog,
   selectSuggestionPushCandidates,
+  sendRemindersForUser,
   type PushMessage,
   type ContactRow,
 } from "../server/push-notifications";
@@ -129,6 +130,33 @@ describe("scheduler boundary alignment", () => {
 
   test("waits only for the next quarter-hour from an in-between startup", () => {
     expect(millisecondsUntilNextQuarterHour(Date.parse("2026-08-24T09:07:30.000Z"))).toBe(450_000);
+  });
+});
+
+describe("cross-instance reminder serialization", () => {
+  test("a concurrent Autoscale instance that cannot acquire the user lock sends nothing", async () => {
+    const mockedPool = pool as typeof pool & { connect: jest.Mock };
+    const lockClient = {
+      query: jest.fn().mockResolvedValue({ rows: [{ acquired: false }] }),
+      release: jest.fn(),
+    };
+    mockedPool.connect = jest.fn().mockResolvedValue(lockClient);
+    (mockedPool.query as jest.Mock).mockClear();
+
+    const sent = await sendRemindersForUser(
+      "user-concurrent",
+      "ExponentPushToken[concurrent-test]",
+      "America/Toronto",
+      new Date("2026-09-03T13:45:00Z"),
+    );
+
+    expect(sent).toBe(0);
+    expect(lockClient.query).toHaveBeenCalledWith(
+      "SELECT pg_try_advisory_lock(hashtext($1)) AS acquired",
+      ["bridges:reminder:user-concurrent"],
+    );
+    expect(lockClient.release).toHaveBeenCalledTimes(1);
+    expect(mockedPool.query).not.toHaveBeenCalled();
   });
 });
 

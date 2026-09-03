@@ -260,19 +260,24 @@ describe("isNineAmLocalNow", () => {
 });
 
 describe("isAtLocalDeliveryStart", () => {
-  it("allows the exact scheduled minute and a short startup grace", () => {
-    setUtcTime("2024-06-15T09:01:59Z");
+  it("allows the exact scheduled minute", () => {
+    setUtcTime("2024-06-15T09:00:00Z");
     expect(isAtLocalDeliveryStart("UTC", 9)).toBe(true);
   });
 
-  it("does not turn a 9:10 server restart into a late 9am push", () => {
-    setUtcTime("2024-06-15T09:10:00Z");
+  it("allows a delayed Autoscale cold start during the scheduled hour", () => {
+    setUtcTime("2024-06-15T09:56:59Z");
+    expect(isAtLocalDeliveryStart("UTC", 9)).toBe(true);
+  });
+
+  it("closes the delivery window at the next local hour", () => {
+    setUtcTime("2024-06-15T10:00:00Z");
     expect(isAtLocalDeliveryStart("UTC", 9)).toBe(false);
   });
 
   it("uses the recipient timezone for an afternoon delivery", () => {
-    // 21:00 UTC is 17:00 EDT.
-    setUtcTime("2024-06-15T21:00:30Z");
+    // 21:45 UTC is 17:45 EDT.
+    setUtcTime("2024-06-15T21:45:30Z");
     expect(isAtLocalDeliveryStart("America/New_York", 17)).toBe(true);
   });
 });

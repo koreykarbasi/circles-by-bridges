@@ -16,10 +16,12 @@ while true; do
   local_minutes=$((hour * 60 + minute))
 
   # Start inclusive, end exclusive:
-  #   morning   08:30–09:30
-  #   afternoon 16:30–17:30
-  if (( (local_minutes >= 510 && local_minutes < 570) ||
-        (local_minutes >= 990 && local_minutes < 1050) )); then
+  #   morning   08:30–10:00
+  #   afternoon 16:30–18:00
+  # Keep pinging through the full delivery hour so a delayed workspace wake-up
+  # can still start Autoscale in time for the scheduler's catch-up run.
+  if (( (local_minutes >= 510 && local_minutes < 600) ||
+        (local_minutes >= 990 && local_minutes < 1080) )); then
     echo "$now pinging production health"
     if curl --fail --silent --show-error --location --max-time 20 "$PRODUCTION_HEALTH_URL"; then
       echo

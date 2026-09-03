@@ -1612,10 +1612,9 @@ function isAtLocalDeliveryStart(timezone, targetHour, now = /* @__PURE__ */ new 
       hourCycle: "h23"
     }).formatToParts(now);
     const hour = parseIntlHour(parts.find((part) => part.type === "hour")?.value ?? "");
-    const minute = parseInt(parts.find((part) => part.type === "minute")?.value ?? "", 10);
-    return hour === targetHour && minute >= 0 && minute < 2;
+    return hour === targetHour;
   } catch {
-    return now.getUTCHours() === targetHour && now.getUTCMinutes() < 2;
+    return now.getUTCHours() === targetHour;
   }
 }
 async function sendRemindersForUserUnlocked(userId, pushToken, timezone, scheduledAt) {
