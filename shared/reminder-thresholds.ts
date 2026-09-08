@@ -6,7 +6,7 @@
 export const CHECKIN_THRESHOLDS: Record<1 | 2 | 3, number> = {
   1: 14,
   2: 45,
-  3: 75,
+  3: 160,
 };
 
 export const NEW_CONTACT_GRACE_DAYS = 7;
@@ -19,15 +19,27 @@ export function isCheckinQuickPickEligible(
   circleLevel: 1 | 2 | 3,
   daysSinceContact: number | null,
   daysSinceCreated: number | null,
+  emptyPromptDueAt?: string | Date | null,
+  now = new Date(),
 ): boolean {
-  if (circleLevel === 3) {
-    return daysSinceContact !== null && daysSinceContact > CHECKIN_THRESHOLDS[3];
+  if (daysSinceContact !== null) {
+    return daysSinceContact > CHECKIN_THRESHOLDS[circleLevel];
   }
 
+  if (emptyPromptDueAt) {
+    const due = new Date(emptyPromptDueAt);
+    return !Number.isNaN(due.getTime()) && now.getTime() > due.getTime();
+  }
+
+  // Legacy C1/C2 rows keep their established createdAt grace behavior. Legacy
+  // C3 rows stay hidden until the production rollout persists a stable due date.
+  if (circleLevel === 3) return false;
+  // Pre-column rows without a creation timestamp cannot derive a stable grace
+  // period. Production startup assigns them a persisted due date.
+  if (daysSinceCreated === null) return false;
   const isNewUncontactedContact =
-    daysSinceContact === null &&
-    (daysSinceCreated === null || daysSinceCreated <= NEW_CONTACT_GRACE_DAYS);
+    daysSinceCreated <= NEW_CONTACT_GRACE_DAYS;
   if (isNewUncontactedContact) return false;
 
-  return daysSinceContact === null || daysSinceContact > CHECKIN_THRESHOLDS[circleLevel];
+  return true;
 }

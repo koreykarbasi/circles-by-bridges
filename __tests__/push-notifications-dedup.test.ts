@@ -103,6 +103,22 @@ describe("daily suggestion and reminder coexistence", () => {
       .toEqual(cohort);
   });
 
+  test("never uses the fallback to push a C3 Longer elevation before 72 hours", () => {
+    const deferred = {
+      ...contact({ id: "deferred", circleLevel: 3, lastContacted: "2023-01-01" }),
+      score: 9999,
+      elevationPhase: "deferred" as const,
+    };
+    const ordinary = {
+      ...contact({ id: "ordinary", circleLevel: 2, lastContacted: "2024-01-01" }),
+      score: 1,
+      elevationPhase: "none" as const,
+    };
+    expect(selectSuggestionPushCandidates([deferred, ordinary], "UTC").map((item) => item.id))
+      .toEqual(["ordinary"]);
+    expect(selectSuggestionPushCandidates([deferred], "UTC")).toEqual([]);
+  });
+
   test("prefers a Home-priority suggestion without a quick-pick when available", () => {
     const cohort = [
       {
@@ -445,7 +461,7 @@ describe("buildReminderMessages — birthday milestone notifType is 'milestone'"
     const reminders = [
       contact({ id: "c1", name: "Ava", circleLevel: 1, lastContacted: "2024-05-31" }),
       contact({ id: "c2", name: "Ben", circleLevel: 2, lastContacted: "2024-04-29" }),
-      contact({ id: "c3", name: "Cam", circleLevel: 3, lastContacted: "2024-03-31" }),
+      contact({ id: "c3", name: "Cam", circleLevel: 3, lastContacted: "2023-12-31" }),
     ].flatMap((item) => buildReminderMessages(item, timezone));
 
     expect(reminders.filter((message) => message.notifType === "reminder").map((message) => message.contactId))

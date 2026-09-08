@@ -1,0 +1,1 @@
+ALTER TABLE "contacts" ADD COLUMN IF NOT EXISTS "empty_last_contact_prompt_due_at" timestamp;

@@ -2,6 +2,12 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Platform } from "react-native";
 import * as Notifications from "expo-notifications";
 import { apiRequest } from "@/lib/query-client";
+import { CHECKIN_THRESHOLDS } from "@shared/reminder-thresholds";
+import {
+  ELEVATION_DELAY_HOURS,
+  ELEVATION_LIFETIME_HOURS,
+} from "@shared/suggestion-priority";
+import { getCheckinDaysSince } from "@shared/checkin-time";
 
 const ELEVATION_KEY = "bridges_checkin_elevation_v1";
 
@@ -126,3 +132,28 @@ export async function invalidateElevationCache(): Promise<void> {
 }
 
 export const ELEVATION_SCORE_BONUS: Record<1 | 2 | 3, number> = { 1: 3000, 2: 1500, 3: 1001 };
+
+export async function setCheckinElevationIfOverdue(params: {
+  contactId: string;
+  contactName: string;
+  circleLevel: 1 | 2 | 3;
+  selectedDate: Date;
+}): Promise<boolean> {
+  const { contactId, contactName, circleLevel, selectedDate } = params;
+  const daysSince = getCheckinDaysSince(selectedDate);
+  if (daysSince === null) return false;
+  if (daysSince <= CHECKIN_THRESHOLDS[circleLevel]) return false;
+
+  const now = new Date();
+  await setElevation({
+    contactId,
+    contactName,
+    circleLevel,
+    type: "checkin",
+    elevatedAt: now.toISOString(),
+    pushDue: new Date(now.getTime() + ELEVATION_DELAY_HOURS[circleLevel] * 3_600_000).toISOString(),
+    cleanupDue: new Date(now.getTime() + ELEVATION_LIFETIME_HOURS[circleLevel] * 3_600_000).toISOString(),
+  });
+  await invalidateElevationCache();
+  return true;
+}

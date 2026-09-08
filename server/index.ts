@@ -272,6 +272,9 @@ import { seedDatabase, updateExistingContactsWithLabels } from "./seed";
 import { initPromptSync } from "./prompts-sync";
 import { scheduleDailyNotifications } from "./push-notifications";
 import { pool } from "./db";
+import {
+  migrateEmptyContactPromptDueDates,
+} from "./contact-prompt-rollout";
 
 async function ensureNotificationLogTable() {
   try {
@@ -386,6 +389,19 @@ async function ensureUserCreatedAtColumn() {
   }
 }
 
+async function ensureEmptyLastContactPromptDueAtColumn() {
+  try {
+    // This database is shared external Supabase. Development starts may add the
+    // harmless nullable column, but must never initialize live rollout clocks.
+    // The first production start anchors every legacy empty C3 row (plus the
+    // otherwise-unschedulable C1/C2 rows missing created_at) to that
+    // transaction's CURRENT_TIMESTAMP; WHERE NULL makes retries idempotent.
+    await migrateEmptyContactPromptDueDates(pool, process.env.NODE_ENV === "production");
+  } catch (err) {
+    console.error("[startup] Failed to add/backfill empty contact prompt due dates:", err);
+  }
+}
+
 (async () => {
   setupCors(app);
   setupBodyParsing(app);
@@ -403,6 +419,7 @@ async function ensureUserCreatedAtColumn() {
   await ensureHangoutVoterTokensColumn();
   await ensureProviderSubColumns();
   await ensureUserCreatedAtColumn();
+  await ensureEmptyLastContactPromptDueAtColumn();
 
   const server = await registerRoutes(app);
 

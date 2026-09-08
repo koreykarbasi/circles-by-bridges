@@ -109,7 +109,7 @@ export function ContactsProvider({ children }: { children: ReactNode }) {
     if (label) body.label = label;
     try {
       await apiRequest("POST", `/api/contacts/${id}/mark-contacted`, Object.keys(body).length ? body : undefined);
-      clearElevation(id, "checkin").catch(() => {});
+      await clearElevation(id, "checkin");
       invalidateElevationCache().catch(() => {});
       fetchContacts();
     } catch (err) {

@@ -1,13 +1,15 @@
 import { db, pool } from "./db";
 import { users, contacts, hangoutVotes, hangoutOptions, hangoutPlans } from "@shared/schema";
 import { isNotNull, eq } from "drizzle-orm";
-import { getDaysUntilBirthday, getDaysUntilBirthdayInTz, getDaysSinceInTz } from "./birthday-utils";
+import { getDaysUntilBirthday, getDaysUntilBirthdayInTz } from "./birthday-utils";
 export { getDaysUntilBirthday };
 import { importPKCS8, SignJWT } from "jose";
 import http2 from "http2";
 import {
   CIRCLE_COOLDOWN_DAYS,
   ELEVATION_SCORE_BONUS,
+  elevationBonusForAge,
+  elevationPhaseForAge,
   PRIORITY_COHORT_SIZE,
   scorePrioritySuggestion,
   selectSuggestionForDelivery,
@@ -16,6 +18,7 @@ import {
   CHECKIN_THRESHOLDS,
   isCheckinQuickPickEligible,
 } from "@shared/reminder-thresholds";
+import { getCheckinDaysSince } from "@shared/checkin-time";
 
 interface CustomReminder {
   label: string;
@@ -44,27 +47,15 @@ export type ContactRow = {
   lastHangout?: string | null;
   customReminders?: unknown;
   createdAt?: string | Date | null;
+  emptyLastContactPromptDueAt?: string | Date | null;
 };
 
-function getContactDaysSince(value: string | Date | null | undefined, timezone: string): number | null {
-  if (!value) return null;
-  if (value instanceof Date) {
-    try {
-      const parts = new Intl.DateTimeFormat("en-CA", {
-        timeZone: timezone,
-        year: "numeric",
-        month: "2-digit",
-        day: "2-digit",
-      }).formatToParts(value);
-      const year = parts.find((part) => part.type === "year")!.value;
-      const month = parts.find((part) => part.type === "month")!.value;
-      const day = parts.find((part) => part.type === "day")!.value;
-      return getDaysSinceInTz(`${year}-${month}-${day}`, timezone);
-    } catch {
-      return getDaysSinceInTz(value.toISOString().slice(0, 10), timezone);
-    }
-  }
-  return getDaysSinceInTz(value, timezone);
+function getContactDaysSince(
+  value: string | Date | null | undefined,
+  timezone: string,
+  now = new Date(),
+): number | null {
+  return getCheckinDaysSince(value, timezone, now);
 }
 
 // Birthday day-of messages — delivered when the hourly run fires on the birthday.
@@ -106,7 +97,7 @@ export function buildReminderMessages(contact: ContactRow, timezone: string): Pu
     // daily reminder. Keep this aligned with lib/reminders.ts.
     const daysSinceContact = getContactDaysSince(contact.lastContacted, timezone);
     const daysSinceCreated = getContactDaysSince(contact.createdAt, timezone);
-    if (isCheckinQuickPickEligible(1, daysSinceContact, daysSinceCreated)) {
+    if (isCheckinQuickPickEligible(1, daysSinceContact, daysSinceCreated, contact.emptyLastContactPromptDueAt)) {
       messages.push({
         title: `Check in with ${contact.name}`,
         body: `Open the app to confirm when you last spoke.`,
@@ -145,7 +136,7 @@ export function buildReminderMessages(contact: ContactRow, timezone: string): Pu
     // Keep the server threshold identical to the visible quick-pick threshold.
     const daysSinceContact = getContactDaysSince(contact.lastContacted, timezone);
     const daysSinceCreated = getContactDaysSince(contact.createdAt, timezone);
-    if (isCheckinQuickPickEligible(2, daysSinceContact, daysSinceCreated)) {
+    if (isCheckinQuickPickEligible(2, daysSinceContact, daysSinceCreated, contact.emptyLastContactPromptDueAt)) {
       messages.push({
         title: `Check in with ${contact.name}`,
         body: `Open the app to confirm when you last spoke.`,
@@ -168,7 +159,7 @@ export function buildReminderMessages(contact: ContactRow, timezone: string): Pu
     // Keep the server threshold identical to the visible quick-pick threshold.
     const daysSinceContact3 = getContactDaysSince(contact.lastContacted, timezone);
     const daysSinceCreated = getContactDaysSince(contact.createdAt, timezone);
-    if (isCheckinQuickPickEligible(3, daysSinceContact3, daysSinceCreated)) {
+    if (isCheckinQuickPickEligible(3, daysSinceContact3, daysSinceCreated, contact.emptyLastContactPromptDueAt)) {
       messages.push({
         title: `Check in with ${contact.name}`,
         body: `Open the app to confirm when you last spoke.`,
@@ -1008,6 +999,7 @@ type SuggestionEventRow = {
 
 export type PrioritySuggestionContact = ContactRow & {
   score: number;
+  elevationPhase?: "none" | "deferred" | "due";
 };
 
 function hasHomeReminder(contact: ContactRow, timezone: string, now: Date): boolean {
@@ -1016,7 +1008,7 @@ function hasHomeReminder(contact: ContactRow, timezone: string, now: Date): bool
 
   const daysSinceContact = getContactDaysSince(contact.lastContacted, timezone);
   const daysSinceCreated = getContactDaysSince(contact.createdAt, timezone);
-  if (isCheckinQuickPickEligible(circle, daysSinceContact, daysSinceCreated)) return true;
+  if (isCheckinQuickPickEligible(circle, daysSinceContact, daysSinceCreated, contact.emptyLastContactPromptDueAt, now)) return true;
 
   const reminderWindow = { 1: 30, 2: 7, 3: 0 }[circle];
   const birthdayDays = getDaysUntilBirthdayInTz(contact.birthday, timezone);
@@ -1044,10 +1036,15 @@ export function selectSuggestionPushCandidates(
   timezone: string,
   now = new Date(),
 ): PrioritySuggestionContact[] {
-  const reminderFree = priorityCohort.filter(
+  // Defense in depth: a caller must never turn the pre-delay "Longer" answer
+  // into an ordinary suggestion via the all-reminders fallback.
+  const eligibleCohort = priorityCohort.filter(
+    (contact) => contact.circleLevel !== 3 || contact.elevationPhase !== "deferred",
+  );
+  const reminderFree = eligibleCohort.filter(
     (contact) => !hasHomeReminder(contact, timezone, now),
   );
-  return reminderFree.length > 0 ? reminderFree : priorityCohort;
+  return reminderFree.length > 0 ? reminderFree : eligibleCohort;
 }
 
 export async function getPrioritySuggestionCohort(
@@ -1095,9 +1092,15 @@ export async function getPrioritySuggestionCohort(
       if (![1, 2, 3].includes(circle)) return false;
 
       const dismissedAt = latestDismissal.get(contact.id);
-      if (!dismissedAt) return true;
-      const elapsedDays = (now.getTime() - dismissedAt.getTime()) / 86_400_000;
-      return elapsedDays >= CIRCLE_COOLDOWN_DAYS[circle];
+      if (dismissedAt) {
+        const elapsedDays = (now.getTime() - dismissedAt.getTime()) / 86_400_000;
+        if (elapsedDays < CIRCLE_COOLDOWN_DAYS[circle]) return false;
+      }
+      const elevatedAt = latestElevation.get(contact.id);
+      const elevationAgeHours = elevatedAt
+        ? (now.getTime() - elevatedAt.getTime()) / 3_600_000
+        : null;
+      return circle !== 3 || elevationPhaseForAge(circle, elevationAgeHours) !== "deferred";
     })
     .map((contact) => {
       const circle = contact.circleLevel as 1 | 2 | 3;
@@ -1105,21 +1108,16 @@ export async function getPrioritySuggestionCohort(
       const elevationAgeHours = elevatedAt
         ? (now.getTime() - elevatedAt.getTime()) / 3_600_000
         : null;
-      const elevationDelay = { 1: 24, 2: 48, 3: 72 }[circle];
-      const elevationLifetime = { 1: 6, 2: 7, 3: 8 }[circle] * 24;
-      const elevationBonus =
-        elevationAgeHours !== null &&
-        elevationAgeHours >= elevationDelay &&
-        elevationAgeHours < elevationLifetime
-          ? ELEVATION_SCORE_BONUS[circle]
-          : 0;
+      const elevationBonus = elevationBonusForAge(circle, elevationAgeHours);
+      const elevationPhase = elevationPhaseForAge(circle, elevationAgeHours);
 
       return {
         ...contact,
+        elevationPhase,
         score: scorePrioritySuggestion(
           circle,
           null,
-          getContactDaysSince(contact.lastContacted, _timezone),
+          getContactDaysSince(contact.lastContacted, _timezone, now),
           elevationBonus,
         ),
       };

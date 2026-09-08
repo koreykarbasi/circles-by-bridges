@@ -34,6 +34,11 @@ import { useSequentialHints, HINT_TEXT } from "@/lib/hints-store";
 import { HintTooltip } from "@/components/HintTooltip";
 import { scheduleReminderNotifications, scheduleSuggestionNudge } from "@/lib/reminder-notifications";
 import * as BirthdayText from "@/lib/birthday-text";
+import {
+  shouldDeferSuggestion,
+  shouldSuppressCheckin,
+} from "@shared/suggestion-priority";
+import { getCheckinDaysSince } from "@shared/checkin-time";
 
 const MAX_REMINDERS = 5;
 const MAX_SUGGESTIONS = 3;
@@ -74,6 +79,9 @@ interface Suggestion {
 interface PrioritySuggestionResponse {
   contactIds: string[];
   dismissedContactIds: string[];
+  pendingElevationContactIds?: string[];
+  deferredElevationContactIds?: string[];
+  dueElevationContactIds?: string[];
   generatedAt: string;
 }
 
@@ -171,7 +179,7 @@ export default function HomeScreen() {
   }, []);
 
   const contactsScheduleKey = contacts
-    .map((c) => `${c.id}:${c.circleLevel}:${c.birthday ?? ""}:${c.lastContacted ?? ""}:${c.lastHangout ?? ""}:${(c.customReminders ?? []).length}`)
+    .map((c) => `${c.id}:${c.circleLevel}:${c.birthday ?? ""}:${c.lastContacted ?? ""}:${c.emptyLastContactPromptDueAt ?? ""}:${c.lastHangout ?? ""}:${(c.customReminders ?? []).length}`)
     .join("|");
 
   useEffect(() => {
@@ -268,19 +276,27 @@ export default function HomeScreen() {
   const visibleReminders = useMemo(() => {
     const passesFilter = (r: Reminder) => {
       if (dismissedReminders.has(r.id)) return false;
-      if (r.type === "check-in-quickpick" && r.contactId && elevatedContactTypes.has(`${r.contactId}:checkin`)) return false;
+      if (
+        r.type === "check-in-quickpick" &&
+        r.contactId &&
+        shouldSuppressCheckin(
+          r.contactId,
+          elevatedContactTypes.has(`${r.contactId}:checkin`),
+          prioritySuggestions?.pendingElevationContactIds,
+        )
+      ) return false;
       if (r.type === "hangout-quickpick" && r.contactId && elevatedContactTypes.has(`${r.contactId}:hangout`)) return false;
       return true;
     };
     return allReminders
       .filter(passesFilter)
       .slice(0, MAX_REMINDERS);
-  }, [allReminders, dismissedReminders, elevatedContactTypes]);
+  }, [allReminders, dismissedReminders, elevatedContactTypes, prioritySuggestions]);
 
   const getSuggestionForContact = useCallback(
     (contact: typeof contacts[0]): Suggestion => {
       const circleLevel = contact.circleLevel as 1 | 2 | 3;
-      const daysSinceContact = getDaysSince(contact.lastContacted ?? undefined);
+      const daysSinceContact = getCheckinDaysSince(contact.lastContacted);
       const daysUntilBday = getDaysUntilBirthday(contact.birthday ?? undefined);
 
       const shared = getCachedPrompt(contact.id);
@@ -326,10 +342,26 @@ export default function HomeScreen() {
     const isDismissed = (contactId: string) =>
       dismissedSuggestions.has(contactId) || serverDismissedIds.has(contactId);
     const reminderContactIds = new Set(visibleReminders.map((r) => r.contactId));
+    const serverDeferredIds = prioritySuggestions?.deferredElevationContactIds ?? [];
+    const serverDueIds = new Set(prioritySuggestions?.dueElevationContactIds ?? []);
+    const elevationBonus = (contact: typeof contacts[0]) =>
+      elevationMap[contact.id] ??
+      (serverDueIds.has(contact.id)
+        ? ELEVATION_SCORE_BONUS[contact.circleLevel as 1 | 2 | 3]
+        : 0);
+    const isDeferred = (contact: typeof contacts[0]) =>
+      contact.circleLevel === 3 &&
+      shouldDeferSuggestion(
+        contact.id,
+        elevatedContactTypes.has(`${contact.id}:checkin`),
+        !!elevationBonus(contact),
+        serverDeferredIds,
+      );
 
     const eligible = contacts.filter((c) => {
+      if (isDeferred(c)) return false;
       if (reminderContactIds.has(c.id)) return false;
-      if (elevationMap[c.id]) return true;
+      if (elevationBonus(c)) return true;
       const daysSinceLastSug = getDaysSinceLastSuggestedSync(c.id, lastSuggestedDates);
       if (isInCooldown(c.circleLevel as 1 | 2 | 3, daysSinceLastSug)) return false;
       return true;
@@ -337,12 +369,12 @@ export default function HomeScreen() {
 
     const rankContact = (c: typeof contacts[0]) => {
       const daysSinceLastSug = getDaysSinceLastSuggestedSync(c.id, lastSuggestedDates);
-      const daysSinceContact = getDaysSince(c.lastContacted ?? undefined);
+      const daysSinceContact = getCheckinDaysSince(c.lastContacted);
       const daysUntilBday = getDaysUntilBirthday(c.birthday ?? undefined);
       return {
         contact: c,
-        score: scoreSuggestion(c.circleLevel as 1 | 2 | 3, daysSinceLastSug, daysSinceContact, daysUntilBday, elevationMap[c.id]),
-        elevated: !!elevationMap[c.id],
+        score: scoreSuggestion(c.circleLevel as 1 | 2 | 3, daysSinceLastSug, daysSinceContact, daysUntilBday, elevationBonus(c)),
+        elevated: !!elevationBonus(c),
       };
     };
 
@@ -358,7 +390,7 @@ export default function HomeScreen() {
     // dismissedSuggestions store now persists across restarts.
     const eligibleIds = new Set(eligible.map((c) => c.id));
     const cooldownPool = contacts.filter(
-      (c) => !reminderContactIds.has(c.id) && !eligibleIds.has(c.id),
+      (c) => !isDeferred(c) && !reminderContactIds.has(c.id) && !eligibleIds.has(c.id),
     );
     const rankedCooldown = cooldownPool.map(rankContact).sort((a, b) => {
       if (a.elevated !== b.elevated) return a.elevated ? -1 : 1;
@@ -371,7 +403,7 @@ export default function HomeScreen() {
       .map((x) => x.contact);
 
     return visible.map((c) => getSuggestionForContact(c));
-  }, [contacts, dismissedSuggestions, visibleReminders, getSuggestionForContact, lastSuggestedDates, elevationMap, prioritySuggestions]);
+  }, [contacts, dismissedSuggestions, visibleReminders, getSuggestionForContact, lastSuggestedDates, elevationMap, elevatedContactTypes, prioritySuggestions]);
 
   // Publish the exact visible order so the closed-app scheduler can rotate only
   // within what Home actually showed. Home still owns the UI; this is a one-way

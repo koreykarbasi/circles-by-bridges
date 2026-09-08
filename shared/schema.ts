@@ -32,6 +32,7 @@ export const contacts = pgTable("contacts", {
   interests: text("interests").array().notNull().default(sql`'{}'::text[]`),
   birthday: text("birthday"),
   lastContacted: text("last_contacted"),
+  emptyLastContactPromptDueAt: timestamp("empty_last_contact_prompt_due_at"),
   lastHangout: text("last_hangout"),
   labels: text("labels").array().notNull().default(sql`'{}'::text[]`),
   notes: text("notes"),

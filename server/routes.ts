@@ -17,7 +17,16 @@ import {
 } from "./push-notifications";
 import { sendPasswordResetEmail, sendHangoutCalendarInvite } from "./email";
 import type { InsertContact } from "@shared/schema";
-import { CIRCLE_COOLDOWN_DAYS } from "@shared/suggestion-priority";
+import {
+  CIRCLE_COOLDOWN_DAYS,
+  ELEVATION_LIFETIME_HOURS,
+  elevationPhaseForAge,
+} from "@shared/suggestion-priority";
+import {
+  emptyContactPromptDueAt,
+  normalizeLastContacted,
+  promptDueAfterContactUpdate,
+} from "@shared/checkin-policy";
 import * as chrono from "chrono-node";
 import { createRemoteJWKSet, jwtVerify } from "jose";
 
@@ -1009,7 +1018,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         [userId],
       );
       const timezone = timezoneResult.rows[0]?.notification_timezone ?? "UTC";
-      const [cohort, dismissalResult] = await Promise.all([
+      const [cohort, dismissalResult, elevationResult] = await Promise.all([
         getPrioritySuggestionCohort(userId, timezone),
         pool.query<{
           contact_id: string;
@@ -1025,6 +1034,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
            GROUP BY nl.contact_id, c.circle_level`,
           [userId],
         ),
+        pool.query<{
+          contact_id: string;
+          circle_level: number;
+          elevated_at: string | Date;
+        }>(
+          `SELECT nl.contact_id, c.circle_level, MAX(nl.sent_at) AS elevated_at
+           FROM notification_log nl
+           INNER JOIN contacts c ON c.id = nl.contact_id AND c.user_id = nl.user_id
+           WHERE nl.user_id = $1
+             AND nl.notif_type = 'elevation'
+             AND nl.sent_at > NOW() - INTERVAL '8 days'
+           GROUP BY nl.contact_id, c.circle_level`,
+          [userId],
+        ),
       ]);
       const now = Date.now();
       const dismissedContactIds = dismissalResult.rows
@@ -1035,9 +1058,36 @@ export async function registerRoutes(app: Express): Promise<Server> {
           return ageMs < CIRCLE_COOLDOWN_DAYS[circle] * 86_400_000;
         })
         .map((row) => row.contact_id);
+      const pendingElevationContactIds = elevationResult.rows
+        .filter((row) => {
+          const circle = row.circle_level as 1 | 2 | 3;
+          if (![1, 2, 3].includes(circle)) return false;
+          return now - new Date(row.elevated_at).getTime() <
+            ELEVATION_LIFETIME_HOURS[circle] * 3_600_000;
+        })
+        .map((row) => row.contact_id);
+      const deferredElevationContactIds = elevationResult.rows
+        .filter((row) => {
+          const circle = row.circle_level as 1 | 2 | 3;
+          if (![1, 2, 3].includes(circle)) return false;
+          const ageHours = (now - new Date(row.elevated_at).getTime()) / 3_600_000;
+          return circle === 3 && elevationPhaseForAge(circle, ageHours) === "deferred";
+        })
+        .map((row) => row.contact_id);
+      const dueElevationContactIds = elevationResult.rows
+        .filter((row) => {
+          const circle = row.circle_level as 1 | 2 | 3;
+          if (![1, 2, 3].includes(circle)) return false;
+          const ageHours = (now - new Date(row.elevated_at).getTime()) / 3_600_000;
+          return elevationPhaseForAge(circle, ageHours) === "due";
+        })
+        .map((row) => row.contact_id);
       res.json({
         contactIds: cohort.map((contact) => contact.id),
         dismissedContactIds,
+        pendingElevationContactIds,
+        deferredElevationContactIds,
+        dueElevationContactIds,
         generatedAt: new Date().toISOString(),
       });
     } catch (err) {
@@ -1283,6 +1333,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return bad(res, "circleLevel must be 1, 2, or 3");
       }
       const safe = pickContactFields(body);
+      const normalizedLastContacted = normalizeLastContacted(safe.lastContacted);
       const avatarColor =
         typeof body.avatarColor === "string" && body.avatarColor
           ? body.avatarColor
@@ -1293,16 +1344,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
         circleLevel: level,
         userId: req.session.userId!,
         avatarColor,
-        lastContacted: (() => {
-          if (safe.lastContacted) return safe.lastContacted;
-          const now = new Date();
-          const daysBack =
-            level === 1 ? Math.floor(Math.random() * 15) :
-            level === 2 ? Math.floor(Math.random() * 31) :
-            30 + Math.floor(Math.random() * 31);
-          now.setDate(now.getDate() - daysBack);
-          return now.toISOString();
-        })(),
+        // Unknown means unknown: do not invent contact history. The persisted,
+        // server-authored due date keeps empty-contact prompts stable across
+        // devices and offline client restarts.
+        lastContacted: normalizedLastContacted,
+        emptyLastContactPromptDueAt: normalizedLastContacted
+          ? null
+          : emptyContactPromptDueAt(level as 1 | 2 | 3),
         lastHangout: (() => {
           if (safe.lastHangout) return safe.lastHangout;
           const now = new Date();
@@ -1342,6 +1390,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const safe = pickContactFields(body);
       safe.name = (body.name as string).trim();
       safe.circleLevel = normalizedLevel;
+      if (Object.prototype.hasOwnProperty.call(body, "lastContacted")) {
+        safe.lastContacted = normalizeLastContacted(safe.lastContacted);
+      }
+      const incomingLastContacted = Object.prototype.hasOwnProperty.call(body, "lastContacted")
+        ? safe.lastContacted
+        : existing.lastContacted;
+      safe.emptyLastContactPromptDueAt = promptDueAfterContactUpdate({
+        previousCircleLevel: existing.circleLevel as 1 | 2 | 3,
+        previousLastContacted: normalizeLastContacted(existing.lastContacted),
+        previousDueAt: existing.emptyLastContactPromptDueAt,
+        nextCircleLevel: normalizedLevel as 1 | 2 | 3,
+        nextLastContacted: normalizeLastContacted(incomingLastContacted),
+      });
       const contact = await storage.updateContact(id, safe);
       res.json(contact);
     } catch (err) {
@@ -1410,7 +1471,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
           lastContacted = parsed.toISOString();
         }
       }
-      const updates: Record<string, string | null> = { lastContacted };
+      const updates: Record<string, string | null> = {
+        lastContacted,
+        emptyLastContactPromptDueAt: null,
+      };
       if (typeof label === "string" && label.length > 0) {
         updates.lastContactedLabel = label;
       } else {

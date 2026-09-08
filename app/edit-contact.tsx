@@ -25,6 +25,12 @@ import { DateWheelPicker } from "@/components/DateWheelPicker";
 import * as Haptics from "expo-haptics";
 import { useSequentialHints, HINT_TEXT } from "@/lib/hints-store";
 import { HintTooltip } from "@/components/HintTooltip";
+import {
+  C3_CHECKIN_OPTIONS,
+  canSaveContactEdit,
+  dateForCheckinOption,
+} from "@shared/checkin-policy";
+import { setCheckinElevationIfOverdue } from "@/lib/checkin-state";
 
 const PREDEFINED_LABELS = [
   "Family", "Childhood Friend", "College Friend", "Work Friend", "Neighbor",
@@ -71,6 +77,9 @@ export default function EditContactScreen() {
   const [saving, setSaving] = useState(false);
   const [showBirthdayPicker, setShowBirthdayPicker] = useState(focusBirthday === "true");
   const [selectedChip, setSelectedChip] = useState<string | null>(null);
+  const [selectedContactDate, setSelectedContactDate] = useState<string | null>(null);
+  const [quickContactSaving, setQuickContactSaving] = useState(false);
+  const quickContactPendingRef = useRef(false);
   const [customReminders, setCustomReminders] = useState<CustomReminder[]>(
     (contact?.customReminders ?? []).filter((r) => r && r.label && r.date)
   );
@@ -146,6 +155,7 @@ export default function EditContactScreen() {
   };
 
   const handleSave = async () => {
+    if (saving || quickContactSaving || quickContactPendingRef.current) return;
     if (!name.trim()) {
       Alert.alert("Name required", "Please enter a name.");
       return;
@@ -183,6 +193,7 @@ export default function EditContactScreen() {
         email: email.trim() || undefined,
         photoUri,
         customReminders,
+        lastContacted: selectedContactDate ?? contact.lastContacted,
       });
       router.back();
     } catch (err) {
@@ -209,22 +220,47 @@ export default function EditContactScreen() {
     );
   };
 
-  const QUICK_CONTACT_CHIPS: Array<{ label: string; daysAgo: number }> = [
-    { label: "Today", daysAgo: 0 },
-    { label: "This week", daysAgo: 4 },
-    { label: "This month", daysAgo: 14 },
-    { label: "Earlier this year", daysAgo: 120 },
-  ];
+  const QUICK_CONTACT_CHIPS: Array<{ label: string; getDate: () => Date }> = circleLevel === 3
+    ? C3_CHECKIN_OPTIONS.map((option) => ({
+        label: option.label,
+        getDate: () => dateForCheckinOption(option),
+      }))
+    : [
+        { label: "Today", getDate: () => new Date() },
+        { label: "This week", getDate: () => new Date(Date.now() - 4 * 86_400_000) },
+        { label: "This month", getDate: () => new Date(Date.now() - 14 * 86_400_000) },
+        { label: "Earlier this year", getDate: () => new Date(Date.now() - 120 * 86_400_000) },
+      ];
 
-  const handleQuickContact = useCallback((label: string, daysAgo: number) => {
+  const handleQuickContact = useCallback((label: string, getDate: () => Date) => {
+    if (saving || quickContactPendingRef.current) return;
+    quickContactPendingRef.current = true;
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    setQuickContactSaving(true);
     setSelectedChip(label);
-    const date = new Date(Date.now() - daysAgo * 24 * 60 * 60 * 1000);
-    markContacted(contact.id, date, label).catch(() => {
-      setSelectedChip(null);
-      Alert.alert("Could not save", "Failed to update last contacted. Please try again.");
-    });
-  }, [contact.id, markContacted]);
+    const date = getDate();
+    setSelectedContactDate(date.toISOString());
+    markContacted(contact.id, date, label)
+      .then(async () => {
+        if (circleLevel === 3 && label === "Longer") {
+          await setCheckinElevationIfOverdue({
+            contactId: contact.id,
+            contactName: contact.name,
+            circleLevel: 3,
+            selectedDate: date,
+          });
+        }
+      })
+      .catch(() => {
+        setSelectedChip(null);
+        setSelectedContactDate(null);
+        Alert.alert("Could not save", "Failed to update last contacted. Please try again.");
+      })
+      .finally(() => {
+        quickContactPendingRef.current = false;
+        setQuickContactSaving(false);
+      });
+  }, [circleLevel, contact.id, contact.name, markContacted, saving]);
 
   const webTopInset = Platform.OS === "web" ? 67 : 0;
   const [activeHint, dismissHint] = useSequentialHints(["edit_custom_reminder", "edit_labels"]);
@@ -241,14 +277,16 @@ export default function EditContactScreen() {
         </Pressable>
         <Text style={styles.headerTitle}>Edit</Text>
         <Pressable
+          accessibilityLabel="Save contact"
+          testID="save-contact-header"
           onPress={handleSave}
-          disabled={saving || !name.trim()}
+          disabled={!canSaveContactEdit(name, saving, quickContactSaving)}
           style={({ pressed }) => [pressed && { opacity: 0.5 }]}
         >
           <Ionicons
             name="checkmark"
             size={26}
-            color={!name.trim() ? Colors.textTertiary : Colors.primary}
+            color={!canSaveContactEdit(name, saving, quickContactSaving) ? Colors.textTertiary : Colors.primary}
           />
         </Pressable>
       </View>
@@ -288,13 +326,14 @@ export default function EditContactScreen() {
             </Text>
           </View>
           <View style={styles.quickContactRow}>
-            {QUICK_CONTACT_CHIPS.map(({ label, daysAgo }) => {
+            {QUICK_CONTACT_CHIPS.map(({ label, getDate }) => {
               const currentLabel = selectedChip ?? (contact.lastContactedLabel ?? formatLastContacted(contact.lastContacted ?? undefined));
               const isSelected = currentLabel === label;
               return (
                 <Pressable
                   key={label}
-                  onPress={() => handleQuickContact(label, daysAgo)}
+                  disabled={saving || quickContactSaving}
+                  onPress={() => handleQuickContact(label, getDate)}
                   style={({ pressed }) => [
                     styles.quickChip,
                     isSelected && styles.quickChipSelected,
@@ -659,15 +698,16 @@ export default function EditContactScreen() {
         </View>
 
         <Pressable
+          testID="save-contact-changes"
           onPress={handleSave}
-          disabled={saving || !name.trim()}
+          disabled={!canSaveContactEdit(name, saving, quickContactSaving)}
           style={({ pressed }) => [
             styles.saveButton,
-            (!name.trim() || saving) && styles.saveButtonDisabled,
+            !canSaveContactEdit(name, saving, quickContactSaving) && styles.saveButtonDisabled,
             pressed && { opacity: 0.8 },
           ]}
         >
-          <Text style={styles.saveButtonText}>{saving ? "Saving..." : "Save Changes"}</Text>
+          <Text style={styles.saveButtonText}>{saving || quickContactSaving ? "Saving..." : "Save Changes"}</Text>
         </Pressable>
 
         <Pressable

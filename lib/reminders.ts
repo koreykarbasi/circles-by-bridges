@@ -4,6 +4,8 @@ import {
   CHECKIN_THRESHOLDS as sharedCheckinThresholds,
   isCheckinQuickPickEligible,
 } from "@shared/reminder-thresholds";
+import { ELEVATION_DELAY_HOURS } from "@shared/suggestion-priority";
+import { getCheckinDaysSince } from "@shared/checkin-time";
 
 export type ReminderType =
   | "birthday"
@@ -30,7 +32,7 @@ export interface Reminder {
 
 export const CHECKIN_THRESHOLDS = sharedCheckinThresholds;
 export const HANGOUT_THRESHOLDS: Record<1 | 2 | 3, number> = { 1: 21, 2: 60, 3: 90 };
-export const ELEVATION_PUSH_DELAY_HOURS: Record<1 | 2 | 3, number> = { 1: 24, 2: 48, 3: 72 };
+export const ELEVATION_PUSH_DELAY_HOURS = ELEVATION_DELAY_HOURS;
 export const ELEVATION_CLEANUP_DAYS: Record<1 | 2 | 3, { checkin: number; hangout: number }> = {
   1: { checkin: 6, hangout: 6 },
   2: { checkin: 7, hangout: 7 },
@@ -206,9 +208,9 @@ function generateCircle1Reminders(contact: Contact): Reminder[] {
 
   reminders.push(...generateCustomReminders(contact, 1));
 
-  const daysSinceContact = getDaysSince(contact.lastContacted ?? undefined);
-  const daysSinceCreated = getDaysSince(contact.createdAt ?? undefined);
-  if (isCheckinQuickPickEligible(1, daysSinceContact, daysSinceCreated)) {
+  const daysSinceContact = getCheckinDaysSince(contact.lastContacted);
+  const daysSinceCreated = getCheckinDaysSince(contact.createdAt);
+  if (isCheckinQuickPickEligible(1, daysSinceContact, daysSinceCreated, contact.emptyLastContactPromptDueAt)) {
     const severity = daysSinceContact === null
       ? 80
       : Math.min(80, 30 + Math.floor((daysSinceContact - CHECKIN_THRESHOLDS[1]) * 3));
@@ -279,9 +281,9 @@ function generateCircle2Reminders(contact: Contact): Reminder[] {
 
   reminders.push(...generateCustomReminders(contact, 2));
 
-  const daysSinceContact = getDaysSince(contact.lastContacted ?? undefined);
-  const daysSinceCreated = getDaysSince(contact.createdAt ?? undefined);
-  if (isCheckinQuickPickEligible(2, daysSinceContact, daysSinceCreated)) {
+  const daysSinceContact = getCheckinDaysSince(contact.lastContacted);
+  const daysSinceCreated = getCheckinDaysSince(contact.createdAt);
+  if (isCheckinQuickPickEligible(2, daysSinceContact, daysSinceCreated, contact.emptyLastContactPromptDueAt)) {
     const severity = daysSinceContact === null
       ? 60
       : Math.min(60, 20 + Math.floor((daysSinceContact - CHECKIN_THRESHOLDS[2]) * 1.2));
@@ -339,8 +341,8 @@ function generateCircle3Reminders(contact: Contact): Reminder[] {
 
   reminders.push(...generateCustomReminders(contact, 3));
 
-  const daysSinceContact = getDaysSince(contact.lastContacted ?? undefined);
-  if (isCheckinQuickPickEligible(3, daysSinceContact, getDaysSince(contact.createdAt ?? undefined))) {
+  const daysSinceContact = getCheckinDaysSince(contact.lastContacted);
+  if (isCheckinQuickPickEligible(3, daysSinceContact, getCheckinDaysSince(contact.createdAt), contact.emptyLastContactPromptDueAt)) {
     const severity = Math.min(30, Math.floor(((daysSinceContact ?? CHECKIN_THRESHOLDS[3]) - CHECKIN_THRESHOLDS[3]) * 0.4));
     reminders.push({
       id: `checkin-${contact.id}`,
@@ -350,7 +352,9 @@ function generateCircle3Reminders(contact: Contact): Reminder[] {
       type: "check-in-quickpick",
       priority: 30 + severity,
       title: `When did you last speak to ${contact.name}?`,
-      subtitle: `Last contact: ${formatLastContacted(contact.lastContacted ?? undefined)}`,
+      subtitle: daysSinceContact === null
+        ? "You haven't reached out yet"
+        : `Last contact: ${formatLastContacted(contact.lastContacted ?? undefined)}`,
     });
   }
 

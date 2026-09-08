@@ -48,9 +48,11 @@ Bridges is a relationship management app based on Dunbar's social brain theory. 
 - Birthday required for Core Circle (circle 1) contacts
 - Two distinct alert types: Reminders (priority obligations) and Suggestions (proactive outreach)
 - Priority-based reminders engine with circle-specific rules:
-  - Circle 1: Birthday milestones at 30d/14d/7d/day-of, check-in overdue (>7 days)
-  - Circle 2: Birthday milestones at 7d/day-of, hangout overdue (>3 weeks), check-in overdue (>30 days)
-  - Circle 3 (Friends): Birthday day-of only, hangout overdue (>60 days), check-in overdue (>90 days)
+  - Circle 1: Birthday milestones at 30d/14d/7d/day-of, check-in overdue (>14 full days)
+  - Circle 2: Birthday milestones at 7d/day-of, check-in overdue (>45 full days)
+  - Circle 3 (Friends): Birthday day-of only, check-in overdue (>160 full days)
+  - Missing last-contact dates: Circles 1/2 ask after 7 days; Circle 3 gets a persisted, randomized 14–30-day grace period. Existing unknown Circle 3 contacts are staggered from the updated backend's first production rollout, not their original creation dates.
+  - Circle 3 last-contact choices (Quick Pick and edit contact): This month=3–25 days ago, This quarter=35–75, This year=100–150, Longer=175–300. Longer resolves the check-in prompt and retains the 72-hour priority-elevation delay.
 - Birthday reminders have no action-type badge (call/text hidden for birthday type)
 - Suggestion frequency scoring: Circle 2 = ~2x/week, Circle 1 = ~1x/week, Circle 3 = every 15 days
 - Suggestion scheduler: AsyncStorage-backed tracking prevents repeat suggestions, cycling bonus up to +400 based on days since last suggested
@@ -67,7 +69,7 @@ Bridges is a relationship management app based on Dunbar's social brain theory. 
 - Action type badges on suggestion cards (call/text/hangout)
 - Profile completion system: Stage 1 (home banner + Circles tab badge) until 3 Circle 1 with birthdays + 2 Circle 2 + 1 Circle 3; Stage 2 (Circles encouragement card only); Circle 1 contacts without birthdays get inline nudge in circles view
 - Auth state caching: user cached in AsyncStorage/localStorage, resolve navigation immediately on startup without spinner (background verify with server)
-- New contacts get randomized lastContacted on creation: C1=0–14 days ago, C2=0–30 days ago, C3=30–60 days ago (server-side)
+- New contacts without a user-supplied last-contact date remain unknown until the user answers; the server schedules the circle-specific grace period instead of inventing a date.
 - Hangout planning accessible from: home header calendar button, home "Plan a hangout" banner, circles header button, and per-contact calendar icon on every contact card
 - Hangout 3-step creation flow (Title → Invitees → Survey Builder)
 - Survey builder: activity options (multiple or fixed), time slots, optional location, plus-one toggle, deadline

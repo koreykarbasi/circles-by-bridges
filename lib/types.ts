@@ -11,6 +11,7 @@ export interface Contact {
   interests: string[];
   birthday?: string | null;
   lastContacted?: string | null;
+  emptyLastContactPromptDueAt?: string | null;
   lastHangout?: string | null;
   lastContactedLabel?: string | null;
   lastHangoutLabel?: string | null;

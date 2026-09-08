@@ -12,6 +12,64 @@ export const ELEVATION_SCORE_BONUS: Record<1 | 2 | 3, number> = {
   3: 1001,
 };
 
+export const ELEVATION_DELAY_HOURS: Record<1 | 2 | 3, number> = {
+  1: 24,
+  2: 48,
+  3: 72,
+};
+
+export const ELEVATION_LIFETIME_HOURS: Record<1 | 2 | 3, number> = {
+  1: 6 * 24,
+  2: 7 * 24,
+  3: 8 * 24,
+};
+
+export function elevationBonusForAge(
+  circleLevel: 1 | 2 | 3,
+  ageHours: number | null,
+): number {
+  if (
+    ageHours === null ||
+    ageHours < ELEVATION_DELAY_HOURS[circleLevel] ||
+    ageHours >= ELEVATION_LIFETIME_HOURS[circleLevel]
+  ) {
+    return 0;
+  }
+  return ELEVATION_SCORE_BONUS[circleLevel];
+}
+
+export type ElevationPhase = "none" | "deferred" | "due";
+
+export function elevationPhaseForAge(
+  circleLevel: 1 | 2 | 3,
+  ageHours: number | null,
+): ElevationPhase {
+  if (ageHours === null || ageHours < 0 || ageHours >= ELEVATION_LIFETIME_HOURS[circleLevel]) {
+    return "none";
+  }
+  return ageHours < ELEVATION_DELAY_HOURS[circleLevel] ? "deferred" : "due";
+}
+
+export function shouldDeferSuggestion(
+  contactId: string,
+  localElevationActive: boolean,
+  hasDueElevationBonus: boolean,
+  serverDeferredContactIds: readonly string[] = [],
+): boolean {
+  return (
+    serverDeferredContactIds.includes(contactId) ||
+    (localElevationActive && !hasDueElevationBonus)
+  );
+}
+
+export function shouldSuppressCheckin(
+  contactId: string,
+  localElevationActive: boolean,
+  serverPendingContactIds: readonly string[] = [],
+): boolean {
+  return localElevationActive || serverPendingContactIds.includes(contactId);
+}
+
 export function isSuggestionInCooldown(
   circleLevel: 1 | 2 | 3,
   daysSinceLastSuggested: number | null,

@@ -2,6 +2,7 @@ import React, { useCallback } from "react";
 import { View, Text, Pressable, StyleSheet, ScrollView } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import Colors from "@/constants/colors";
+import { C3_CHECKIN_OPTIONS, dateForCheckinOption } from "@shared/checkin-policy";
 
 function randomInRange(min: number, max: number): number {
   return Math.floor(Math.random() * (max - min + 1)) + min;
@@ -24,10 +25,10 @@ const CHECKIN_C1_C2: Option[] = [
 ];
 
 const CHECKIN_C3: Option[] = [
-  { label: "This week", getDate: () => daysAgoRandom(3, 6) },
-  { label: "This month", getDate: () => daysAgoRandom(12, 24) },
-  { label: "This quarter", getDate: () => daysAgoRandom(55, 80) },
-  { label: "Longer", getDate: () => daysAgoRandom(90, 120) },
+  ...C3_CHECKIN_OPTIONS.map((option) => ({
+    label: option.label,
+    getDate: () => dateForCheckinOption(option),
+  })),
 ];
 
 const HANGOUT_C1_C2: Option[] = [

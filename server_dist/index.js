@@ -55,6 +55,7 @@ var init_schema = __esm({
       interests: text("interests").array().notNull().default(sql`'{}'::text[]`),
       birthday: text("birthday"),
       lastContacted: text("last_contacted"),
+      emptyLastContactPromptDueAt: timestamp("empty_last_contact_prompt_due_at"),
       lastHangout: text("last_hangout"),
       labels: text("labels").array().notNull().default(sql`'{}'::text[]`),
       notes: text("notes"),
@@ -1071,49 +1072,6 @@ init_schema();
 import { isNotNull, eq as eq2 } from "drizzle-orm";
 
 // server/birthday-utils.ts
-function getDaysSinceInTz(dateStr, timezone) {
-  if (!dateStr) return null;
-  let localYear;
-  let localMonth;
-  let localDay;
-  try {
-    const parts = new Intl.DateTimeFormat("en-CA", {
-      timeZone: timezone,
-      year: "numeric",
-      month: "2-digit",
-      day: "2-digit"
-    }).formatToParts(/* @__PURE__ */ new Date());
-    localYear = parseInt(parts.find((part) => part.type === "year").value, 10);
-    localMonth = parseInt(parts.find((part) => part.type === "month").value, 10) - 1;
-    localDay = parseInt(parts.find((part) => part.type === "day").value, 10);
-  } catch {
-    const now = /* @__PURE__ */ new Date();
-    localYear = now.getUTCFullYear();
-    localMonth = now.getUTCMonth();
-    localDay = now.getUTCDate();
-  }
-  let year;
-  let month;
-  let day;
-  const slashParts = dateStr.split("/");
-  if (slashParts.length >= 2) {
-    month = parseInt(slashParts[0], 10) - 1;
-    day = parseInt(slashParts[1], 10);
-    year = slashParts.length >= 3 ? parseInt(slashParts[2], 10) : localYear;
-  } else {
-    const dashParts = dateStr.split("-");
-    if (dashParts.length !== 3) return null;
-    year = parseInt(dashParts[0], 10);
-    month = parseInt(dashParts[1], 10) - 1;
-    day = parseInt(dashParts[2], 10);
-  }
-  if (isNaN(year) || isNaN(month) || isNaN(day) || month < 0 || month > 11 || day < 1 || day > 31) {
-    return null;
-  }
-  return Math.floor(
-    (Date.UTC(localYear, localMonth, localDay) - Date.UTC(year, month, day)) / (1e3 * 60 * 60 * 24)
-  );
-}
 function getDaysUntilBirthdayInTz(birthday, timezone) {
   if (!birthday) return null;
   let month;
@@ -1173,6 +1131,28 @@ var ELEVATION_SCORE_BONUS = {
   2: 1500,
   3: 1001
 };
+var ELEVATION_DELAY_HOURS = {
+  1: 24,
+  2: 48,
+  3: 72
+};
+var ELEVATION_LIFETIME_HOURS = {
+  1: 6 * 24,
+  2: 7 * 24,
+  3: 8 * 24
+};
+function elevationBonusForAge(circleLevel, ageHours) {
+  if (ageHours === null || ageHours < ELEVATION_DELAY_HOURS[circleLevel] || ageHours >= ELEVATION_LIFETIME_HOURS[circleLevel]) {
+    return 0;
+  }
+  return ELEVATION_SCORE_BONUS[circleLevel];
+}
+function elevationPhaseForAge(circleLevel, ageHours) {
+  if (ageHours === null || ageHours < 0 || ageHours >= ELEVATION_LIFETIME_HOURS[circleLevel]) {
+    return "none";
+  }
+  return ageHours < ELEVATION_DELAY_HOURS[circleLevel] ? "deferred" : "due";
+}
 function scorePrioritySuggestion(circleLevel, daysSinceLastSuggested, daysSinceContact, elevationBonus = 0) {
   let score = circleLevel === 2 ? 1150 : circleLevel === 1 ? 1100 : 1e3;
   if (daysSinceLastSuggested === null) {
@@ -1200,38 +1180,63 @@ function selectSuggestionForDelivery(priorityCohort, lastSuccessfulContactIds) {
 var CHECKIN_THRESHOLDS = {
   1: 14,
   2: 45,
-  3: 75
+  3: 160
 };
 var NEW_CONTACT_GRACE_DAYS = 7;
-function isCheckinQuickPickEligible(circleLevel, daysSinceContact, daysSinceCreated) {
-  if (circleLevel === 3) {
-    return daysSinceContact !== null && daysSinceContact > CHECKIN_THRESHOLDS[3];
+function isCheckinQuickPickEligible(circleLevel, daysSinceContact, daysSinceCreated, emptyPromptDueAt, now = /* @__PURE__ */ new Date()) {
+  if (daysSinceContact !== null) {
+    return daysSinceContact > CHECKIN_THRESHOLDS[circleLevel];
   }
-  const isNewUncontactedContact = daysSinceContact === null && (daysSinceCreated === null || daysSinceCreated <= NEW_CONTACT_GRACE_DAYS);
+  if (emptyPromptDueAt) {
+    const due = new Date(emptyPromptDueAt);
+    return !Number.isNaN(due.getTime()) && now.getTime() > due.getTime();
+  }
+  if (circleLevel === 3) return false;
+  if (daysSinceCreated === null) return false;
+  const isNewUncontactedContact = daysSinceCreated <= NEW_CONTACT_GRACE_DAYS;
   if (isNewUncontactedContact) return false;
-  return daysSinceContact === null || daysSinceContact > CHECKIN_THRESHOLDS[circleLevel];
+  return true;
+}
+
+// shared/checkin-time.ts
+function calendarParts(value, timezone) {
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: timezone,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit"
+  }).formatToParts(value);
+  return [
+    Number(parts.find((part) => part.type === "year")?.value),
+    Number(parts.find((part) => part.type === "month")?.value),
+    Number(parts.find((part) => part.type === "day")?.value)
+  ];
+}
+function literalDateParts(value) {
+  const dateOnly = value.match(/^(\d{4})-(\d{1,2})-(\d{1,2})$/);
+  if (dateOnly) return [Number(dateOnly[1]), Number(dateOnly[2]), Number(dateOnly[3])];
+  const slash = value.match(/^(\d{1,2})\/(\d{1,2})(?:\/(\d{4}))?$/);
+  if (!slash) return null;
+  return [slash[3] ? Number(slash[3]) : (/* @__PURE__ */ new Date()).getFullYear(), Number(slash[1]), Number(slash[2])];
+}
+function getCheckinDaysSince(value, timezone = Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC", now = /* @__PURE__ */ new Date()) {
+  if (!value) return null;
+  try {
+    const today = calendarParts(now, timezone);
+    const literal = typeof value === "string" ? literalDateParts(value) : null;
+    const contactDay = literal ?? calendarParts(value instanceof Date ? value : new Date(value), timezone);
+    if ([...today, ...contactDay].some((part) => !Number.isFinite(part))) return null;
+    return Math.floor(
+      (Date.UTC(today[0], today[1] - 1, today[2]) - Date.UTC(contactDay[0], contactDay[1] - 1, contactDay[2])) / 864e5
+    );
+  } catch {
+    return null;
+  }
 }
 
 // server/push-notifications.ts
-function getContactDaysSince(value, timezone) {
-  if (!value) return null;
-  if (value instanceof Date) {
-    try {
-      const parts = new Intl.DateTimeFormat("en-CA", {
-        timeZone: timezone,
-        year: "numeric",
-        month: "2-digit",
-        day: "2-digit"
-      }).formatToParts(value);
-      const year = parts.find((part) => part.type === "year").value;
-      const month = parts.find((part) => part.type === "month").value;
-      const day = parts.find((part) => part.type === "day").value;
-      return getDaysSinceInTz(`${year}-${month}-${day}`, timezone);
-    } catch {
-      return getDaysSinceInTz(value.toISOString().slice(0, 10), timezone);
-    }
-  }
-  return getDaysSinceInTz(value, timezone);
+function getContactDaysSince(value, timezone, now = /* @__PURE__ */ new Date()) {
+  return getCheckinDaysSince(value, timezone, now);
 }
 function buildBirthdayDayOfMessages(contact, timezone) {
   const messages = [];
@@ -1260,7 +1265,7 @@ function buildReminderMessages(contact, timezone) {
   if (contact.circleLevel === 1) {
     const daysSinceContact = getContactDaysSince(contact.lastContacted, timezone);
     const daysSinceCreated = getContactDaysSince(contact.createdAt, timezone);
-    if (isCheckinQuickPickEligible(1, daysSinceContact, daysSinceCreated)) {
+    if (isCheckinQuickPickEligible(1, daysSinceContact, daysSinceCreated, contact.emptyLastContactPromptDueAt)) {
       messages.push({
         title: `Check in with ${contact.name}`,
         body: `Open the app to confirm when you last spoke.`,
@@ -1296,7 +1301,7 @@ function buildReminderMessages(contact, timezone) {
   } else if (contact.circleLevel === 2) {
     const daysSinceContact = getContactDaysSince(contact.lastContacted, timezone);
     const daysSinceCreated = getContactDaysSince(contact.createdAt, timezone);
-    if (isCheckinQuickPickEligible(2, daysSinceContact, daysSinceCreated)) {
+    if (isCheckinQuickPickEligible(2, daysSinceContact, daysSinceCreated, contact.emptyLastContactPromptDueAt)) {
       messages.push({
         title: `Check in with ${contact.name}`,
         body: `Open the app to confirm when you last spoke.`,
@@ -1316,7 +1321,7 @@ function buildReminderMessages(contact, timezone) {
   } else if (contact.circleLevel === 3) {
     const daysSinceContact3 = getContactDaysSince(contact.lastContacted, timezone);
     const daysSinceCreated = getContactDaysSince(contact.createdAt, timezone);
-    if (isCheckinQuickPickEligible(3, daysSinceContact3, daysSinceCreated)) {
+    if (isCheckinQuickPickEligible(3, daysSinceContact3, daysSinceCreated, contact.emptyLastContactPromptDueAt)) {
       messages.push({
         title: `Check in with ${contact.name}`,
         body: `Open the app to confirm when you last spoke.`,
@@ -1854,7 +1859,7 @@ function hasHomeReminder(contact, timezone, now) {
   if (![1, 2, 3].includes(circle)) return false;
   const daysSinceContact = getContactDaysSince(contact.lastContacted, timezone);
   const daysSinceCreated = getContactDaysSince(contact.createdAt, timezone);
-  if (isCheckinQuickPickEligible(circle, daysSinceContact, daysSinceCreated)) return true;
+  if (isCheckinQuickPickEligible(circle, daysSinceContact, daysSinceCreated, contact.emptyLastContactPromptDueAt, now)) return true;
   const reminderWindow = { 1: 30, 2: 7, 3: 0 }[circle];
   const birthdayDays = getDaysUntilBirthdayInTz(contact.birthday, timezone);
   if (birthdayDays !== null && birthdayDays >= 0 && birthdayDays <= reminderWindow) {
@@ -1867,10 +1872,13 @@ function hasHomeReminder(contact, timezone, now) {
   });
 }
 function selectSuggestionPushCandidates(priorityCohort, timezone, now = /* @__PURE__ */ new Date()) {
-  const reminderFree = priorityCohort.filter(
+  const eligibleCohort = priorityCohort.filter(
+    (contact) => contact.circleLevel !== 3 || contact.elevationPhase !== "deferred"
+  );
+  const reminderFree = eligibleCohort.filter(
     (contact) => !hasHomeReminder(contact, timezone, now)
   );
-  return reminderFree.length > 0 ? reminderFree : priorityCohort;
+  return reminderFree.length > 0 ? reminderFree : eligibleCohort;
 }
 async function getPrioritySuggestionCohort(userId, _timezone = "UTC", now = /* @__PURE__ */ new Date()) {
   const [userContacts, eventResult, snapshotResult] = await Promise.all([
@@ -1908,22 +1916,26 @@ async function getPrioritySuggestionCohort(userId, _timezone = "UTC", now = /* @
     const circle = contact.circleLevel;
     if (![1, 2, 3].includes(circle)) return false;
     const dismissedAt = latestDismissal.get(contact.id);
-    if (!dismissedAt) return true;
-    const elapsedDays = (now.getTime() - dismissedAt.getTime()) / 864e5;
-    return elapsedDays >= CIRCLE_COOLDOWN_DAYS[circle];
+    if (dismissedAt) {
+      const elapsedDays = (now.getTime() - dismissedAt.getTime()) / 864e5;
+      if (elapsedDays < CIRCLE_COOLDOWN_DAYS[circle]) return false;
+    }
+    const elevatedAt = latestElevation.get(contact.id);
+    const elevationAgeHours = elevatedAt ? (now.getTime() - elevatedAt.getTime()) / 36e5 : null;
+    return circle !== 3 || elevationPhaseForAge(circle, elevationAgeHours) !== "deferred";
   }).map((contact) => {
     const circle = contact.circleLevel;
     const elevatedAt = latestElevation.get(contact.id);
     const elevationAgeHours = elevatedAt ? (now.getTime() - elevatedAt.getTime()) / 36e5 : null;
-    const elevationDelay = { 1: 24, 2: 48, 3: 72 }[circle];
-    const elevationLifetime = { 1: 6, 2: 7, 3: 8 }[circle] * 24;
-    const elevationBonus = elevationAgeHours !== null && elevationAgeHours >= elevationDelay && elevationAgeHours < elevationLifetime ? ELEVATION_SCORE_BONUS[circle] : 0;
+    const elevationBonus = elevationBonusForAge(circle, elevationAgeHours);
+    const elevationPhase = elevationPhaseForAge(circle, elevationAgeHours);
     return {
       ...contact,
+      elevationPhase,
       score: scorePrioritySuggestion(
         circle,
         null,
-        getContactDaysSince(contact.lastContacted, _timezone),
+        getContactDaysSince(contact.lastContacted, _timezone, now),
         elevationBonus
       )
     };
@@ -2331,6 +2343,31 @@ async function sendHangoutCalendarInvite(to, contactName, hangoutTitle, timeLabe
   if (error) {
     throw new Error(`Failed to send calendar invite email: ${error.message}`);
   }
+}
+
+// shared/checkin-policy.ts
+function randomInclusive(min, max, random = Math.random) {
+  return Math.floor(random() * (max - min + 1)) + min;
+}
+function emptyContactPromptDueAt(circleLevel, now = /* @__PURE__ */ new Date(), random = Math.random) {
+  const result = new Date(now);
+  const days = circleLevel === 3 ? randomInclusive(14, 30, random) : 7;
+  result.setDate(result.getDate() + days);
+  return result;
+}
+function normalizeLastContacted(value) {
+  return typeof value === "string" && value.trim() ? value.trim() : null;
+}
+function promptDueAfterContactUpdate(params) {
+  if (params.nextLastContacted) return null;
+  if (params.previousLastContacted || params.previousCircleLevel !== params.nextCircleLevel) {
+    return emptyContactPromptDueAt(
+      params.nextCircleLevel,
+      params.now,
+      params.random
+    );
+  }
+  return params.previousDueAt;
 }
 
 // server/routes.ts
@@ -3418,7 +3455,7 @@ async function registerRoutes(app2) {
         [userId]
       );
       const timezone = timezoneResult.rows[0]?.notification_timezone ?? "UTC";
-      const [cohort, dismissalResult] = await Promise.all([
+      const [cohort, dismissalResult, elevationResult] = await Promise.all([
         getPrioritySuggestionCohort(userId, timezone),
         pool.query(
           `SELECT nl.contact_id, c.circle_level, MAX(nl.sent_at) AS dismissed_at
@@ -3427,6 +3464,16 @@ async function registerRoutes(app2) {
            WHERE nl.user_id = $1
              AND nl.notif_type = 'suggestion_dismissed'
              AND nl.sent_at > NOW() - INTERVAL '15 days'
+           GROUP BY nl.contact_id, c.circle_level`,
+          [userId]
+        ),
+        pool.query(
+          `SELECT nl.contact_id, c.circle_level, MAX(nl.sent_at) AS elevated_at
+           FROM notification_log nl
+           INNER JOIN contacts c ON c.id = nl.contact_id AND c.user_id = nl.user_id
+           WHERE nl.user_id = $1
+             AND nl.notif_type = 'elevation'
+             AND nl.sent_at > NOW() - INTERVAL '8 days'
            GROUP BY nl.contact_id, c.circle_level`,
           [userId]
         )
@@ -3438,9 +3485,29 @@ async function registerRoutes(app2) {
         const ageMs = now - new Date(row.dismissed_at).getTime();
         return ageMs < CIRCLE_COOLDOWN_DAYS[circle] * 864e5;
       }).map((row) => row.contact_id);
+      const pendingElevationContactIds = elevationResult.rows.filter((row) => {
+        const circle = row.circle_level;
+        if (![1, 2, 3].includes(circle)) return false;
+        return now - new Date(row.elevated_at).getTime() < ELEVATION_LIFETIME_HOURS[circle] * 36e5;
+      }).map((row) => row.contact_id);
+      const deferredElevationContactIds = elevationResult.rows.filter((row) => {
+        const circle = row.circle_level;
+        if (![1, 2, 3].includes(circle)) return false;
+        const ageHours = (now - new Date(row.elevated_at).getTime()) / 36e5;
+        return circle === 3 && elevationPhaseForAge(circle, ageHours) === "deferred";
+      }).map((row) => row.contact_id);
+      const dueElevationContactIds = elevationResult.rows.filter((row) => {
+        const circle = row.circle_level;
+        if (![1, 2, 3].includes(circle)) return false;
+        const ageHours = (now - new Date(row.elevated_at).getTime()) / 36e5;
+        return elevationPhaseForAge(circle, ageHours) === "due";
+      }).map((row) => row.contact_id);
       res.json({
         contactIds: cohort.map((contact) => contact.id),
         dismissedContactIds,
+        pendingElevationContactIds,
+        deferredElevationContactIds,
+        dueElevationContactIds,
         generatedAt: (/* @__PURE__ */ new Date()).toISOString()
       });
     } catch (err) {
@@ -3658,6 +3725,7 @@ async function registerRoutes(app2) {
         return bad(res, "circleLevel must be 1, 2, or 3");
       }
       const safe = pickContactFields(body);
+      const normalizedLastContacted = normalizeLastContacted(safe.lastContacted);
       const avatarColor = typeof body.avatarColor === "string" && body.avatarColor ? body.avatarColor : "#9B7DFF";
       const contact = await storage.createContact({
         ...safe,
@@ -3665,13 +3733,11 @@ async function registerRoutes(app2) {
         circleLevel: level,
         userId: req.session.userId,
         avatarColor,
-        lastContacted: (() => {
-          if (safe.lastContacted) return safe.lastContacted;
-          const now = /* @__PURE__ */ new Date();
-          const daysBack = level === 1 ? Math.floor(Math.random() * 15) : level === 2 ? Math.floor(Math.random() * 31) : 30 + Math.floor(Math.random() * 31);
-          now.setDate(now.getDate() - daysBack);
-          return now.toISOString();
-        })(),
+        // Unknown means unknown: do not invent contact history. The persisted,
+        // server-authored due date keeps empty-contact prompts stable across
+        // devices and offline client restarts.
+        lastContacted: normalizedLastContacted,
+        emptyLastContactPromptDueAt: normalizedLastContacted ? null : emptyContactPromptDueAt(level),
         lastHangout: (() => {
           if (safe.lastHangout) return safe.lastHangout;
           const now = /* @__PURE__ */ new Date();
@@ -3707,6 +3773,17 @@ async function registerRoutes(app2) {
       const safe = pickContactFields(body);
       safe.name = body.name.trim();
       safe.circleLevel = normalizedLevel;
+      if (Object.prototype.hasOwnProperty.call(body, "lastContacted")) {
+        safe.lastContacted = normalizeLastContacted(safe.lastContacted);
+      }
+      const incomingLastContacted = Object.prototype.hasOwnProperty.call(body, "lastContacted") ? safe.lastContacted : existing.lastContacted;
+      safe.emptyLastContactPromptDueAt = promptDueAfterContactUpdate({
+        previousCircleLevel: existing.circleLevel,
+        previousLastContacted: normalizeLastContacted(existing.lastContacted),
+        previousDueAt: existing.emptyLastContactPromptDueAt,
+        nextCircleLevel: normalizedLevel,
+        nextLastContacted: normalizeLastContacted(incomingLastContacted)
+      });
       const contact = await storage.updateContact(id, safe);
       res.json(contact);
     } catch (err) {
@@ -3772,7 +3849,10 @@ async function registerRoutes(app2) {
           lastContacted = parsed.toISOString();
         }
       }
-      const updates = { lastContacted };
+      const updates = {
+        lastContacted,
+        emptyLastContactPromptDueAt: null
+      };
       if (typeof label === "string" && label.length > 0) {
         updates.lastContactedLabel = label;
       } else {
@@ -4827,6 +4907,45 @@ async function updateExistingContactsWithLabels() {
 
 // server/index.ts
 init_db();
+
+// server/contact-prompt-rollout.ts
+var LEGACY_C3_PROMPT_BACKFILL_SQL = `
+  UPDATE contacts
+  SET empty_last_contact_prompt_due_at =
+    CURRENT_TIMESTAMP + (14 + FLOOR(RANDOM() * 17)) * INTERVAL '1 day'
+  WHERE circle_level = 3
+    AND NULLIF(BTRIM(last_contacted), '') IS NULL
+    AND empty_last_contact_prompt_due_at IS NULL
+`;
+var LEGACY_C1_C2_MISSING_CREATED_AT_BACKFILL_SQL = `
+  UPDATE contacts
+  SET empty_last_contact_prompt_due_at = CURRENT_TIMESTAMP + INTERVAL '7 days'
+  WHERE circle_level IN (1, 2)
+    AND NULLIF(BTRIM(last_contacted), '') IS NULL
+    AND created_at IS NULL
+    AND empty_last_contact_prompt_due_at IS NULL
+`;
+async function migrateEmptyContactPromptDueDates(pool2, production) {
+  await pool2.query(
+    `ALTER TABLE contacts ADD COLUMN IF NOT EXISTS empty_last_contact_prompt_due_at TIMESTAMP`
+  );
+  if (!production) return;
+  const client = await pool2.connect();
+  try {
+    await client.query("BEGIN");
+    await client.query(LEGACY_C1_C2_MISSING_CREATED_AT_BACKFILL_SQL);
+    await client.query(LEGACY_C3_PROMPT_BACKFILL_SQL);
+    await client.query("COMMIT");
+  } catch (error) {
+    await client.query("ROLLBACK").catch(() => {
+    });
+    throw error;
+  } finally {
+    client.release();
+  }
+}
+
+// server/index.ts
 var app = express();
 var log = console.log;
 function setupCors(app2) {
@@ -5114,6 +5233,13 @@ async function ensureUserCreatedAtColumn() {
     console.error("[startup] Failed to add/backfill users.created_at column:", err);
   }
 }
+async function ensureEmptyLastContactPromptDueAtColumn() {
+  try {
+    await migrateEmptyContactPromptDueDates(pool, process.env.NODE_ENV === "production");
+  } catch (err) {
+    console.error("[startup] Failed to add/backfill empty contact prompt due dates:", err);
+  }
+}
 (async () => {
   setupCors(app);
   setupBodyParsing(app);
@@ -5129,6 +5255,7 @@ async function ensureUserCreatedAtColumn() {
   await ensureHangoutVoterTokensColumn();
   await ensureProviderSubColumns();
   await ensureUserCreatedAtColumn();
+  await ensureEmptyLastContactPromptDueAtColumn();
   const server = await registerRoutes(app);
   setupErrorHandler(app);
   if (process.env.NODE_ENV !== "production") {

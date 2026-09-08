@@ -28,6 +28,11 @@ import { NoPhoneSheet } from "@/components/NoPhoneSheet";
 import * as BirthdayText from "@/lib/birthday-text";
 import { queryClient } from "@/lib/query-client";
 import { useQuery } from "@tanstack/react-query";
+import {
+  shouldDeferSuggestion,
+  shouldSuppressCheckin,
+} from "@shared/suggestion-priority";
+import { getCheckinDaysSince } from "@shared/checkin-time";
 
 interface GeneratedSuggestion {
   contact: Contact;
@@ -41,6 +46,9 @@ interface GeneratedSuggestion {
 interface PrioritySuggestionResponse {
   contactIds: string[];
   dismissedContactIds: string[];
+  pendingElevationContactIds?: string[];
+  deferredElevationContactIds?: string[];
+  dueElevationContactIds?: string[];
   generatedAt: string;
 }
 
@@ -148,7 +156,7 @@ export default function SuggestionsScreen() {
   }, []);
 
   const contactsScheduleKey = contacts
-    .map((c) => `${c.id}:${c.circleLevel}:${c.birthday ?? ""}:${c.lastContacted ?? ""}:${c.lastHangout ?? ""}:${(c.customReminders ?? []).length}`)
+    .map((c) => `${c.id}:${c.circleLevel}:${c.birthday ?? ""}:${c.lastContacted ?? ""}:${c.emptyLastContactPromptDueAt ?? ""}:${c.lastHangout ?? ""}:${(c.customReminders ?? []).length}`)
     .join("|");
 
   useEffect(() => {
@@ -216,12 +224,20 @@ export default function SuggestionsScreen() {
       : allReminders;
     return filtered.filter((r) => {
       if (completedReminderIds.has(r.id)) return false;
-      if (r.type === "check-in-quickpick" && r.contactId && elevatedContactTypes.has(`${r.contactId}:checkin`)) return false;
+      if (
+        r.type === "check-in-quickpick" &&
+        r.contactId &&
+        shouldSuppressCheckin(
+          r.contactId,
+          elevatedContactTypes.has(`${r.contactId}:checkin`),
+          prioritySuggestions?.pendingElevationContactIds,
+        )
+      ) return false;
       if (r.type === "hangout-quickpick" && r.contactId && elevatedContactTypes.has(`${r.contactId}:hangout`)) return false;
       if ((r.type === "check-in-quickpick" || r.type === "hangout-quickpick") && r.contactId && snoozedContacts.has(r.contactId)) return false;
       return true;
     });
-  }, [contacts, filterCircle, completedReminderIds, elevatedContactTypes, snoozedContacts]);
+  }, [contacts, filterCircle, completedReminderIds, elevatedContactTypes, snoozedContacts, prioritySuggestions]);
 
   const rankedContacts = useMemo(() => {
     const serverDismissedIds = new Set(prioritySuggestions?.dismissedContactIds ?? []);
@@ -230,8 +246,23 @@ export default function SuggestionsScreen() {
     const filtered = filterCircle
       ? contacts.filter((c) => c.circleLevel === filterCircle)
       : contacts;
+    const serverDeferredIds = prioritySuggestions?.deferredElevationContactIds ?? [];
+    const serverDueIds = new Set(prioritySuggestions?.dueElevationContactIds ?? []);
+    const elevationBonus = (contact: typeof contacts[0]) =>
+      elevationMap[contact.id] ??
+      (serverDueIds.has(contact.id)
+        ? ELEVATION_SCORE_BONUS[contact.circleLevel as 1 | 2 | 3]
+        : 0);
+    const isDeferred = (contact: typeof contacts[0]) =>
+      contact.circleLevel === 3 &&
+      shouldDeferSuggestion(
+        contact.id,
+        elevatedContactTypes.has(`${contact.id}:checkin`),
+        !!elevationBonus(contact),
+        serverDeferredIds,
+      );
 
-    const isElevated = (c: typeof contacts[0]) => !!elevationMap[c.id];
+    const isElevated = (c: typeof contacts[0]) => !!elevationBonus(c);
     const isSessionSkipped = (c: typeof contacts[0]) => sessionSkippedIds.has(c.id) && !isElevated(c);
     const inCooldown = (c: typeof contacts[0]) => {
       if (isElevated(c)) return false;
@@ -239,12 +270,12 @@ export default function SuggestionsScreen() {
       return isInCooldown(c.circleLevel as 1 | 2 | 3, daysSinceLastSug);
     };
 
-    const base = filtered.filter((c) => !isSessionSkipped(c) && !isDismissed(c.id));
+    const base = filtered.filter((c) => !isDeferred(c) && !isSessionSkipped(c) && !isDismissed(c.id));
     const eligible = base.filter((c) => !inCooldown(c));
 
     const rankContact = (c: typeof contacts[0]) => {
       const daysSinceLastSug = getDaysSinceLastSuggestedSync(c.id, lastSuggestedDates);
-      const daysSinceContact = getDaysSince(c.lastContacted ?? undefined);
+      const daysSinceContact = getCheckinDaysSince(c.lastContacted);
       const daysUntilBday = getDaysUntilBirthday(c.birthday ?? undefined);
       return {
         contact: c,
@@ -253,7 +284,7 @@ export default function SuggestionsScreen() {
           daysSinceLastSug,
           daysSinceContact,
           daysUntilBday,
-          elevationMap[c.id],
+          elevationBonus(c),
         ),
       };
     };
@@ -270,7 +301,7 @@ export default function SuggestionsScreen() {
     return [...rankedEligible, ...rankedCooldown]
       .slice(0, SUGGESTION_MAX)
       .map((x) => x.contact);
-  }, [contacts, filterCircle, lastSuggestedDates, elevationMap, sessionSkippedIds, completedIds, prioritySuggestions]);
+  }, [contacts, filterCircle, lastSuggestedDates, elevationMap, elevatedContactTypes, sessionSkippedIds, completedIds, prioritySuggestions]);
 
   useEffect(() => {
     const next: Record<string, number> = {};
