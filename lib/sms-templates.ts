@@ -2,6 +2,17 @@ function pick<T>(arr: T[]): T {
   return arr[Math.floor(Math.random() * arr.length)];
 }
 
+export const ADULT_FRIEND_PROMPTS = new Set([
+  "Ask [Name] if they've discovered any good local spots lately.",
+  "Send [Name] something that reminded you of a conversation you had.",
+  "Invite [Name] for a low-key coffee, walk, or quick catch-up.",
+  "Ask [Name] what they've been enjoying outside of work lately.",
+  "Recommend a show, podcast, restaurant, or event that fits [Name]'s taste.",
+  "Follow up with [Name] about something they mentioned last time you spoke.",
+  "Suggest an easy group hangout and invite [Name] along.",
+  "Share a small win or funny moment from your week with [Name].",
+]);
+
 export const PROMPT_SMS_MAP: Record<string, string> = {
   // ── Circle 1 Text ──────────────────────────────────────────────────────────
   "Tell [Name] something you deeply appreciate about who they are.":
@@ -108,6 +119,24 @@ export const PROMPT_SMS_MAP: Record<string, string> = {
     "Hey [Name]! Randomly thought of you today and just wanted to say — you're someone I'm genuinely glad to know.",
   "Reach out to [Name] just to say hi - it's always the right time.":
     "Hey [Name]! Just wanted to say hi — hope things are going really well.",
+
+  // ── Adult Friend label prompts ─────────────────────────────────────────────
+  "Ask [Name] if they've discovered any good local spots lately.":
+    "Hey [Name]! Have you discovered any good local spots lately? I'm always looking for somewhere new to try.",
+  "Send [Name] something that reminded you of a conversation you had.":
+    "Hey [Name]! I came across this and it reminded me of our conversation about [fill in the topic]. Thought you'd appreciate it!",
+  "Invite [Name] for a low-key coffee, walk, or quick catch-up.":
+    "Hey [Name]! Want to grab a coffee or go for a walk sometime soon? Would be great to catch up.",
+  "Ask [Name] what they've been enjoying outside of work lately.":
+    "Hey [Name]! What have you been enjoying outside of work lately? Always curious what you've been up to.",
+  "Recommend a show, podcast, restaurant, or event that fits [Name]'s taste.":
+    "Hey [Name]! I found [fill in the show, podcast, restaurant, or event] and thought it might be right up your alley.",
+  "Follow up with [Name] about something they mentioned last time you spoke.":
+    "Hey [Name]! I was thinking about what you mentioned last time about [fill in the topic]. How did that turn out?",
+  "Suggest an easy group hangout and invite [Name] along.":
+    "Hey [Name]! A few of us are thinking about [fill in the plan]. You should join if you're free!",
+  "Share a small win or funny moment from your week with [Name].":
+    "Hey [Name]! Had a small win/funny moment this week that I thought you'd appreciate: [fill in what happened]. How's your week going?",
 
   // ── Universal ──────────────────────────────────────────────────────────────
   "What's a compliment you haven't said out loud to [Name] yet?":
@@ -548,12 +577,23 @@ export function getTextCopyMessage(
     hasBirthdaySoon,
   } = options ?? {};
 
+  const escapedName = contactName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const rawPromptKey = prompt.replace(new RegExp(escapedName, "g"), "[Name]");
+  const promptTemplate = PROMPT_SMS_MAP[rawPromptKey] ?? PROMPT_SMS_MAP[prompt];
+  const isAdultFriendPrompt = ADULT_FRIEND_PROMPTS.has(rawPromptKey);
+
   if (hasBirthdaySoon) {
     return pick([
       `Hey ${firstName}! Your birthday is coming up and I didn't want to miss it. Hope you have the most amazing day!`,
       `Hey ${firstName}! Just wanted to wish you an early happy birthday. Hope it's a great one!`,
       `Hey ${firstName}! Thinking of you with your birthday around the corner. Have an incredible day!`,
     ]);
+  }
+
+  // Adult Friend prompts are deliberately concrete and light. Keep their
+  // matching message instead of replacing it with the generic overdue copy.
+  if (isAdultFriendPrompt && promptTemplate) {
+    return promptTemplate.replace(/\[Name\]/g, firstName);
   }
 
   if (daysSinceContact !== null && daysSinceContact !== undefined && daysSinceContact > 45) {
@@ -565,11 +605,8 @@ export function getTextCopyMessage(
   }
 
   if (prompt) {
-    const escapedName = contactName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-    const rawKey = prompt.replace(new RegExp(escapedName, "g"), "[Name]");
-    const template = PROMPT_SMS_MAP[rawKey] ?? PROMPT_SMS_MAP[prompt];
-    if (template) {
-      return template.replace(/\[Name\]/g, firstName);
+    if (promptTemplate) {
+      return promptTemplate.replace(/\[Name\]/g, firstName);
     }
 
     // If the prompt is already phrased as a direct message to send, use a

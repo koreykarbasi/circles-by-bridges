@@ -1,4 +1,9 @@
-import { PROMPT_SMS_MAP, getTextCopyMessage, reasonFromPrompt } from "../lib/sms-templates";
+import {
+  ADULT_FRIEND_PROMPTS,
+  PROMPT_SMS_MAP,
+  getTextCopyMessage,
+  reasonFromPrompt,
+} from "../lib/sms-templates";
 
 const SAMPLE_NAME = "Jane Smith";
 const FIRST_NAME = "Jane";
@@ -239,6 +244,25 @@ describe("getTextCopyMessage — specific map entries (spot-checks)", () => {
     expect(result.toLowerCase()).toContain("lonely");
     expect(result.startsWith("Hey " + FIRST_NAME)).toBe(true);
   });
+});
+
+describe("getTextCopyMessage — Adult Friend prompts", () => {
+  test.each([...ADULT_FRIEND_PROMPTS])(
+    "provides matching iMessage copy even when the contact is overdue: %s",
+    (prompt) => {
+      const result = getTextCopyMessage("Maria Sanchez", {
+        prompt: prompt.replace(/\[Name\]/g, "Maria Sanchez"),
+        labels: ["Adult Friend"],
+        daysSinceContact: 200,
+        circleLevel: 3,
+      });
+
+      expect(PROMPT_SMS_MAP[prompt]).toBeDefined();
+      expect(result).toContain("Maria");
+      expect(result).not.toContain("[Name]");
+      expect(result).not.toMatch(/It's been way too long|Feels like ages|It's been a while/);
+    },
+  );
 });
 
 describe("reasonFromPrompt — fallback logic (no map hit)", () => {
