@@ -335,6 +335,16 @@ const LABEL_PROMPTS: Record<string, string[]> = {
     "Update [Name] on your progress - they'd love to hear it.",
     "Share a win with [Name] and credit their influence.",
   ],
+  "adult friend": [
+    "Ask [Name] if they've discovered any good local spots lately.",
+    "Send [Name] something that reminded you of a conversation you had.",
+    "Invite [Name] for a low-key coffee, walk, or quick catch-up.",
+    "Ask [Name] what they've been enjoying outside of work lately.",
+    "Recommend a show, podcast, restaurant, or event that fits [Name]'s taste.",
+    "Follow up with [Name] about something they mentioned last time you spoke.",
+    "Suggest an easy group hangout and invite [Name] along.",
+    "Share a small win or funny moment from your week with [Name].",
+  ],
   "international friend": [
     "Ask [Name] when they started feeling at home in their new city.",
     "Ask [Name] if there's something they miss about home that surprised them.",

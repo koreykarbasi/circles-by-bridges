@@ -35,7 +35,7 @@ import { setCheckinElevationIfOverdue } from "@/lib/checkin-state";
 const PREDEFINED_LABELS = [
   "Family", "Childhood Friend", "College Friend", "Work Friend", "Neighbor",
   "Family Friend", "International Friend", "Gym Buddy", "Travel Buddy",
-  "Mentor", "Mentee",
+  "Mentor", "Adult Friend",
 ];
 
 const MONTH_NAMES = [
@@ -939,7 +939,7 @@ const styles = StyleSheet.create({
     color: Colors.primary,
   },
   labelChip: {
-    paddingHorizontal: 14,
+    paddingHorizontal: 10,
     paddingVertical: 8,
     borderRadius: 20,
     backgroundColor: Colors.surface,
