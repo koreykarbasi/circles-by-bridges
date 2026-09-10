@@ -30,7 +30,7 @@ interface CustomReminder {
 // "birthday"  — day-of birthday (actual birthday, not custom)
 // "custom"    — custom reminders: day-of AND advance (7d/14d/30d)
 // "reminder"  — check-in overdue
-// "milestone" — birthday advance notices (C1: 30d/14d/7d, C2: 7d)
+// "milestone" — birthday advance notices (C1: 30d/14d/7d/1d, C2: 7d)
 export interface PushMessage {
   title: string;
   body: string;
@@ -107,7 +107,14 @@ export function buildReminderMessages(contact: ContactRow, timezone: string): Pu
     }
     // Birthday advance milestones (day-of handled separately)
     if (daysUntilBirthday !== null && daysUntilBirthday > 0) {
-      if (daysUntilBirthday === 7) {
+      if (daysUntilBirthday === 1) {
+        messages.push({
+          title: `${contact.name}'s birthday is tomorrow`,
+          body: `${contact.name}'s birthday is tomorrow — make sure you're ready to celebrate!`,
+          contactId: contact.id,
+          notifType: "milestone",
+        });
+      } else if (daysUntilBirthday === 7) {
         messages.push({
           title: `${contact.name}'s birthday is coming up`,
           body: `${contact.name}'s birthday is a week away — make sure you have everything sorted!`,

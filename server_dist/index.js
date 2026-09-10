@@ -1284,7 +1284,14 @@ function buildReminderMessages(contact, timezone) {
       });
     }
     if (daysUntilBirthday !== null && daysUntilBirthday > 0) {
-      if (daysUntilBirthday === 7) {
+      if (daysUntilBirthday === 1) {
+        messages.push({
+          title: `${contact.name}'s birthday is tomorrow`,
+          body: `${contact.name}'s birthday is tomorrow \u2014 make sure you're ready to celebrate!`,
+          contactId: contact.id,
+          notifType: "milestone"
+        });
+      } else if (daysUntilBirthday === 7) {
         messages.push({
           title: `${contact.name}'s birthday is coming up`,
           body: `${contact.name}'s birthday is a week away \u2014 make sure you have everything sorted!`,

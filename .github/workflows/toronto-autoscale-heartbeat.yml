@@ -35,4 +35,4 @@ jobs:
         run: |
           curl --fail --silent --show-error --location \
             --retry 2 --retry-delay 2 --max-time 20 \
-            https://circles-bridges.replit.app/api/health
+            https://circles-by-bridges.replit.app/api/health

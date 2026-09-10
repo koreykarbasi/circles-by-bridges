@@ -408,6 +408,25 @@ describe("buildReminderMessages — birthday milestone notifType is 'milestone'"
     jest.useRealTimers();
   });
 
+  test("Circle 1 — 1-day birthday milestone announces the birthday is tomorrow", () => {
+    const c = contact({
+      id: "c1",
+      name: "Parsa",
+      circleLevel: 1,
+      birthday: "03/16",
+      lastContacted: "2024-03-14",
+    });
+    const msgs = buildReminderMessages(c, "UTC");
+    const milestone = msgs.find((message) => message.notifType === "milestone");
+
+    expect(milestone).toEqual({
+      title: "Parsa's birthday is tomorrow",
+      body: "Parsa's birthday is tomorrow — make sure you're ready to celebrate!",
+      contactId: "c1",
+      notifType: "milestone",
+    });
+  });
+
   test("uses the visible Circle 1 threshold and compact contact-first title", () => {
     const c = contact({ id: "c1", name: "Ava", circleLevel: 1, lastContacted: "2024-02-29" });
     const reminder = buildReminderMessages(c, "UTC").find((message) => message.notifType === "reminder");
