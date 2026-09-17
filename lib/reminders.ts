@@ -30,6 +30,25 @@ export interface Reminder {
   persistent?: boolean;
 }
 
+export const MAX_HOME_CHECKIN_REMINDERS = 3;
+
+/**
+ * Limits only Home's check-in quick-picks while preserving the established
+ * priority order and every eligible time-sensitive/non-check-in reminder.
+ */
+export function selectHomeReminders(
+  reminders: Reminder[],
+  maxCheckins = MAX_HOME_CHECKIN_REMINDERS,
+): Reminder[] {
+  let checkinsIncluded = 0;
+  return reminders.filter((reminder) => {
+    if (reminder.type !== "check-in-quickpick") return true;
+    if (checkinsIncluded >= maxCheckins) return false;
+    checkinsIncluded++;
+    return true;
+  });
+}
+
 export const CHECKIN_THRESHOLDS = sharedCheckinThresholds;
 export const HANGOUT_THRESHOLDS: Record<1 | 2 | 3, number> = { 1: 21, 2: 60, 3: 90 };
 export const ELEVATION_PUSH_DELAY_HOURS = ELEVATION_DELAY_HOURS;

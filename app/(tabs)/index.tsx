@@ -17,7 +17,7 @@ import { EmptyState } from "@/components/EmptyState";
 import { NoPhoneSheet } from "@/components/NoPhoneSheet";
 import { formatLastContacted, getDaysSince, getDaysUntilBirthday } from "@/lib/helpers";
 import { CIRCLE_CONFIG, HangoutPlan } from "@/lib/types";
-import { generateReminders, Reminder, CHECKIN_THRESHOLDS, ELEVATION_PUSH_DELAY_HOURS, ELEVATION_CLEANUP_DAYS } from "@/lib/reminders";
+import { generateReminders, selectHomeReminders, Reminder, CHECKIN_THRESHOLDS, ELEVATION_PUSH_DELAY_HOURS, ELEVATION_CLEANUP_DAYS } from "@/lib/reminders";
 import { setElevation, getElevations, getExpiredElevations, clearElevation, ELEVATION_SCORE_BONUS, invalidateElevationCache } from "@/lib/checkin-state";
 import { snoozeContact, getSnoozedContacts, SNOOZE_DAYS } from "@/lib/reminder-snooze";
 import { getSmartPrompt, getActionType, getNextPrompt, loadSyncedPrompts } from "@/lib/prompts";
@@ -40,7 +40,6 @@ import {
 } from "@shared/suggestion-priority";
 import { getCheckinDaysSince } from "@shared/checkin-time";
 
-const MAX_REMINDERS = 5;
 const MAX_SUGGESTIONS = 3;
 
 function getReminderIcon(reminder: Reminder): string {
@@ -288,9 +287,7 @@ export default function HomeScreen() {
       if (r.type === "hangout-quickpick" && r.contactId && elevatedContactTypes.has(`${r.contactId}:hangout`)) return false;
       return true;
     };
-    return allReminders
-      .filter(passesFilter)
-      .slice(0, MAX_REMINDERS);
+    return selectHomeReminders(allReminders.filter(passesFilter));
   }, [allReminders, dismissedReminders, elevatedContactTypes, prioritySuggestions]);
 
   const getSuggestionForContact = useCallback(
