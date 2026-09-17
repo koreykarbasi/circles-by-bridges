@@ -231,6 +231,43 @@ describe("sendDailyReminders — birthday day-of gate (UTC user)", () => {
     expect(body.data?.contactId).toBe(FAKE_CONTACT_ID);
   });
 
+  test("all same-day birthdays are dispatched together in the first 9am batch", async () => {
+    jest.setSystemTime(new Date(TODAY_YEAR, TODAY_MONTH, TODAY_DAY, 9, 0, 0));
+    const birthdayContacts = Array.from({ length: 5 }, (_, index) => ({
+      ...fakeContact,
+      id: `${FAKE_CONTACT_ID}-${index + 1}`,
+      name: `Birthday Contact ${index + 1}`,
+    }));
+    dbModule.db = makeDbMock(birthdayContacts);
+    dbModule.pool = makePoolMock();
+
+    await sendDailyReminders();
+
+    const calls = birthdayPushCalls(mockFetch);
+    expect(calls).toHaveLength(5);
+    expect(calls.map((call) => JSON.parse(call[1].body).data?.contactId)).toEqual(
+      birthdayContacts.map((contact) => contact.id),
+    );
+  });
+
+  test("retains the delivery claim when the provider outcome is uncertain", async () => {
+    jest.setSystemTime(new Date(TODAY_YEAR, TODAY_MONTH, TODAY_DAY, 9, 0, 0));
+    mockFetch.mockRejectedValueOnce(new Error("network connection reset"));
+    dbModule.db = makeDbMock([fakeContact]);
+    const poolMock = makePoolMock();
+    dbModule.pool = poolMock;
+
+    await sendDailyReminders();
+
+    const sqlCalls = poolMock.query.mock.calls.map(([sql]: [string]) => sql);
+    expect(sqlCalls.some((sql: string) => sql.includes("RETURNING id"))).toBe(true);
+    expect(
+      sqlCalls.some((sql: string) =>
+        sql.includes("DELETE FROM notification_log WHERE id = $1"),
+      ),
+    ).toBe(false);
+  });
+
   test("Circle 2 one-week birthday reminder is dispatched in the 9am reminder slot", async () => {
     jest.setSystemTime(new Date(TODAY_YEAR, TODAY_MONTH, TODAY_DAY, 9, 0, 0));
     dbModule.db = makeDbMock([{
@@ -249,14 +286,14 @@ describe("sendDailyReminders — birthday day-of gate (UTC user)", () => {
     expect(body.body).toContain("week");
   });
 
-  test("does not send a late 9am push after a 9:10 startup", async () => {
+  test("recovers a birthday push after a 9:10 cold start within the 9am window", async () => {
     jest.setSystemTime(new Date(TODAY_YEAR, TODAY_MONTH, TODAY_DAY, 9, 10, 0));
     dbModule.db = makeDbMock([fakeContact]);
     dbModule.pool = makePoolMock();
 
     await sendDailyReminders();
 
-    expect(birthdayPushCalls(mockFetch)).toHaveLength(0);
+    expect(birthdayPushCalls(mockFetch)).toHaveLength(1);
   });
 
   test("birthday push is NOT dispatched at 8am UTC (one hour before the window)", async () => {

@@ -329,20 +329,18 @@ export async function pruneOldNotificationLog(): Promise<void> {
 // ─── Expo push sender ─────────────────────────────────────────────────────────
 
 const EXPO_PUSH_URL = "https://exp.host/--/api/v2/push/send";
+type PushDeliveryResult = "accepted" | "rejected" | "expired" | "uncertain";
 
 /**
- * Returns true on success, false on a transient/unknown error, or "expired"
- * when Expo tells us the token can no longer deliver (HTTP 404 or
- * DeviceNotRegistered). Callers that receive "expired"
- * must clear the token from the DB so the server doesn't keep retrying a dead
- * legacy Expo route.
+ * Distinguishes provider acceptance, definitive rejection, an expired token,
+ * and transport errors where the provider may have accepted the request.
  */
 async function sendExpoPush(
   token: string,
   title: string,
   body: string,
   data?: Record<string, string>,
-): Promise<boolean | "expired"> {
+): Promise<PushDeliveryResult> {
   try {
     const payload = { to: token, title, body, sound: "default", data: data ?? {} };
     const res = await fetch(EXPO_PUSH_URL, {
@@ -356,7 +354,7 @@ async function sendExpoPush(
         return "expired";
       }
       console.error(`[push] HTTP ${res.status} sending to ${token.slice(0, 20)}…`);
-      return false;
+      return "rejected";
     }
     // Even on HTTP 200 Expo can report DeviceNotRegistered inside the body.
     // When sending a single message object (our case), Expo returns data as a
@@ -379,21 +377,21 @@ async function sendExpoPush(
           `[push] Token retained: this is an app-wide credential problem, not a device-specific token failure.\n` +
           `[push] FIX: Repair the Expo/APNs credential configuration and send again.`
         );
-        return false;
+        return "rejected";
       }
-      // Any other Expo-reported error is a real failure — return false so callers
+      // Any other Expo-reported error is a definitive failure so callers
       // don't write a dedup entry for an undelivered notification.
       if (ticket?.status === "error") {
         console.error(`[push] Expo push error for token ${token.slice(0, 20)}…: ${JSON.stringify(ticket)}`);
-        return false;
+        return "rejected";
       }
     } catch {
       // JSON parse failed — HTTP was OK so treat as delivered
     }
-    return true;
+    return "accepted";
   } catch (err) {
     console.error("[push] Failed to send notification:", err);
-    return false;
+    return "uncertain";
   }
 }
 
@@ -438,7 +436,7 @@ async function sendApnsPush(
   deviceToken: string,
   title: string,
   body: string,
-): Promise<boolean | "expired"> {
+): Promise<PushDeliveryResult> {
   try {
     const jwt = await getApnsJwt();
     const bundleId = process.env.APNS_BUNDLE_ID ?? "app.replit.bridges";
@@ -464,7 +462,7 @@ async function sendApnsPush(
       req.on("data", (chunk) => { responseBody += chunk; });
       req.on("end", () => {
         if (status === 200) {
-          resolve(true);
+          resolve("accepted");
           return;
         }
         try {
@@ -474,24 +472,24 @@ async function sendApnsPush(
             resolve("expired");
           } else {
             console.error(`[push] APNs error ${status}: ${responseBody}`);
-            resolve(false);
+            resolve("rejected");
           }
         } catch {
           console.error(`[push] APNs error ${status}: ${responseBody}`);
-          resolve(false);
+          resolve("rejected");
         }
       });
       req.on("error", (err) => {
         console.error("[push] APNs request error:", err);
         _apnsClient = null;
-        resolve(false);
+        resolve("uncertain");
       });
       req.write(payload);
       req.end();
     });
   } catch (err) {
     console.error("[push] sendApnsPush error:", err);
-    return false;
+    return "rejected";
   }
 }
 
@@ -504,7 +502,7 @@ async function sendPush(
   title: string,
   body: string,
   data?: Record<string, string>,
-): Promise<boolean | "expired"> {
+): Promise<PushDeliveryResult> {
   if (token.startsWith("apns:")) {
     return sendApnsPush(token.slice(5), title, body);
   }
@@ -537,6 +535,19 @@ async function clearExpiredPushToken(userId: string, token: string): Promise<voi
 export function parseIntlHour(raw: string): number {
   const h = parseInt(raw, 10);
   return h === 24 ? 0 : h;
+}
+
+function normalizeNotificationTimezone(timezone: string): string {
+  const candidate = timezone || "UTC";
+  try {
+    new Intl.DateTimeFormat("en-US", { timeZone: candidate }).format(new Date(0));
+    return candidate;
+  } catch {
+    console.warn(
+      `[push] Unrecognised notification timezone "${candidate}"; using UTC for delivery checks.`,
+    );
+    return "UTC";
+  }
 }
 
 export function getLocalHour(timezone: string): number {
@@ -651,11 +662,46 @@ async function sendRemindersForUserUnlocked(
   timezone: string,
   scheduledAt: Date,
 ): Promise<number> {
-  const tz = timezone || "UTC";
+  const tz = normalizeNotificationTimezone(timezone);
   const isNineAm = isAtLocalDeliveryStart(tz, 9, scheduledAt);
   const isFivePm = isAtLocalDeliveryStart(tz, 17, scheduledAt);
 
   if (!isNineAm && !isFivePm) return 0;
+
+  // The scheduler runs every 15 minutes throughout the delivery hour. Treat the
+  // first accepted/uncertain reminder batch as consuming that user's whole local
+  // window, rather than merely deduplicating individual contacts. This still
+  // allows every same-day birthday in the first 9am batch to be sent together.
+  const windowLockResult = await pool.query<{ count: string }>(
+    `SELECT COUNT(*) AS count
+     FROM notification_log
+     WHERE user_id = $1
+       AND notif_type IN (
+         'birthday', 'birthday_claim',
+         'custom', 'custom_claim',
+         'milestone', 'milestone_claim',
+         'reminder', 'reminder_claim'
+       )
+       AND sent_at >= (
+         date_trunc('hour', $3::timestamptz AT TIME ZONE $2)
+         AT TIME ZONE $2
+       )
+       AND sent_at < (
+         (date_trunc('hour', $3::timestamptz AT TIME ZONE $2) + INTERVAL '1 hour')
+         AT TIME ZONE $2
+       )`,
+    [userId, tz, scheduledAt.toISOString()],
+  );
+  const alreadyConsumedThisWindow =
+    parseInt(windowLockResult.rows[0]?.count ?? "0", 10) > 0;
+  if (alreadyConsumedThisWindow) {
+    const deliveryHour = isNineAm ? 9 : 17;
+    console.log(
+      `[push]   user ${userId.slice(0, 8)}: reminder window already consumed ` +
+      `for local ${deliveryHour}:xx; skipping later tick`,
+    );
+    return 0;
+  }
 
   const userContacts = await db
     .select()
@@ -855,7 +901,7 @@ async function sendRemindersForUserUnlocked(
       await clearExpiredPushToken(userId, pushToken);
       return sent;
     }
-    if (result) {
+    if (result === "accepted") {
       await pool.query(
         `UPDATE notification_log
          SET notif_type = $2, sent_at = NOW()
@@ -864,8 +910,13 @@ async function sendRemindersForUserUnlocked(
       );
       sent++;
       console.log(`[push]     sent [${msg.notifType}] "${msg.title.slice(0, 50)}" → contact ${msg.contactId.slice(0, 8)}`);
-    } else {
+    } else if (result === "rejected") {
       await pool.query(`DELETE FROM notification_log WHERE id = $1`, [claimId]);
+    } else {
+      console.warn(
+        `[push]     delivery outcome uncertain [${msg.notifType}] for contact ` +
+        `${msg.contactId.slice(0, 8)}; retaining claim to prevent a duplicate`,
+      );
     }
   }
 
@@ -924,12 +975,19 @@ export async function sendDailyReminders() {
     const scheduledAt = new Date();
     for (const user of usersWithTokens) {
       if (!user.pushToken) continue;
-      sent += await sendRemindersForUser(
-        user.id,
-        user.pushToken,
-        user.notificationTimezone ?? "UTC",
-        scheduledAt,
-      );
+      try {
+        sent += await sendRemindersForUser(
+          user.id,
+          user.pushToken,
+          user.notificationTimezone ?? "UTC",
+          scheduledAt,
+        );
+      } catch (userErr) {
+        console.error(
+          `[push] Reminder dispatch failed for user ${user.id.slice(0, 8)}; continuing with remaining users:`,
+          userErr,
+        );
+      }
     }
     if (sent > 0) {
       console.log(`[push] sendDailyReminders: sent ${sent} notification(s) total`);
@@ -1194,7 +1252,7 @@ export async function sendProfileCompletionPushes() {
         await clearExpiredPushToken(user.id, user.pushToken);
         continue;
       }
-      if (result) {
+      if (result === "accepted") {
         await pool.query(
           `UPDATE users SET last_profile_push_at = NOW() WHERE id = $1`,
           [user.id],
@@ -1369,7 +1427,7 @@ export async function sendSuggestionNudges(userId?: string) {
         await pool.query(`DELETE FROM notification_log WHERE id = $1`, [claimId]);
         await clearExpiredPushToken(user.id, user.push_token);
         console.log(`[push]   → token expired; cleared from DB`);
-      } else if (result) {
+      } else if (result === "accepted") {
         await pool.query(
           `UPDATE notification_log
            SET notif_type = 'suggestion_push', sent_at = NOW()
@@ -1378,9 +1436,11 @@ export async function sendSuggestionNudges(userId?: string) {
         );
         sent++;
         console.log(`[push]   → delivered OK`);
-      } else {
+      } else if (result === "rejected") {
         await pool.query(`DELETE FROM notification_log WHERE id = $1`, [claimId]);
         console.log(`[push]   → delivery failed (Expo push service error)`);
+      } else {
+        console.warn(`[push]   → delivery outcome uncertain; retaining window claim`);
       }
       } finally {
         if (userLockAcquired) {

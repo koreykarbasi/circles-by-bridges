@@ -3,11 +3,11 @@ name: Daily push delivery invariants
 description: Reliability rules for the selected daily notification window.
 ---
 
-At a selected delivery window, a user can receive one normal quick-pick reminder and one daily suggestion independently. A contact's check-in eligibility must be shared between the app, reminder delivery, and suggestion conflict checks, and every elapsed-day calculation must use the recipient's selected timezone.
+At a selected delivery window, a user can receive one reminder/event dispatch and one daily suggestion independently. If multiple contacts have same-day birthdays, all birthday pushes belong to the first 9 AM dispatch; that batch consumes the reminder window and later ticks must not fall back to other reminder types. A contact's check-in eligibility must be shared between the app, reminder delivery, and suggestion conflict checks, and every elapsed-day calculation must use the recipient's selected timezone.
 
-**Why:** Suppressing the suggestion whenever all visible Home contacts also had quick-picks caused missing daily suggestions. Evaluating grace and threshold days in the server's calendar caused one-day late or early behavior for users outside the deployment timezone. Concurrent scheduler and token-registration delivery can duplicate reminders unless delivery is claimed before it reaches a provider.
+**Why:** Suppressing the suggestion whenever all visible Home contacts also had quick-picks caused missing daily suggestions. Per-contact dedup allowed later quarter-hour ticks to select different overdue contacts, producing four pushes in one hour. Evaluating grace and threshold days in the server's calendar caused one-day late or early behavior for users outside the deployment timezone. Concurrent scheduler and token-registration delivery can duplicate reminders unless delivery is claimed before it reaches a provider.
 
-**How to apply:** Preserve Home's published ranking for suggestions. Use the shared eligibility predicate when changing quick-pick logic, calculate calendar days in the user's timezone at 9 AM/5 PM, and retain per-user delivery serialization plus durable pre-send claims that are promoted as each provider delivery succeeds.
+**How to apply:** Preserve Home's published ranking for suggestions. Use the shared eligibility predicate when changing quick-pick logic, calculate calendar days in the user's timezone at 9 AM/5 PM, and retain per-user delivery serialization plus a durable local-hour guard. Promote claims after provider acceptance, retain them when acceptance is uncertain, and remove them only after a definitive rejection or expired token.
 
 For legacy Expo routes, clear a saved token only for a token-specific response such as `DeviceNotRegistered` or an HTTP 404. Treat `InvalidCredentials` as an app-wide Expo/APNs configuration outage and retain user tokens.
 

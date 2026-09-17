@@ -174,6 +174,43 @@ describe("cross-instance reminder serialization", () => {
     expect(lockClient.release).toHaveBeenCalledTimes(1);
     expect(mockedPool.query).not.toHaveBeenCalled();
   });
+
+  test("a later tick sends nothing after the local reminder window is consumed", async () => {
+    const mockedPool = pool as typeof pool & { connect: jest.Mock };
+    const lockClient = {
+      query: jest
+        .fn()
+        .mockResolvedValueOnce({ rows: [{ acquired: true }] })
+        .mockResolvedValueOnce({ rows: [{ pg_advisory_unlock: true }] }),
+      release: jest.fn(),
+    };
+    mockedPool.connect = jest.fn().mockResolvedValue(lockClient);
+    (mockedPool.query as jest.Mock)
+      .mockReset()
+      .mockResolvedValueOnce({ rows: [{ count: "1" }] });
+
+    const sent = await sendRemindersForUser(
+      "user-window-consumed",
+      "ExponentPushToken[window-test]",
+      "America/Toronto",
+      new Date("2026-09-14T13:45:00Z"),
+    );
+
+    expect(sent).toBe(0);
+    expect(mockedPool.query).toHaveBeenCalledWith(
+      expect.stringContaining("'birthday_claim'"),
+      [
+        "user-window-consumed",
+        "America/Toronto",
+        "2026-09-14T13:45:00.000Z",
+      ],
+    );
+    expect(lockClient.query).toHaveBeenCalledWith(
+      "SELECT pg_advisory_unlock(hashtext($1))",
+      ["bridges:reminder:user-window-consumed"],
+    );
+    expect(lockClient.release).toHaveBeenCalledTimes(1);
+  });
 });
 
 // ── dedupMessages — core dedup logic ─────────────────────────────────────────
@@ -193,6 +230,7 @@ describe("dedupMessages — empty inputs", () => {
 describe("priority snapshot retention", () => {
   test("general log pruning never deletes the current Home priority snapshot", async () => {
     const query = pool.query as jest.Mock;
+    query.mockClear();
     query.mockResolvedValue({ rows: [] });
 
     await pruneOldNotificationLog();
