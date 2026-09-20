@@ -200,6 +200,16 @@ function configureExpoAndLanding(app: express.Application) {
     ? fs.readFileSync(privacyPolicyTemplatePath, "utf-8")
     : null;
 
+  const supportTemplatePath = path.resolve(
+    process.cwd(),
+    "server",
+    "templates",
+    "support.html",
+  );
+  const supportTemplate = fs.existsSync(supportTemplatePath)
+    ? fs.readFileSync(supportTemplatePath, "utf-8")
+    : null;
+
   app.use((req: Request, res: Response, next: NextFunction) => {
     if (req.path.startsWith("/api")) {
       return next();
@@ -213,6 +223,11 @@ function configureExpoAndLanding(app: express.Application) {
     if (req.path === "/privacy" && privacyPolicyTemplate) {
       res.setHeader("Content-Type", "text/html; charset=utf-8");
       return res.status(200).send(privacyPolicyTemplate);
+    }
+
+    if (req.path === "/support" && supportTemplate) {
+      res.setHeader("Content-Type", "text/html; charset=utf-8");
+      return res.status(200).send(supportTemplate);
     }
 
     if (req.path.startsWith("/vote/") && votePageTemplate) {

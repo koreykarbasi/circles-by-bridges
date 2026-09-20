@@ -1459,7 +1459,7 @@ async function sendExpoPush(token, title, body, data) {
         return "expired";
       }
       console.error(`[push] HTTP ${res.status} sending to ${token.slice(0, 20)}\u2026`);
-      return false;
+      return "rejected";
     }
     try {
       const json = await res.json();
@@ -1476,18 +1476,18 @@ async function sendExpoPush(token, title, body, data) {
 [push] Token retained: this is an app-wide credential problem, not a device-specific token failure.
 [push] FIX: Repair the Expo/APNs credential configuration and send again.`
         );
-        return false;
+        return "rejected";
       }
       if (ticket?.status === "error") {
         console.error(`[push] Expo push error for token ${token.slice(0, 20)}\u2026: ${JSON.stringify(ticket)}`);
-        return false;
+        return "rejected";
       }
     } catch {
     }
-    return true;
+    return "accepted";
   } catch (err) {
     console.error("[push] Failed to send notification:", err);
-    return false;
+    return "uncertain";
   }
 }
 var _apnsJwt = null;
@@ -1543,7 +1543,7 @@ async function sendApnsPush(deviceToken, title, body) {
       });
       req.on("end", () => {
         if (status === 200) {
-          resolve3(true);
+          resolve3("accepted");
           return;
         }
         try {
@@ -1553,24 +1553,24 @@ async function sendApnsPush(deviceToken, title, body) {
             resolve3("expired");
           } else {
             console.error(`[push] APNs error ${status}: ${responseBody}`);
-            resolve3(false);
+            resolve3("rejected");
           }
         } catch {
           console.error(`[push] APNs error ${status}: ${responseBody}`);
-          resolve3(false);
+          resolve3("rejected");
         }
       });
       req.on("error", (err) => {
         console.error("[push] APNs request error:", err);
         _apnsClient = null;
-        resolve3(false);
+        resolve3("uncertain");
       });
       req.write(payload);
       req.end();
     });
   } catch (err) {
     console.error("[push] sendApnsPush error:", err);
-    return false;
+    return "rejected";
   }
 }
 async function sendPush(token, title, body, data) {
@@ -1593,6 +1593,18 @@ async function clearExpiredPushToken(userId, token) {
 function parseIntlHour(raw) {
   const h = parseInt(raw, 10);
   return h === 24 ? 0 : h;
+}
+function normalizeNotificationTimezone(timezone) {
+  const candidate = timezone || "UTC";
+  try {
+    new Intl.DateTimeFormat("en-US", { timeZone: candidate }).format(/* @__PURE__ */ new Date(0));
+    return candidate;
+  } catch {
+    console.warn(
+      `[push] Unrecognised notification timezone "${candidate}"; using UTC for delivery checks.`
+    );
+    return "UTC";
+  }
 }
 function getLocalHour(timezone) {
   try {
@@ -1640,10 +1652,38 @@ function isAtLocalDeliveryStart(timezone, targetHour, now = /* @__PURE__ */ new 
   }
 }
 async function sendRemindersForUserUnlocked(userId, pushToken, timezone, scheduledAt) {
-  const tz = timezone || "UTC";
+  const tz = normalizeNotificationTimezone(timezone);
   const isNineAm = isAtLocalDeliveryStart(tz, 9, scheduledAt);
   const isFivePm = isAtLocalDeliveryStart(tz, 17, scheduledAt);
   if (!isNineAm && !isFivePm) return 0;
+  const windowLockResult = await pool.query(
+    `SELECT COUNT(*) AS count
+     FROM notification_log
+     WHERE user_id = $1
+       AND notif_type IN (
+         'birthday', 'birthday_claim',
+         'custom', 'custom_claim',
+         'milestone', 'milestone_claim',
+         'reminder', 'reminder_claim'
+       )
+       AND sent_at >= (
+         date_trunc('hour', $3::timestamptz AT TIME ZONE $2)
+         AT TIME ZONE $2
+       )
+       AND sent_at < (
+         (date_trunc('hour', $3::timestamptz AT TIME ZONE $2) + INTERVAL '1 hour')
+         AT TIME ZONE $2
+       )`,
+    [userId, tz, scheduledAt.toISOString()]
+  );
+  const alreadyConsumedThisWindow = parseInt(windowLockResult.rows[0]?.count ?? "0", 10) > 0;
+  if (alreadyConsumedThisWindow) {
+    const deliveryHour = isNineAm ? 9 : 17;
+    console.log(
+      `[push]   user ${userId.slice(0, 8)}: reminder window already consumed for local ${deliveryHour}:xx; skipping later tick`
+    );
+    return 0;
+  }
   const userContacts = await db.select().from(contacts).where(eq2(contacts.userId, userId));
   const nineAmBirthdayMsgs = [];
   const nineAmCustomMsgs = [];
@@ -1785,7 +1825,7 @@ async function sendRemindersForUserUnlocked(userId, pushToken, timezone, schedul
       await clearExpiredPushToken(userId, pushToken);
       return sent;
     }
-    if (result) {
+    if (result === "accepted") {
       await pool.query(
         `UPDATE notification_log
          SET notif_type = $2, sent_at = NOW()
@@ -1794,8 +1834,12 @@ async function sendRemindersForUserUnlocked(userId, pushToken, timezone, schedul
       );
       sent++;
       console.log(`[push]     sent [${msg.notifType}] "${msg.title.slice(0, 50)}" \u2192 contact ${msg.contactId.slice(0, 8)}`);
-    } else {
+    } else if (result === "rejected") {
       await pool.query(`DELETE FROM notification_log WHERE id = $1`, [claimId]);
+    } else {
+      console.warn(
+        `[push]     delivery outcome uncertain [${msg.notifType}] for contact ${msg.contactId.slice(0, 8)}; retaining claim to prevent a duplicate`
+      );
     }
   }
   return sent;
@@ -1834,12 +1878,19 @@ async function sendDailyReminders() {
     const scheduledAt = /* @__PURE__ */ new Date();
     for (const user of usersWithTokens) {
       if (!user.pushToken) continue;
-      sent += await sendRemindersForUser(
-        user.id,
-        user.pushToken,
-        user.notificationTimezone ?? "UTC",
-        scheduledAt
-      );
+      try {
+        sent += await sendRemindersForUser(
+          user.id,
+          user.pushToken,
+          user.notificationTimezone ?? "UTC",
+          scheduledAt
+        );
+      } catch (userErr) {
+        console.error(
+          `[push] Reminder dispatch failed for user ${user.id.slice(0, 8)}; continuing with remaining users:`,
+          userErr
+        );
+      }
     }
     if (sent > 0) {
       console.log(`[push] sendDailyReminders: sent ${sent} notification(s) total`);
@@ -2008,7 +2059,7 @@ async function sendProfileCompletionPushes() {
         await clearExpiredPushToken(user.id, user.pushToken);
         continue;
       }
-      if (result) {
+      if (result === "accepted") {
         await pool.query(
           `UPDATE users SET last_profile_push_at = NOW() WHERE id = $1`,
           [user.id]
@@ -2142,7 +2193,7 @@ async function sendSuggestionNudges(userId) {
           await pool.query(`DELETE FROM notification_log WHERE id = $1`, [claimId]);
           await clearExpiredPushToken(user.id, user.push_token);
           console.log(`[push]   \u2192 token expired; cleared from DB`);
-        } else if (result2) {
+        } else if (result2 === "accepted") {
           await pool.query(
             `UPDATE notification_log
            SET notif_type = 'suggestion_push', sent_at = NOW()
@@ -2151,9 +2202,11 @@ async function sendSuggestionNudges(userId) {
           );
           sent++;
           console.log(`[push]   \u2192 delivered OK`);
-        } else {
+        } else if (result2 === "rejected") {
           await pool.query(`DELETE FROM notification_log WHERE id = $1`, [claimId]);
           console.log(`[push]   \u2192 delivery failed (Expo push service error)`);
+        } else {
+          console.warn(`[push]   \u2192 delivery outcome uncertain; retaining window claim`);
         }
       } finally {
         if (userLockAcquired) {
@@ -5105,6 +5158,13 @@ function configureExpoAndLanding(app2) {
     "privacy-policy.html"
   );
   const privacyPolicyTemplate = fs2.existsSync(privacyPolicyTemplatePath) ? fs2.readFileSync(privacyPolicyTemplatePath, "utf-8") : null;
+  const supportTemplatePath = path2.resolve(
+    process.cwd(),
+    "server",
+    "templates",
+    "support.html"
+  );
+  const supportTemplate = fs2.existsSync(supportTemplatePath) ? fs2.readFileSync(supportTemplatePath, "utf-8") : null;
   app2.use((req, res, next) => {
     if (req.path.startsWith("/api")) {
       return next();
@@ -5116,6 +5176,10 @@ function configureExpoAndLanding(app2) {
     if (req.path === "/privacy" && privacyPolicyTemplate) {
       res.setHeader("Content-Type", "text/html; charset=utf-8");
       return res.status(200).send(privacyPolicyTemplate);
+    }
+    if (req.path === "/support" && supportTemplate) {
+      res.setHeader("Content-Type", "text/html; charset=utf-8");
+      return res.status(200).send(supportTemplate);
     }
     if (req.path.startsWith("/vote/") && votePageTemplate) {
       res.setHeader("Content-Type", "text/html; charset=utf-8");
