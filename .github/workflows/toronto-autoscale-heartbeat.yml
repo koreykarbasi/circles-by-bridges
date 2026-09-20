@@ -24,7 +24,7 @@ jobs:
         shell: bash
         run: |
           local_hour="$(TZ=America/Toronto date +%H)"
-         if true; then
+          if true; then
             echo "should_ping=true" >> "$GITHUB_OUTPUT"
           else
             echo "should_ping=false" >> "$GITHUB_OUTPUT"
