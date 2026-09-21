@@ -7,4 +7,6 @@ Do not treat a configured GitHub connection or a readable repository as proof th
 
 **Why:** GitHub repository reads succeeded, while writes through the connector and the repository’s configured Git remote were rejected by an environment-level authentication/Cloudflare response.
 
+Repository metadata and Actions-list requests can succeed while Contents API reads and writes receive a Cloudflare HTML 403 identifying replit.com. This is not evidence of expired GitHub credentials: the connection can still report healthy. Do not repeatedly reconnect for this response; distinguish proxy blocking from a GitHub permission error.
+
 **How to apply:** For any GitHub-backed monitor or automation, publish a tiny workflow and confirm its Actions run before declaring it active. If writes fail, use a separately configured external monitor or an always-running deployment rather than an unverified local workflow file.
