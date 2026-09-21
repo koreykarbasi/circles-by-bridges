@@ -7,9 +7,10 @@ on:
     paths:
       - ".github/workflows/toronto-autoscale-heartbeat.yml"
   schedule:
-    # Runs every 10 minutes around the Toronto test windows. The script below
-    # checks America/Toronto directly, so daylight-saving changes are safe.
-    - cron: "*/10 11-14,19-22 * * *"
+    # Start several hours before each Toronto window. GitHub may delay scheduled
+    # jobs substantially, so each run waits and then owns the whole window.
+    # 09:17/17:17 UTC keeps even the longer EST run below the six-hour limit.
+    - cron: "17 9,17 * * *"
   workflow_dispatch:
 
 permissions:
@@ -18,21 +19,56 @@ permissions:
 jobs:
   heartbeat:
     runs-on: ubuntu-latest
+    timeout-minutes: 355
     steps:
-      - name: Check whether Toronto is in a notification window
-        id: window
-        shell: bash
-        run: |
-          local_hour="$(TZ=America/Toronto date +%H)"
-          if [[ "$local_hour" == "08" || "$local_hour" == "09" || "$local_hour" == "16" || "$local_hour" == "17" ]]; then
-            echo "should_ping=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "should_ping=false" >> "$GITHUB_OUTPUT"
-          fi
-
-      - name: Wake the production deployment
-        if: steps.window.outputs.should_ping == 'true'
+      - name: Wake production now
+        if: github.event_name == 'workflow_dispatch'
         run: |
           curl --fail --silent --show-error --location \
             --retry 2 --retry-delay 2 --max-time 20 \
             https://circles-by-bridges.replit.app/api/health
+
+      - name: Keep production awake through the Toronto window
+        if: github.event_name != 'workflow_dispatch'
+        shell: bash
+        run: |
+          set -u
+          readonly HEALTH_URL="https://circles-by-bridges.replit.app/api/health"
+          readonly POLL_SECONDS=300
+
+          while true; do
+            now="$(TZ=America/Toronto date -Iseconds)"
+            hour_text="$(TZ=America/Toronto date +%H)"
+            minute_text="$(TZ=America/Toronto date +%M)"
+            local_minutes=$((10#$hour_text * 60 + 10#$minute_text))
+
+            if (( local_minutes < 480 )); then
+              sleep_seconds=$(((480 - local_minutes) * 60))
+              echo "$now waiting ${sleep_seconds}s for the 08:00 Toronto pre-warm window"
+              sleep "$sleep_seconds"
+              continue
+            fi
+
+            if (( local_minutes >= 600 && local_minutes < 960 )); then
+              sleep_seconds=$(((960 - local_minutes) * 60))
+              echo "$now morning window passed; waiting ${sleep_seconds}s for 16:00"
+              sleep "$sleep_seconds"
+              continue
+            fi
+
+            if (( local_minutes >= 1080 )); then
+              echo "$now Toronto notification windows complete"
+              exit 0
+            fi
+
+            echo "$now pinging production health"
+            if curl --fail --silent --show-error --location \
+              --retry 2 --retry-delay 2 --max-time 20 \
+              "$HEALTH_URL"; then
+              echo
+              echo "$now production health OK"
+            else
+              echo "$now production health unavailable; retrying in five minutes" >&2
+            fi
+            sleep "$POLL_SECONDS"
+          done
