@@ -1,0 +1,58 @@
+I reviewed this closely, and I'd stop before pushing it — this rewrite has a real bug, and it's very likely the direct cause of this morning's failure. Let me walk through why, since it's worth understanding rather than just reverting blindly.
+
+What Replit was trying to fix: the comment says GitHub may delay scheduled cron jobs substantially. That's true — GitHub doesn't guarantee exact cron timing, especially under load. Reasonable thing to worry about.
+
+But the fix introduces a worse problem. Look at the cron schedule: it only fires twice a day now (9:17 and 17:17 UTC), and each single run is supposed to stay alive via a polling loop and cover both the morning window (8–10am Toronto) and the evening window (4–6pm Toronto) in one continuous job. Walk through what actually happens to the morning-triggered run:
+
+Starts around 4:17–5:17am Toronto time (depending on DST)
+Waits until 8am, polls every 5 minutes through 10am ✅ so far so good
+At 10am, the code doesn't exit — it falls into the next branch and starts waiting for 4pm
+That's roughly another 6 hours of waiting, on top of the ~5-6 hours already elapsed
+
+Total runtime for that single job: close to 14 hours. But the job has timeout-minutes: 355 (5 hours 55 minutes) explicitly set on it — and GitHub Actions also hard-kills any job at 6 hours regardless of your own setting. Either limit gets hit before the job ever reaches the evening window, which means it gets forcibly killed mid-run. That shows up in GitHub's UI exactly as a failed/cancelled run — which is almost certainly what you saw this morning.
+
+The separate 17:17 UTC trigger would still independently cover the evening window on its own (that one's runtime math works out fine), so notifications may not have actually been missed — but the morning job's own attempt to also chain into the evening window is dead code that's guaranteed to blow past its own timeout every single day. That's a structural bug, not a one-off fluke.
+
+My honest recommendation: don't debug this version — revert to the one we already proved works. The original design (cron every 10 minutes during two UTC windows, each run just checks the current Toronto hour and pings if it matches) is simpler, cheaper, and — importantly — was the one I personally watched succeed against your live /api/health endpoint a few days ago. It's also inherently more resilient to GitHub's scheduling jitter than this new one, since a short, frequent, stateless check naturally self-corrects if any single run is delayed by a few minutes — no long-lived job to lose to a timeout.
+
+Same process as last time to apply this. On GitHub's website, edit .github/workflows/toronto-autoscale-heartbeat.yml directly and replace the entire contents with the version we already confirmed works:
+
+yaml
+name: Keep Toronto notification windows awake
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - ".github/workflows/toronto-autoscale-heartbeat.yml"
+  schedule:
+    # Runs every 10 minutes around the Toronto test windows. The script below
+    # checks America/Toronto directly, so daylight-saving changes are safe.
+    - cron: "*/10 11-14,19-22 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  heartbeat:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check whether Toronto is in a notification window
+        id: window
+        shell: bash
+        run: |
+          local_hour="$(TZ=America/Toronto date +%H)"
+          if [[ "$local_hour" == "08" || "$local_hour" == "09" || "$local_hour" == "16" || "$local_hour" == "17" ]]; then
+            echo "should_ping=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "should_ping=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Wake the production deployment
+        if: steps.window.outputs.should_ping == 'true'
+        run: |
+          curl --fail --silent --show-error --location \
+            --retry 2 --retry-delay 2 --max-time 20 \
+            https://circles-by-bridges.replit.app/api/health
