@@ -9,6 +9,7 @@ import {
   Platform,
   Alert,
   Image,
+  useWindowDimensions,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
@@ -24,7 +25,13 @@ import * as Haptics from "expo-haptics";
 const PREDEFINED_LABELS = [
   "Family", "Childhood Friend", "College Friend", "Work Friend", "Neighbor",
   "Family Friend", "International Friend", "Gym Buddy", "Travel Buddy",
-  "Mentor", "Mentee",
+  "Mentor", "Mentee", "Partner",
+];
+
+const COMPACT_PREDEFINED_LABELS = [
+  "Family", "Gym Buddy", "Mentee", "Mentor", "Family Friend", "Neighbor",
+  "Work Friend", "International Friend", "Partner", "Travel Buddy",
+  "Childhood Friend", "College Friend",
 ];
 
 const MONTH_NAMES = [
@@ -42,6 +49,8 @@ function formatBirthdayDisplay(birthday: string): string {
 }
 
 export default function AddContactScreen() {
+  const { width: viewportWidth } = useWindowDimensions();
+  const displayedLabels = viewportWidth < 365 ? COMPACT_PREDEFINED_LABELS : PREDEFINED_LABELS;
   const insets = useSafeAreaInsets();
   const { addContact, getCircleContacts } = useContacts();
   const params = useLocalSearchParams<{
@@ -380,7 +389,7 @@ export default function AddContactScreen() {
         <View style={styles.inputGroup}>
           <Text style={styles.label}>Labels</Text>
           <View style={styles.interestsGrid}>
-            {PREDEFINED_LABELS.map((label) => {
+            {displayedLabels.map((label) => {
               const isSelected = selectedLabels.includes(label);
               return (
                 <Pressable

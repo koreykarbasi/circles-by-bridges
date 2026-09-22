@@ -9,6 +9,7 @@ import {
   Platform,
   Alert,
   Linking,
+  useWindowDimensions,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
@@ -35,7 +36,13 @@ import { setCheckinElevationIfOverdue } from "@/lib/checkin-state";
 const PREDEFINED_LABELS = [
   "Family", "Childhood Friend", "College Friend", "Work Friend", "Neighbor",
   "Family Friend", "International Friend", "Gym Buddy", "Travel Buddy",
-  "Mentor", "Adult Friend",
+  "Mentor", "Adult Friend", "Partner",
+];
+
+const COMPACT_PREDEFINED_LABELS = [
+  "Family", "Gym Buddy", "Adult Friend", "Mentor", "Family Friend", "Neighbor",
+  "Work Friend", "International Friend", "Partner", "Travel Buddy",
+  "Childhood Friend", "College Friend",
 ];
 
 const MONTH_NAMES = [
@@ -57,6 +64,8 @@ function formatCustomReminderDate(date: string): string {
 }
 
 export default function EditContactScreen() {
+  const { width: viewportWidth } = useWindowDimensions();
+  const displayedLabels = viewportWidth < 365 ? COMPACT_PREDEFINED_LABELS : PREDEFINED_LABELS;
   const insets = useSafeAreaInsets();
   const { id, focusBirthday } = useLocalSearchParams<{ id: string; focusBirthday?: string }>();
   const { contacts, updateContact, deleteContact, markContacted, getCircleContacts } = useContacts();
@@ -498,7 +507,7 @@ export default function EditContactScreen() {
         <View style={styles.inputGroup}>
           <Text style={styles.label}>Labels</Text>
           <View style={styles.interestsGrid}>
-            {PREDEFINED_LABELS.map((label) => {
+            {displayedLabels.map((label) => {
               const isSelected = selectedLabels.includes(label);
               return (
                 <Pressable
