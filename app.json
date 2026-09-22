@@ -55,7 +55,8 @@
       "permissions": [
         "android.permission.READ_CONTACTS",
         "android.permission.WRITE_CONTACTS"
-      ]
+      ],
+      "versionCode": 2
     },
     "web": {
       "favicon": "./assets/images/favicon.png"
