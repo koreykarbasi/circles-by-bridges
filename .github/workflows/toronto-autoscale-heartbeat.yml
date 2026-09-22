@@ -7,8 +7,8 @@ on:
     paths:
       - ".github/workflows/toronto-autoscale-heartbeat.yml"
   schedule:
-    # Runs every 10 minutes around the Toronto test windows. The script below
-    # checks America/Toronto directly, so daylight-saving changes are safe.
+    # Backup only — cron-job.org is now the primary heartbeat.
+    # Runs every 10 minutes around the Toronto test windows.
     - cron: "*/10 11-14,19-22 * * *"
   workflow_dispatch:
 
