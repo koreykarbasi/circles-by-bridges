@@ -5,6 +5,8 @@ description: The cost-driven choice to use Autoscale with a continuous workspace
 
 Use Autoscale for production and run a continuous five-minute health check from 8:30–10:00 AM and 4:30–6:00 PM Toronto time to cover both the pre-warm period and full delivery hour while the workspace workflow is active. The heartbeat must log failures and retry rather than exiting on a transient response.
 
+cron-job.org is now the primary external heartbeat, requesting production every five minutes from 8–10 AM and 4–6 PM Toronto time. GitHub Actions and workspace-hosted heartbeats are secondary only.
+
 **Why:** A Reserved VM was considered too expensive for this app, while scheduled push delivery requires the server to be available at the recipient’s local delivery window.
 
 **How to apply:** After each publish, confirm the health endpoint returns successfully from the heartbeat and recheck the generated production URL, which can change. Treat this as best-effort: a workspace workflow is not an independently hosted uptime monitor and may not run if the development workspace is asleep. Prefer a verified external monitor if reliable unattended delivery is required.
