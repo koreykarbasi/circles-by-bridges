@@ -44,6 +44,12 @@ function OrbitingAvatar({
   ringRotation: SharedValue<number>;
 }) {
   const baseAngle = (360 / Math.max(total, 1)) * index - 90;
+  const baseAngleRadians = (baseAngle * Math.PI) / 180;
+  const initialPosition = {
+    position: "absolute" as const,
+    left: center + Math.cos(baseAngleRadians) * radius - avatarSize / 2,
+    top: center + Math.sin(baseAngleRadians) * radius - avatarSize / 2,
+  };
 
   const animatedStyle = useAnimatedStyle(() => {
     const angle = ((baseAngle + ringRotation.value) * Math.PI) / 180;
@@ -54,10 +60,10 @@ function OrbitingAvatar({
       left: center + x - avatarSize / 2,
       top: center + y - avatarSize / 2,
     };
-  });
+  }, [baseAngle, radius, center, avatarSize]);
 
   return (
-    <Animated.View style={animatedStyle}>
+    <Animated.View style={[initialPosition, animatedStyle]}>
       <Pressable
         onPress={() => router.push({ pathname: "/edit-contact", params: { id: contact.id } })}
         style={({ pressed }) => [pressed && { opacity: 0.7 }]}
@@ -91,6 +97,12 @@ function OverflowBadge({
 }) {
   const baseAngle = (360 / Math.max(totalSlots, 1)) * slotIndex - 90;
   const size = 26;
+  const baseAngleRadians = (baseAngle * Math.PI) / 180;
+  const initialPosition = {
+    position: "absolute" as const,
+    left: center + Math.cos(baseAngleRadians) * radius - size / 2,
+    top: center + Math.sin(baseAngleRadians) * radius - size / 2,
+  };
 
   const animatedStyle = useAnimatedStyle(() => {
     const angle = ((baseAngle + ringRotation.value) * Math.PI) / 180;
@@ -101,10 +113,10 @@ function OverflowBadge({
       left: center + x - size / 2,
       top: center + y - size / 2,
     };
-  });
+  }, [baseAngle, radius, center]);
 
   return (
-    <Animated.View style={animatedStyle}>
+    <Animated.View style={[initialPosition, animatedStyle]}>
       <View style={[styles.overflowBadge, { width: size, height: size, borderRadius: size / 2 }]}>
         <Text style={styles.overflowText}>+{count}</Text>
       </View>
@@ -133,12 +145,12 @@ function useRingRotation(speed: number) {
 export function CirclesVisualization({ contacts, user, onCenterPress }: CirclesVisualizationProps) {
   const c1 = contacts.filter((c) => c.circleLevel === 1);
   const c2 = contacts.filter((c) => c.circleLevel === 2);
-  const c3All = contacts.filter((c) => c.circleLevel === 3);
+  const c3All = useMemo(() => contacts.filter((c) => c.circleLevel === 3), [contacts]);
 
   const c3Shown = useMemo(() => {
     if (c3All.length <= MAX_OUTER_SHOWN) return c3All;
     return [...c3All].sort((a, b) => a.id.localeCompare(b.id)).slice(0, MAX_OUTER_SHOWN);
-  }, [c3All.length]);
+  }, [c3All]);
 
   const c3Overflow = c3All.length - c3Shown.length;
   const c3TotalSlots = c3Shown.length + (c3Overflow > 0 ? 1 : 0);
