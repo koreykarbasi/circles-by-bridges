@@ -18,7 +18,7 @@ import * as ImagePicker from "expo-image-picker";
 import Colors from "@/constants/colors";
 import { useContacts } from "@/lib/contacts-context";
 import { CIRCLE_CONFIG } from "@/lib/types";
-import type { CustomReminder } from "@/lib/types";
+import type { Contact, CustomReminder } from "@/lib/types";
 import { AVAILABLE_INTERESTS } from "@/lib/prompts";
 import { formatLastContacted } from "@/lib/helpers";
 import { Avatar } from "@/components/Avatar";
@@ -64,13 +64,32 @@ function formatCustomReminderDate(date: string): string {
 }
 
 export default function EditContactScreen() {
+  const insets = useSafeAreaInsets();
+  const { id, focusBirthday } = useLocalSearchParams<{ id: string; focusBirthday?: string }>();
+  const { contacts, isLoading } = useContacts();
+  const contact = contacts.find((c) => c.id === id);
+
+  if (!contact) {
+    return (
+      <View style={[styles.container, { paddingTop: insets.top + 60 }]}>
+        <Text style={styles.errorText}>{isLoading ? "Loading contact..." : "Contact not found"}</Text>
+        {!isLoading && (
+          <Pressable onPress={() => router.back()}>
+            <Text style={styles.backLink}>Go back</Text>
+          </Pressable>
+        )}
+      </View>
+    );
+  }
+
+  return <EditContactForm key={contact.id} contact={contact} focusBirthday={focusBirthday} />;
+}
+
+function EditContactForm({ contact, focusBirthday }: { contact: Contact; focusBirthday?: string }) {
   const { width: viewportWidth } = useWindowDimensions();
   const displayedLabels = viewportWidth < 365 ? COMPACT_PREDEFINED_LABELS : PREDEFINED_LABELS;
   const insets = useSafeAreaInsets();
-  const { id, focusBirthday } = useLocalSearchParams<{ id: string; focusBirthday?: string }>();
-  const { contacts, updateContact, deleteContact, markContacted, getCircleContacts } = useContacts();
-
-  const contact = contacts.find((c) => c.id === id);
+  const { updateContact, deleteContact, markContacted, getCircleContacts } = useContacts();
 
   const [name, setName] = useState(contact?.name ?? "");
   const [circleLevel, setCircleLevel] = useState<1 | 2 | 3>((contact?.circleLevel ?? 1) as 1 | 2 | 3);
@@ -128,17 +147,6 @@ export default function EditContactScreen() {
       Alert.alert("Photo error", "Could not process the photo. Please try a different image.");
     }
   };
-
-  if (!contact) {
-    return (
-      <View style={[styles.container, { paddingTop: insets.top + 60 }]}>
-        <Text style={styles.errorText}>Contact not found</Text>
-        <Pressable onPress={() => router.back()}>
-          <Text style={styles.backLink}>Go back</Text>
-        </Pressable>
-      </View>
-    );
-  }
 
   const toggleInterest = (interest: string) => {
     Haptics.selectionAsync();
