@@ -2,7 +2,8 @@ import React, { useState, useMemo, useEffect, useRef, useCallback } from "react"
 import { View, Text, StyleSheet, Pressable, TextInput, Platform, Modal, ActivityIndicator } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
-import Colors from "@/constants/colors";
+import type { ThemeColors } from "@/constants/colors";
+import { useThemeColors } from "@/lib/theme-context";
 import { useContacts } from "@/lib/contacts-context";
 import { ContactCard } from "@/components/ContactCard";
 import { EmptyState } from "@/components/EmptyState";
@@ -21,6 +22,8 @@ function isMissingEnrichment(c: Contact): boolean {
 }
 
 export default function CirclesScreen() {
+  const Colors = useThemeColors();
+  const styles = useMemo(() => createStyles(Colors), [Colors]);
   const insets = useSafeAreaInsets();
   const { contacts, getCircleContacts, markContacted, isLoading, reorderCircleContacts } = useContacts();
   const { circle: circleParam, filter: filterParam } = useLocalSearchParams<{ circle?: string; filter?: string }>();
@@ -67,11 +70,12 @@ export default function CirclesScreen() {
   }, [circleContacts, contacts, searchQuery, activeFilter]);
 
   const config = CIRCLE_CONFIG[activeCircle];
+  const circleColor = (level: 1 | 2 | 3) => Colors[`circle${level}` as "circle1" | "circle2" | "circle3"];
   const isCircleFull = circleContacts.length >= config.max;
   const profileCompletion = useMemo(() => computeProfileCompletion(contacts), [contacts]);
   const bellDotColor = useMemo(
-    () => computeBellDotColor(contacts, profileCompletion.isComplete),
-    [contacts, profileCompletion.isComplete],
+    () => computeBellDotColor(contacts, profileCompletion.isComplete, Colors),
+    [contacts, profileCompletion.isComplete, Colors],
   );
   const webTopInset = Platform.OS === "web" ? 67 : 0;
   const canDrag = Platform.OS !== "web" && !searchQuery && !activeFilter;
@@ -128,7 +132,7 @@ export default function CirclesScreen() {
         </ScaleDecorator>
       );
     },
-    [canDrag, activeCircle, markContacted, profileCompletion.stage, activeFilter, incompleteContactIds],
+    [canDrag, activeCircle, markContacted, profileCompletion.stage, activeFilter, incompleteContactIds, Colors, styles],
   );
 
   const filterBannerLabel = useMemo(() => {
@@ -175,7 +179,7 @@ export default function CirclesScreen() {
               !isCircleFull && pressed && { opacity: 0.7 },
             ]}
           >
-            <Ionicons name="add" size={24} color={isCircleFull ? Colors.textTertiary : "#fff"} />
+                <Ionicons name="add" size={24} color={isCircleFull ? Colors.textTertiary : Colors.onPrimary} />
           </Pressable>
         </View>
       </View>
@@ -183,6 +187,7 @@ export default function CirclesScreen() {
       <View style={styles.tabs}>
         {([1, 2, 3] as const).map((level) => {
           const cfg = CIRCLE_CONFIG[level];
+          const cfgColor = circleColor(level);
           const count = getCircleContacts(level).length;
           const isActive = activeCircle === level;
           return (
@@ -195,17 +200,17 @@ export default function CirclesScreen() {
               }}
               style={[
                 styles.tab,
-                isActive && { backgroundColor: cfg.color + "18", borderColor: cfg.color + "40" },
+                 isActive && { backgroundColor: cfgColor + "18", borderColor: cfgColor + "40" },
               ]}
             >
-              <View style={[styles.tabDot, { backgroundColor: cfg.color }]} />
+              <View style={[styles.tabDot, { backgroundColor: cfgColor }]} />
               <Text
-                style={[styles.tabLabel, isActive && { color: cfg.color }]}
+                style={[styles.tabLabel, isActive && { color: cfgColor }]}
                 numberOfLines={1}
               >
                 {cfg.label}
               </Text>
-              <Text style={[styles.tabCount, isActive && { color: cfg.color }]}>
+              <Text style={[styles.tabCount, isActive && { color: cfgColor }]}>
                 {count}/{cfg.max}
               </Text>
             </Pressable>
@@ -267,7 +272,7 @@ export default function CirclesScreen() {
         </View>
       ) : null}
     </View>
-  ), [insets.top, webTopInset, bellDotColor, isCircleFull, activeCircle, config, circleContacts.length, filteredContacts.length, searchQuery, isLoading, getCircleContacts, activeFilter, filterBannerLabel]);
+  ), [insets.top, webTopInset, bellDotColor, isCircleFull, activeCircle, config, circleContacts.length, filteredContacts.length, searchQuery, isLoading, getCircleContacts, activeFilter, filterBannerLabel, Colors, styles]);
 
   const listFooter = useMemo(() => (
     !searchQuery && circleContacts.length < config.max && circleContacts.length > 0 ? (
@@ -283,7 +288,7 @@ export default function CirclesScreen() {
         </Pressable>
       </View>
     ) : null
-  ), [searchQuery, circleContacts.length, config.max, config.label]);
+  ), [searchQuery, circleContacts.length, config.max, config.label, Colors, styles]);
 
   return (
     <View style={styles.container}>
@@ -366,7 +371,7 @@ export default function CirclesScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (Colors: ThemeColors) => StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: Colors.background,

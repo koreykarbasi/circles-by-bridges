@@ -9,3 +9,4 @@
 - [iOS build-number authority](ios-build-number-authority.md) — use Apple’s highest accepted build as the baseline; EAS history can lag after failed uploads.
 - [Supabase pool limits on Autoscale](supabase-autoscale-pool.md) — cap each instance well below Supabase’s session limit or scale-outs break API reads and scheduled pushes.
 - [Legacy last-contact provenance](last-contact-provenance.md) — older releases invented last-contact dates on creation; nonempty historical values cannot safely be distinguished from user choices.
+- [Appearance preference scope](appearance-preference.md) — Light/Dark is manual and device-local; keep dark launch branding until the saved palette has loaded.

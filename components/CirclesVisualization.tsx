@@ -11,7 +11,8 @@ import Animated, {
   SharedValue,
 } from "react-native-reanimated";
 import { Ionicons } from "@expo/vector-icons";
-import Colors from "@/constants/colors";
+import { useThemeColors } from "@/lib/theme-context";
+import type { ThemeColors } from "@/constants/colors";
 import { Avatar } from "./Avatar";
 import type { Contact } from "@/lib/types";
 import type { AuthUser } from "@/lib/types";
@@ -25,6 +26,15 @@ interface CirclesVisualizationProps {
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
 const VIZ_SIZE = Math.min(SCREEN_WIDTH - 48, 320);
 const MAX_OUTER_SHOWN = 14;
+const overflowBadgeStyle = {
+  borderWidth: 1.5,
+  alignItems: "center" as const,
+  justifyContent: "center" as const,
+};
+const overflowTextStyle = {
+  fontSize: 9,
+  fontFamily: "Nunito_700Bold",
+};
 
 function OrbitingAvatar({
   contact,
@@ -87,6 +97,7 @@ function OverflowBadge({
   totalSlots,
   slotIndex,
   ringRotation,
+  colors,
 }: {
   count: number;
   radius: number;
@@ -94,6 +105,7 @@ function OverflowBadge({
   totalSlots: number;
   slotIndex: number;
   ringRotation: SharedValue<number>;
+  colors: ThemeColors;
 }) {
   const baseAngle = (360 / Math.max(totalSlots, 1)) * slotIndex - 90;
   const size = 26;
@@ -117,8 +129,8 @@ function OverflowBadge({
 
   return (
     <Animated.View style={[initialPosition, animatedStyle]}>
-      <View style={[styles.overflowBadge, { width: size, height: size, borderRadius: size / 2 }]}>
-        <Text style={styles.overflowText}>+{count}</Text>
+      <View style={[overflowBadgeStyle, { width: size, height: size, borderRadius: size / 2, backgroundColor: colors.circle3 + "30", borderColor: colors.circle3 + "60" }]}>
+        <Text style={[overflowTextStyle, { color: colors.circle3 }]}>+{count}</Text>
       </View>
     </Animated.View>
   );
@@ -143,6 +155,8 @@ function useRingRotation(speed: number) {
 }
 
 export function CirclesVisualization({ contacts, user, onCenterPress }: CirclesVisualizationProps) {
+  const Colors = useThemeColors();
+  const styles = useMemo(() => createStyles(Colors), [Colors]);
   const c1 = contacts.filter((c) => c.circleLevel === 1);
   const c2 = contacts.filter((c) => c.circleLevel === 2);
   const c3All = useMemo(() => contacts.filter((c) => c.circleLevel === 3), [contacts]);
@@ -228,6 +242,7 @@ export function CirclesVisualization({ contacts, user, onCenterPress }: CirclesV
             totalSlots={c3TotalSlots}
             slotIndex={c3Shown.length}
             ringRotation={ring3Rotation}
+            colors={Colors}
           />
         )}
 
@@ -299,7 +314,7 @@ export function CirclesVisualization({ contacts, user, onCenterPress }: CirclesV
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (Colors: ThemeColors) => StyleSheet.create({
   wrapper: {
     alignItems: "center",
     paddingVertical: 8,

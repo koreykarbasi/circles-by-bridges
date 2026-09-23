@@ -1,7 +1,8 @@
-import React, { useCallback } from "react";
+import React, { useCallback, useMemo } from "react";
 import { View, Text, Pressable, StyleSheet, ScrollView } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
-import Colors from "@/constants/colors";
+import { useThemeColors } from "@/lib/theme-context";
+import type { ThemeColors } from "@/constants/colors";
 import { C3_CHECKIN_OPTIONS, dateForCheckinOption } from "@shared/checkin-policy";
 
 function randomInRange(min: number, max: number): number {
@@ -51,6 +52,8 @@ interface QuickPickRowProps {
 }
 
 export function QuickPickRow({ circleLevel, variant, onSelect, onCalendarPress }: QuickPickRowProps) {
+  const Colors = useThemeColors();
+  const styles = useMemo(() => createStyles(Colors), [Colors]);
   let options: Option[];
   if (variant === "hangout") {
     options = circleLevel === 3 ? HANGOUT_C3 : HANGOUT_C1_C2;
@@ -104,7 +107,7 @@ export function QuickPickRow({ circleLevel, variant, onSelect, onCalendarPress }
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (Colors: ThemeColors) => StyleSheet.create({
   wrapper: {
     marginTop: 10,
     gap: 6,

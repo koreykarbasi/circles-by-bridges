@@ -5,7 +5,8 @@ import { router } from "expo-router";
 import Animated, { useSharedValue, useAnimatedStyle, withTiming, withSpring, withSequence, runOnJS, Easing } from "react-native-reanimated";
 import { Ionicons } from "@expo/vector-icons";
 import { Avatar } from "./Avatar";
-import Colors from "@/constants/colors";
+import { useThemeColors } from "@/lib/theme-context";
+import type { ThemeColors } from "@/constants/colors";
 import * as Haptics from "expo-haptics";
 import * as Clipboard from "expo-clipboard";
 import { NoPhoneSheet, type ExtraContactData } from "./NoPhoneSheet";
@@ -43,12 +44,6 @@ const TYPE_CONFIG = {
   hangout: { icon: "people-outline" as const, label: "Hang out" },
 };
 
-const URGENCY_CONFIG = {
-  overdue: { color: Colors.danger, label: "Overdue" },
-  soon: { color: Colors.warning, label: "Due soon" },
-  ok: { color: Colors.success, label: "On track" },
-};
-
 function buildSmsUrl(phone: string, message: string): string {
   if (Platform.OS === "ios") {
     return `sms:${phone}&body=${message}`;
@@ -80,9 +75,15 @@ export function SuggestionCard({
   onSaveContactData,
   onSwipeDismiss,
 }: SuggestionCardProps) {
+  const Colors = useThemeColors();
+  const styles = useMemo(() => createStyles(Colors), [Colors]);
   const circleColor = circleLevel === 1 ? Colors.circle1 : circleLevel === 2 ? Colors.circle2 : Colors.circle3;
   const typeConfig = TYPE_CONFIG[type];
-  const urgencyConfig = URGENCY_CONFIG[urgency];
+  const urgencyConfig = {
+    overdue: { color: Colors.danger, label: "Overdue" },
+    soon: { color: Colors.warning, label: "Due soon" },
+    ok: { color: Colors.success, label: "On track" },
+  }[urgency];
 
   const generatedTextMessage = useMemo(
     () => getTextCopyMessage(contactName, { prompt, interests, labels, daysSinceContact, hasBirthdaySoon, circleLevel }),
@@ -347,7 +348,7 @@ export function SuggestionCard({
             onPress={handleDone}
             style={({ pressed }) => [styles.primaryButton, pressed && { opacity: 0.8 }]}
           >
-            <Ionicons name="checkmark" size={18} color="#fff" />
+            <Ionicons name="checkmark" size={18} color={Colors.onPrimary} />
             <Text style={styles.primaryButtonText}>Done</Text>
           </Pressable>
         </View>
@@ -365,7 +366,7 @@ export function SuggestionCard({
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (Colors: ThemeColors) => StyleSheet.create({
   container: {
     backgroundColor: Colors.surface,
     borderRadius: 16,
@@ -482,6 +483,6 @@ const styles = StyleSheet.create({
   primaryButtonText: {
     fontSize: 13,
     fontFamily: "Nunito_700Bold",
-    color: "#fff",
+    color: Colors.onPrimary,
   },
 });

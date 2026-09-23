@@ -10,7 +10,8 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { router, useLocalSearchParams } from "expo-router";
-import Colors from "@/constants/colors";
+import type { ThemeColors } from "@/constants/colors";
+import { useThemeColors } from "@/lib/theme-context";
 import { useContacts } from "@/lib/contacts-context";
 import { Avatar } from "@/components/Avatar";
 import { CIRCLE_CONFIG } from "@/lib/types";
@@ -18,6 +19,8 @@ import * as Haptics from "expo-haptics";
 import { HINT_TEXT } from "@/lib/hints-store";
 
 export default function CompleteContactsScreen() {
+  const Colors = useThemeColors();
+  const styles = useMemo(() => createStyles(Colors), [Colors]);
   const insets = useSafeAreaInsets();
   const params = useLocalSearchParams<{ count?: string; importedIds?: string }>();
   const count = parseInt(params.count ?? "0", 10);
@@ -111,6 +114,7 @@ export default function CompleteContactsScreen() {
 
             {incomplete.map((contact) => {
               const cfg = CIRCLE_CONFIG[contact.circleLevel as 1 | 2 | 3];
+              const circleColor = contact.circleLevel === 1 ? Colors.circle1 : contact.circleLevel === 2 ? Colors.circle2 : Colors.circle3;
               const badgeColor = contact.circleLevel === 1 ? Colors.danger : Colors.warning;
               return (
                 <Pressable
@@ -131,7 +135,7 @@ export default function CompleteContactsScreen() {
                   <Avatar name={contact.name} color={contact.avatarColor} size={44} photoUri={contact.photoUri} />
                   <View style={styles.contactInfo}>
                     <Text style={styles.contactName}>{contact.name}</Text>
-                    <Text style={[styles.contactCircle, { color: cfg.color }]}>{cfg.label}</Text>
+                    <Text style={[styles.contactCircle, { color: circleColor }]}>{cfg.label}</Text>
                   </View>
                   <View style={styles.addBirthdayBtn}>
                     <Ionicons name="gift-outline" size={14} color={badgeColor} />
@@ -193,7 +197,7 @@ export default function CompleteContactsScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (Colors: ThemeColors) => StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: Colors.background,
@@ -311,7 +315,7 @@ const styles = StyleSheet.create({
   doneButtonText: {
     fontSize: 16,
     fontFamily: "Nunito_700Bold",
-    color: "#fff",
+    color: Colors.onPrimary,
   },
   enrichmentBanner: {
     backgroundColor: Colors.yellow + "14",

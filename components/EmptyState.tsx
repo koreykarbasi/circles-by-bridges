@@ -1,7 +1,8 @@
-import React from "react";
+import React, { useMemo } from "react";
 import { View, Text, StyleSheet, Pressable } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
-import Colors from "@/constants/colors";
+import { useThemeColors } from "@/lib/theme-context";
+import type { ThemeColors } from "@/constants/colors";
 
 interface EmptyStateProps {
   icon: keyof typeof Ionicons.glyphMap;
@@ -12,6 +13,8 @@ interface EmptyStateProps {
 }
 
 export function EmptyState({ icon, title, subtitle, actionLabel, onAction }: EmptyStateProps) {
+  const Colors = useThemeColors();
+  const styles = useMemo(() => createStyles(Colors), [Colors]);
   return (
     <View style={styles.container}>
       <View style={styles.iconWrapper}>
@@ -31,7 +34,7 @@ export function EmptyState({ icon, title, subtitle, actionLabel, onAction }: Emp
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (Colors: ThemeColors) => StyleSheet.create({
   container: {
     alignItems: "center",
     justifyContent: "center",
@@ -71,6 +74,6 @@ const styles = StyleSheet.create({
   buttonText: {
     fontSize: 15,
     fontFamily: "Nunito_700Bold",
-    color: "#fff",
+    color: Colors.onPrimary,
   },
 });

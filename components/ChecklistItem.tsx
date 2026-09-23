@@ -1,7 +1,8 @@
-import React from "react";
+import React, { useMemo } from "react";
 import { View, Text, StyleSheet, Pressable } from "react-native";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
-import Colors from "@/constants/colors";
+import { useThemeColors } from "@/lib/theme-context";
+import type { ThemeColors } from "@/constants/colors";
 import * as Haptics from "expo-haptics";
 
 interface ChecklistItemProps {
@@ -25,12 +26,6 @@ const ACTION_ICONS: Record<string, { icon: keyof typeof Ionicons.glyphMap; label
   hangout: { icon: "people-outline", label: "Hang out" },
 };
 
-const PRIORITY_COLORS: Record<string, string> = {
-  high: Colors.danger,
-  medium: Colors.warning,
-  low: Colors.success,
-};
-
 export function ChecklistItem({
   icon,
   iconColor,
@@ -45,10 +40,12 @@ export function ChecklistItem({
   onYes,
   onNo,
 }: ChecklistItemProps) {
+  const Colors = useThemeColors();
+  const styles = useMemo(() => createStyles(Colors), [Colors]);
   return (
     <View style={styles.container}>
       {priorityLevel && (
-        <View style={[styles.priorityBar, { backgroundColor: PRIORITY_COLORS[priorityLevel] }]} />
+        <View style={[styles.priorityBar, { backgroundColor: priorityLevel === "high" ? Colors.danger : priorityLevel === "medium" ? Colors.warning : Colors.success }]} />
       )}
       <View style={[styles.iconContainer, { backgroundColor: iconColor + "18" }]}>
         {iconLibrary === "material" ? (
@@ -124,7 +121,7 @@ export function ChecklistItem({
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (Colors: ThemeColors) => StyleSheet.create({
   container: {
     flexDirection: "row",
     alignItems: "center",

@@ -2,7 +2,8 @@ import React, { useState, useMemo, useCallback, useRef, useEffect } from "react"
 import { View, Text, StyleSheet, ScrollView, Pressable, Platform, Animated, Linking } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
-import Colors from "@/constants/colors";
+import type { ThemeColors } from "@/constants/colors";
+import { useThemeColors } from "@/lib/theme-context";
 import { useContacts } from "@/lib/contacts-context";
 import { SuggestionCard } from "@/components/SuggestionCard";
 import { ReminderItem } from "@/components/ReminderItem";
@@ -103,6 +104,8 @@ function deriveHangoutTitle(contactName: string, prompt: string): string {
 
 
 export default function SuggestionsScreen() {
+  const Colors = useThemeColors();
+  const styles = useMemo(() => createStyles(Colors), [Colors]);
   const insets = useSafeAreaInsets();
   const { user } = useAuth();
   const { contacts, markContacted, savePhoneNumber } = useContacts();
@@ -649,6 +652,7 @@ export default function SuggestionsScreen() {
         </Pressable>
         {([1, 2, 3] as const).map((level) => {
           const cfg = CIRCLE_CONFIG[level];
+          const cfgColor = Colors[`circle${level}` as "circle1" | "circle2" | "circle3"];
           const isActive = filterCircle === level;
           return (
             <Pressable
@@ -661,14 +665,14 @@ export default function SuggestionsScreen() {
               }}
               style={[
                 styles.filterChip,
-                isActive && { backgroundColor: cfg.color + "18", borderColor: cfg.color + "40" },
+                 isActive && { backgroundColor: cfgColor + "18", borderColor: cfgColor + "40" },
               ]}
             >
-              <View style={[styles.filterDot, { backgroundColor: cfg.color }]} />
+              <View style={[styles.filterDot, { backgroundColor: cfgColor }]} />
               <Text
                 style={[
                   styles.filterChipText,
-                  isActive && { color: cfg.color },
+                   isActive && { color: cfgColor },
                 ]}
               >
                 {cfg.label}
@@ -821,8 +825,8 @@ export default function SuggestionsScreen() {
           },
         ]}
       >
-        <Ionicons name="alert-circle" size={16} color="#fff" />
-        <Text style={[styles.copiedToastText, { color: "#fff" }]}>{errorToastMessage}</Text>
+        <Ionicons name="alert-circle" size={16} color={Colors.onPrimary} />
+        <Text style={[styles.copiedToastText, { color: Colors.onPrimary }]}>{errorToastMessage}</Text>
       </Animated.View>
     )}
 
@@ -844,7 +848,7 @@ export default function SuggestionsScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (Colors: ThemeColors) => StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: Colors.background,
@@ -942,7 +946,7 @@ const styles = StyleSheet.create({
   remindersBadgeText: {
     fontSize: 12,
     fontFamily: "Nunito_700Bold",
-    color: "#fff",
+    color: Colors.onPrimary,
   },
   remindersList: {
     gap: 0,

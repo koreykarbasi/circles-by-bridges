@@ -1,7 +1,8 @@
-import React, { useEffect, useRef } from "react";
+import React, { useEffect, useRef, useMemo } from "react";
 import { View, Text, StyleSheet, Pressable, Animated, Platform } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
-import Colors from "@/constants/colors";
+import { useThemeColors } from "@/lib/theme-context";
+import type { ThemeColors } from "@/constants/colors";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 interface HintTooltipProps {
@@ -27,6 +28,8 @@ export function HintTooltip({
   anchorBottom,
   bottomOffset = 80,
 }: HintTooltipProps) {
+  const Colors = useThemeColors();
+  const styles = useMemo(() => createStyles(Colors), [Colors]);
   const insets = useSafeAreaInsets();
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(arrowSide === "top" ? -12 : 12)).current;
@@ -93,10 +96,9 @@ export function HintTooltip({
   );
 }
 
-const CARD_BG = Colors.surfaceElevated;
 const ARROW_SIZE = 10;
 
-const styles = StyleSheet.create({
+const createStyles = (Colors: ThemeColors) => StyleSheet.create({
   wrapper: {
     position: "absolute",
     left: 16,
@@ -120,7 +122,7 @@ const styles = StyleSheet.create({
     borderBottomWidth: ARROW_SIZE,
     borderLeftColor: "transparent",
     borderRightColor: "transparent",
-    borderBottomColor: CARD_BG,
+    borderBottomColor: Colors.surfaceElevated,
   },
   arrowDown: {
     width: 0,
@@ -131,10 +133,10 @@ const styles = StyleSheet.create({
     borderTopWidth: ARROW_SIZE,
     borderLeftColor: "transparent",
     borderRightColor: "transparent",
-    borderTopColor: CARD_BG,
+    borderTopColor: Colors.surfaceElevated,
   },
   card: {
-    backgroundColor: CARD_BG,
+    backgroundColor: Colors.surfaceElevated,
     borderRadius: 14,
     borderWidth: 1,
     borderColor: Colors.primary + "35",

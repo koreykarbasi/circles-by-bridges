@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from "react";
+import React, { useState, useCallback, useMemo } from "react";
 import {
   View,
   Text,
@@ -12,7 +12,8 @@ import {
   KeyboardAvoidingView,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
-import Colors from "@/constants/colors";
+import type { ThemeColors } from "@/constants/colors";
+import { useThemeColors } from "@/lib/theme-context";
 import * as Haptics from "expo-haptics";
 import { buildExtraFromDeviceContact } from "@/lib/contact-extra";
 import type { ExtraContactData } from "@/lib/contact-extra";
@@ -37,6 +38,8 @@ interface NoPhoneSheetProps {
 
 
 export function NoPhoneSheet({ visible, contactName, mode, onConfirm, onDismiss }: NoPhoneSheetProps) {
+  const Colors = useThemeColors();
+  const styles = useMemo(() => createStyles(Colors), [Colors]);
   const [screen, setScreen] = useState<Screen>("entry");
   const [manualPhone, setManualPhone] = useState("");
   const [capturedPhone, setCapturedPhone] = useState("");
@@ -153,10 +156,10 @@ export function NoPhoneSheet({ visible, contactName, mode, onConfirm, onDismiss 
                   style={({ pressed }) => [styles.primaryBtn, pressed && { opacity: 0.8 }]}
                 >
                   {loadingContacts ? (
-                    <ActivityIndicator size="small" color="#fff" />
+                    <ActivityIndicator size="small" color={Colors.onPrimary} />
                   ) : (
                     <View style={styles.btnRow}>
-                      <Ionicons name="people-outline" size={18} color="#fff" />
+                      <Ionicons name="people-outline" size={18} color={Colors.onPrimary} />
                       <Text style={styles.primaryBtnText}>Find in Contacts</Text>
                     </View>
                   )}
@@ -272,7 +275,7 @@ export function NoPhoneSheet({ visible, contactName, mode, onConfirm, onDismiss 
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (Colors: ThemeColors) => StyleSheet.create({
   backdrop: {
     flex: 1,
     backgroundColor: "rgba(0,0,0,0.5)",
@@ -369,7 +372,7 @@ const styles = StyleSheet.create({
   primaryBtnText: {
     fontSize: 15,
     fontFamily: "Nunito_700Bold",
-    color: "#fff",
+    color: Colors.onPrimary,
   },
   secondaryBtn: {
     flexDirection: "row",

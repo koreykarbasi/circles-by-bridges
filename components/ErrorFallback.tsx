@@ -7,11 +7,11 @@ import {
   ScrollView,
   Text,
   Modal,
-  useColorScheme,
   Platform,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Feather } from "@expo/vector-icons";
+import { useTheme, useThemeColors } from "@/lib/theme-context";
 
 export type ErrorFallbackProps = {
   error: Error;
@@ -19,17 +19,18 @@ export type ErrorFallbackProps = {
 };
 
 export function ErrorFallback({ error, resetError }: ErrorFallbackProps) {
-  const colorScheme = useColorScheme();
-  const isDark = colorScheme === "dark";
+  const { mode } = useTheme();
+  const Colors = useThemeColors();
+  const isDark = mode === "dark";
   const insets = useSafeAreaInsets();
 
   const theme = {
-    background: isDark ? "#000000" : "#FFFFFF",
-    backgroundSecondary: isDark ? "#1C1C1E" : "#F2F2F7",
-    text: isDark ? "#FFFFFF" : "#000000",
-    textSecondary: isDark ? "rgba(255, 255, 255, 0.7)" : "rgba(0, 0, 0, 0.7)",
-    link: "#007AFF",
-    buttonText: "#FFFFFF",
+    background: Colors.background,
+    backgroundSecondary: Colors.surfaceElevated,
+    text: Colors.text,
+    textSecondary: Colors.textSecondary,
+    link: Colors.primary,
+    buttonText: Colors.onPrimary,
   };
 
   const [isModalVisible, setIsModalVisible] = useState(false);
@@ -110,7 +111,7 @@ export function ErrorFallback({ error, resetError }: ErrorFallbackProps) {
           transparent={true}
           onRequestClose={() => setIsModalVisible(false)}
         >
-          <View style={styles.modalOverlay}>
+          <View style={[styles.modalOverlay, { backgroundColor: Colors.primaryDeep + "80" }]}>
             <View
               style={[
                 styles.modalContainer,
@@ -121,9 +122,7 @@ export function ErrorFallback({ error, resetError }: ErrorFallbackProps) {
                 style={[
                   styles.modalHeader,
                   {
-                    borderBottomColor: isDark
-                      ? "rgba(255, 255, 255, 0.1)"
-                      : "rgba(0, 0, 0, 0.1)",
+                    borderBottomColor: Colors.border,
                   },
                 ]}
               >
@@ -222,7 +221,7 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     paddingHorizontal: 24,
     minWidth: 200,
-    shadowColor: "#000",
+    shadowColor: "transparent",
     shadowOffset: {
       width: 0,
       height: 2,
@@ -238,7 +237,7 @@ const styles = StyleSheet.create({
   },
   modalOverlay: {
     flex: 1,
-    backgroundColor: "rgba(0, 0, 0, 0.5)",
+    backgroundColor: "transparent",
     justifyContent: "flex-end",
   },
   modalContainer: {

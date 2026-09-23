@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useEffect } from "react";
+import React, { useState, useCallback, useEffect, useMemo } from "react";
 import {
   View, Text, StyleSheet, ScrollView, Pressable, Platform, Alert, Linking,
 } from "react-native";
@@ -8,7 +8,8 @@ import { Ionicons } from "@expo/vector-icons";
 import { router, useLocalSearchParams } from "expo-router";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import * as Haptics from "expo-haptics";
-import Colors from "@/constants/colors";
+import type { ThemeColors } from "@/constants/colors";
+import { useThemeColors } from "@/lib/theme-context";
 import { apiRequest, getApiUrl, queryClient } from "@/lib/query-client";
 import type { HangoutPlan, HangoutOption } from "@/lib/types";
 import { markHangoutViewed } from "@/lib/hangout-notifications";
@@ -38,7 +39,7 @@ function addDayOfWeek(label: string): string {
   }
 }
 
-function getBordaColor(rank: number, total: number): string {
+function getBordaColor(rank: number, total: number, Colors: ThemeColors): string {
   if (total <= 1) return Colors.primary;
   const pct = 1 - (rank - 1) / (total - 1);
   const r = Math.round(155 * pct + 80 * (1 - pct));
@@ -60,18 +61,20 @@ function SurveySection({
   isFinalized: boolean;
   onFinalize?: (id: string, label: string) => void;
 }) {
+  const Colors = useThemeColors();
+  const ss = useMemo(() => createSurveyStyles(Colors), [Colors]);
   if (options.length === 0) return null;
   const sorted = [...options].sort((a, b) => (b.bordaScore || 0) - (a.bordaScore || 0));
   const maxScore = sorted[0]?.bordaScore || 0;
 
   return (
     <View style={ss.block}>
-      <Text style={ss.sectionTitle}>{title}</Text>
+        <Text style={ss.sectionTitle}>{title}</Text>
       {sorted.map((opt, idx) => {
         const isWinner = isFinalized && opt.id === lockedOptionId;
         const isLocked = !isFinalized && opt.id === lockedOptionId;
         const barPct = maxScore > 0 ? ((opt.bordaScore || 0) / maxScore) * 100 : 0;
-        const rankColor = getBordaColor(idx + 1, sorted.length);
+        const rankColor = getBordaColor(idx + 1, sorted.length, Colors);
 
         return (
           <View
@@ -147,6 +150,8 @@ function SurveySection({
 }
 
 export default function HangoutDetailScreen() {
+  const Colors = useThemeColors();
+  const styles = useMemo(() => createStyles(Colors), [Colors]);
   const insets = useSafeAreaInsets();
   const { user } = useAuth();
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -517,7 +522,7 @@ export default function HangoutDetailScreen() {
               onPress={handleCopyLink}
               style={({ pressed }) => [styles.shareBtn, styles.shareBtnPrimary, pressed && { opacity: 0.8 }]}
             >
-              <Ionicons name={linkCopied ? "checkmark" : "link-outline"} size={16} color="#fff" />
+              <Ionicons name={linkCopied ? "checkmark" : "link-outline"} size={16} color={Colors.onPrimary} />
               <Text style={styles.shareBtnText}>{linkCopied ? "Copied!" : "Copy link"}</Text>
             </Pressable>
             <Pressable
@@ -707,7 +712,7 @@ export default function HangoutDetailScreen() {
   );
 }
 
-const ss = StyleSheet.create({
+const createSurveyStyles = (Colors: ThemeColors) => StyleSheet.create({
   block: { marginBottom: 24 },
   sectionTitle: {
     fontSize: 16, fontFamily: "Nunito_700Bold", color: Colors.text, marginBottom: 10,
@@ -747,7 +752,7 @@ const ss = StyleSheet.create({
   lockedBadgeText: { fontSize: 12, fontFamily: "Nunito_600SemiBold", color: Colors.success },
 });
 
-const styles = StyleSheet.create({
+const createStyles = (Colors: ThemeColors) => StyleSheet.create({
   screen: { flex: 1, backgroundColor: Colors.background },
   headerBar: {
     flexDirection: "row", alignItems: "center", justifyContent: "space-between",
@@ -845,7 +850,7 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.primary + "15",
     borderWidth: 1, borderColor: Colors.primary + "40",
   },
-  shareBtnText: { fontSize: 14, fontFamily: "Nunito_700Bold", color: "#fff" },
+  shareBtnText: { fontSize: 14, fontFamily: "Nunito_700Bold", color: Colors.onPrimary },
   inviteeLinksSection: {
     backgroundColor: Colors.primary + "0D",
     borderWidth: 1, borderColor: Colors.primary + "25",

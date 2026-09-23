@@ -3,10 +3,10 @@ import { Tabs, usePathname } from "expo-router";
 import { NativeTabs, Icon, Label } from "expo-router/unstable-native-tabs";
 import { BlurView } from "expo-blur";
 import { Ionicons } from "@expo/vector-icons";
-import { AppState, Platform, StyleSheet, useColorScheme, View } from "react-native";
+import { AppState, Platform, StyleSheet, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import React, { useMemo, useState, useEffect, useRef } from "react";
-import Colors from "@/constants/colors";
+import { useTheme } from "@/lib/theme-context";
 import { useContacts } from "@/lib/contacts-context";
 import { computeProfileCompletion } from "@/lib/profile-completion";
 import { useQuery } from "@tanstack/react-query";
@@ -55,8 +55,18 @@ function useHangoutUnreadCount(): number {
 }
 
 function NativeTabLayout() {
+  const { colors: Colors, mode } = useTheme();
   return (
-    <NativeTabs>
+    <NativeTabs
+      tintColor={Colors.primary}
+      iconColor={{ default: Colors.tabIconDefault, selected: Colors.primary }}
+      labelStyle={{
+        default: { color: Colors.tabIconDefault },
+        selected: { color: Colors.primary },
+      }}
+      backgroundColor={mode === "light" ? Colors.surface : null}
+      badgeBackgroundColor={Colors.primary}
+    >
       <NativeTabs.Trigger name="index">
         <Icon sf={{ default: "heart.circle", selected: "heart.circle.fill" }} />
         <Label>Home</Label>
@@ -78,8 +88,8 @@ function NativeTabLayout() {
 }
 
 function ClassicTabLayout({ hangoutUnreadCount }: { hangoutUnreadCount: number }) {
-  const colorScheme = useColorScheme();
-  const isDark = colorScheme === "dark";
+  const { colors: Colors, mode } = useTheme();
+  const isDark = mode === "dark";
   const isWeb = Platform.OS === "web";
   const isIOS = Platform.OS === "ios";
   const safeAreaInsets = useSafeAreaInsets();
@@ -93,12 +103,12 @@ function ClassicTabLayout({ hangoutUnreadCount }: { hangoutUnreadCount: number }
       screenOptions={{
         headerShown: false,
         tabBarActiveTintColor: Colors.primary,
-        tabBarInactiveTintColor: Colors.light.tabIconDefault,
+        tabBarInactiveTintColor: Colors.tabIconDefault,
         tabBarStyle: {
           position: "absolute" as const,
-          backgroundColor: isIOS ? "transparent" : isDark ? "#000" : "#fff",
+          backgroundColor: isIOS ? "transparent" : Colors.surface,
           borderTopWidth: isWeb ? 1 : 0,
-          borderTopColor: isDark ? "#333" : Colors.borderLight,
+          borderTopColor: Colors.borderLight,
           elevation: 0,
           ...(isWeb ? { height: 84 } : {}),
           ...(!isWeb ? { paddingBottom: safeAreaInsets.bottom } : {}),
@@ -114,7 +124,7 @@ function ClassicTabLayout({ hangoutUnreadCount }: { hangoutUnreadCount: number }
             <View
               style={[
                 StyleSheet.absoluteFill,
-                { backgroundColor: isDark ? "#000" : "#fff" },
+                { backgroundColor: Colors.surface },
               ]}
             />
           ) : null,

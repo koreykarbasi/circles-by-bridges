@@ -1,10 +1,10 @@
-import React, { useRef } from "react";
+import React, { useRef, useMemo } from "react";
 import { View, Text, StyleSheet, Pressable, Animated } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { Avatar } from "./Avatar";
-import Colors from "@/constants/colors";
+import { useThemeColors } from "@/lib/theme-context";
+import type { ThemeColors } from "@/constants/colors";
 import { formatLastContacted, getContactUrgency } from "@/lib/helpers";
-import { CIRCLE_CONFIG } from "@/lib/types";
 import type { Contact } from "@/lib/types";
 import * as Haptics from "expo-haptics";
 
@@ -28,8 +28,10 @@ function isMissingEnrichment(contact: Contact): boolean {
 }
 
 export function ContactCard({ contact, onPress, onMarkContacted, onPlanHangout, showCircleLabel, onLongPress, isProfileIncomplete }: ContactCardProps) {
+  const Colors = useThemeColors();
+  const styles = useMemo(() => createStyles(Colors), [Colors]);
   const urgency = getContactUrgency(contact.circleLevel as 1 | 2 | 3, contact.lastContacted ?? undefined);
-  const circleColor = CIRCLE_CONFIG[contact.circleLevel as 1 | 2 | 3]?.color ?? Colors.primary;
+  const circleColor = contact.circleLevel === 1 ? Colors.circle1 : contact.circleLevel === 2 ? Colors.circle2 : Colors.circle3;
   const flashAnim = useRef(new Animated.Value(0)).current;
 
   const incomplete = isMissingBirthday(contact);
@@ -153,7 +155,7 @@ export function ContactCard({ contact, onPress, onMarkContacted, onPlanHangout, 
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (Colors: ThemeColors) => StyleSheet.create({
   container: {
     flexDirection: "row",
     alignItems: "center",
@@ -245,7 +247,7 @@ const styles = StyleSheet.create({
   incompleteBadgeText: {
     fontSize: 11,
     fontFamily: "Nunito_800ExtraBold",
-    color: "#fff",
+    color: Colors.onPrimary,
     lineHeight: 13,
   },
   enrichmentBadge: {

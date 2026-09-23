@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import {
   View,
   Text,
@@ -15,7 +15,8 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { router, useLocalSearchParams } from "expo-router";
 import * as ImagePicker from "expo-image-picker";
-import Colors from "@/constants/colors";
+import type { ThemeColors } from "@/constants/colors";
+import { useThemeColors } from "@/lib/theme-context";
 import { useContacts } from "@/lib/contacts-context";
 import { CIRCLE_CONFIG } from "@/lib/types";
 import { AVAILABLE_INTERESTS } from "@/lib/prompts";
@@ -49,6 +50,8 @@ function formatBirthdayDisplay(birthday: string): string {
 }
 
 export default function AddContactScreen() {
+  const Colors = useThemeColors();
+  const styles = useMemo(() => createStyles(Colors), [Colors]);
   const { width: viewportWidth } = useWindowDimensions();
   const displayedLabels = viewportWidth < 365 ? COMPACT_PREDEFINED_LABELS : PREDEFINED_LABELS;
   const insets = useSafeAreaInsets();
@@ -325,6 +328,7 @@ export default function AddContactScreen() {
           <View style={styles.circleOptions}>
             {([1, 2, 3] as const).map((level) => {
               const cfg = CIRCLE_CONFIG[level];
+              const circleColor = level === 1 ? Colors.circle1 : level === 2 ? Colors.circle2 : Colors.circle3;
               const isActive = circleLevel === level;
               const count = getCircleContacts(level).length;
               const isFull = count >= cfg.max && !isActive;
@@ -338,18 +342,18 @@ export default function AddContactScreen() {
                   }}
                   style={[
                     styles.circleOption,
-                    isActive && { backgroundColor: cfg.color + "15", borderColor: cfg.color + "50" },
+                    isActive && { backgroundColor: circleColor + "15", borderColor: circleColor + "50" },
                     isFull && { opacity: 0.38 },
                   ]}
                 >
-                  <View style={[styles.circleOptionDot, { backgroundColor: cfg.color }]} />
+                  <View style={[styles.circleOptionDot, { backgroundColor: circleColor }]} />
                   <Text
-                    style={[styles.circleOptionLabel, isActive && { color: cfg.color }]}
+                    style={[styles.circleOptionLabel, isActive && { color: circleColor }]}
                     numberOfLines={1}
                   >
                     {cfg.label}
                   </Text>
-                  <Text style={[styles.circleOptionCount, isActive && { color: cfg.color }]}>
+                  <Text style={[styles.circleOptionCount, isActive && { color: circleColor }]}>
                     {isFull ? "Full" : `${count}/${cfg.max}`}
                   </Text>
                 </Pressable>
@@ -506,7 +510,7 @@ export default function AddContactScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (Colors: ThemeColors) => StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: Colors.background,
@@ -776,6 +780,6 @@ const styles = StyleSheet.create({
   saveButtonText: {
     fontSize: 16,
     fontFamily: "Nunito_700Bold",
-    color: "#fff",
+    color: Colors.onPrimary,
   },
 });

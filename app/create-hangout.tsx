@@ -6,7 +6,8 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { router, useLocalSearchParams } from "expo-router";
 import * as Haptics from "expo-haptics";
-import Colors from "@/constants/colors";
+import type { ThemeColors } from "@/constants/colors";
+import { useThemeColors } from "@/lib/theme-context";
 import { useContacts } from "@/lib/contacts-context";
 import { apiRequest, queryClient } from "@/lib/query-client";
 import { Avatar } from "@/components/Avatar";
@@ -33,6 +34,8 @@ function defaultDatetimeLabel(daysFromNow: number): string {
 }
 
 export default function CreateHangoutScreen() {
+  const Colors = useThemeColors();
+  const styles = useMemo(() => createStyles(Colors), [Colors]);
   const insets = useSafeAreaInsets();
   const { contacts } = useContacts();
   const { contactName, prefillTitle } = useLocalSearchParams<{ contactName?: string; prefillTitle?: string }>();
@@ -261,7 +264,7 @@ export default function CreateHangoutScreen() {
           style={({ pressed }) => [styles.nextButton, !canProceedStep1 && styles.nextButtonDisabled, pressed && { opacity: 0.8 }]}
         >
           <Text style={styles.nextButtonText}>Next</Text>
-          <Ionicons name="arrow-forward" size={18} color="#fff" />
+          <Ionicons name="arrow-forward" size={18} color={Colors.onPrimary} />
         </Pressable>
       </View>
     </>
@@ -291,6 +294,7 @@ export default function CreateHangoutScreen() {
           sortedContacts.map((c) => {
             const selected = selectedContacts.has(c.id);
             const badge = CIRCLE_BADGE[c.circleLevel];
+            const badgeColor = Colors[`circle${c.circleLevel}` as "circle1" | "circle2" | "circle3"];
             return (
               <Pressable
                 key={c.id}
@@ -300,12 +304,12 @@ export default function CreateHangoutScreen() {
                 <Avatar name={c.name} color={c.avatarColor} size={36} photoUri={c.photoUri} />
                 <Text style={styles.contactName} numberOfLines={1}>{c.name}</Text>
                 {badge && (
-                  <View style={[styles.circleBadge, { backgroundColor: badge.color + "22", borderColor: badge.color + "55" }]}>
-                    <Text style={[styles.circleBadgeText, { color: badge.color }]}>{badge.label}</Text>
+                  <View style={[styles.circleBadge, { backgroundColor: badgeColor + "22", borderColor: badgeColor + "55" }]}>
+                    <Text style={[styles.circleBadgeText, { color: badgeColor }]}>{badge.label}</Text>
                   </View>
                 )}
                 <View style={[styles.checkbox, selected && styles.checkboxSelected]}>
-                  {selected && <Ionicons name="checkmark" size={14} color="#fff" />}
+                  {selected && <Ionicons name="checkmark" size={14} color={Colors.onPrimary} />}
                 </View>
               </Pressable>
             );
@@ -515,7 +519,7 @@ export default function CreateHangoutScreen() {
             pressed && { opacity: 0.8 },
           ]}
         >
-          <Ionicons name="link-outline" size={16} color="#fff" />
+          <Ionicons name="link-outline" size={16} color={Colors.onPrimary} />
           <Text style={styles.nextButtonText}>{submitting ? "Creating..." : "Create survey"}</Text>
         </Pressable>
       </View>
@@ -566,7 +570,7 @@ export default function CreateHangoutScreen() {
             style={({ pressed }) => [styles.nextButton, !canProceedStep2 && styles.nextButtonDisabled, pressed && { opacity: 0.8 }]}
           >
             <Text style={styles.nextButtonText}>Next</Text>
-            <Ionicons name="arrow-forward" size={18} color="#fff" />
+            <Ionicons name="arrow-forward" size={18} color={Colors.onPrimary} />
           </Pressable>
         </View>
       )}
@@ -581,13 +585,13 @@ export default function CreateHangoutScreen() {
   );
 }
 
-const CIRCLE_BADGE: Record<number, { label: string; color: string }> = {
-  1: { label: "Core", color: "#FF6B8A" },
-  2: { label: "Close", color: "#9B7DFF" },
-  3: { label: "Friend", color: "#4ECDC4" },
+const CIRCLE_BADGE: Record<number, { label: string }> = {
+  1: { label: "Core" },
+  2: { label: "Close" },
+  3: { label: "Friend" },
 };
 
-const styles = StyleSheet.create({
+const createStyles = (Colors: ThemeColors) => StyleSheet.create({
   screen: { flex: 1, backgroundColor: Colors.background },
   headerBar: {
     flexDirection: "row", alignItems: "center", justifyContent: "space-between",
@@ -713,6 +717,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 24, borderRadius: 12,
   },
   nextButtonDisabled: { opacity: 0.4 },
-  nextButtonText: { fontSize: 15, fontFamily: "Nunito_700Bold", color: "#fff" },
+  nextButtonText: { fontSize: 15, fontFamily: "Nunito_700Bold", color: Colors.onPrimary },
   submitButton: { backgroundColor: Colors.primary },
 });

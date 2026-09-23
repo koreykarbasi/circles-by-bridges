@@ -2,7 +2,8 @@ import React, { useMemo } from "react";
 import { View, Text, StyleSheet, Pressable, Modal, ScrollView } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import Colors from "@/constants/colors";
+import { useThemeColors } from "@/lib/theme-context";
+import type { ThemeColors } from "@/constants/colors";
 import type { Contact } from "@/lib/types";
 import { STAGE1_GOALS } from "@/lib/profile-completion";
 import { router } from "expo-router";
@@ -23,7 +24,7 @@ interface BellTask {
   onPress: () => void;
 }
 
-export function computeBellDotColor(contacts: Contact[], isComplete: boolean): string | null {
+export function computeBellDotColor(contacts: Contact[], isComplete: boolean, Colors: ThemeColors): string | null {
   if (contacts.length === 0) return null;
   const c1Missing = contacts.filter((c) => c.circleLevel === 1 && !c.birthday);
   if (c1Missing.length > 0) return Colors.danger;
@@ -38,6 +39,8 @@ export function computeBellDotColor(contacts: Contact[], isComplete: boolean): s
 }
 
 export function BellSheet({ visible, onClose, contacts, isComplete }: BellSheetProps) {
+  const Colors = useThemeColors();
+  const styles = useMemo(() => createStyles(Colors), [Colors]);
   const insets = useSafeAreaInsets();
 
   const { urgent, recommended, missingEnrichmentCount } = useMemo(() => {
@@ -126,7 +129,7 @@ export function BellSheet({ visible, onClose, contacts, isComplete }: BellSheetP
 
   const totalTasks = urgent.length + recommended.length;
   const allDone = totalTasks === 0 && missingEnrichmentCount === 0;
-  const dotColor = computeBellDotColor(contacts, isComplete);
+  const dotColor = computeBellDotColor(contacts, isComplete, Colors);
 
   function getPriorityColor(priority: BellTask["priority"]): string {
     if (priority === "red") return Colors.danger;
@@ -221,10 +224,10 @@ export function BellSheet({ visible, onClose, contacts, isComplete }: BellSheetP
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (Colors: ThemeColors) => StyleSheet.create({
   backdrop: {
     flex: 1,
-    backgroundColor: "rgba(0,0,0,0.5)",
+    backgroundColor: Colors.primaryDeep + "80",
   },
   sheet: {
     backgroundColor: Colors.surface,

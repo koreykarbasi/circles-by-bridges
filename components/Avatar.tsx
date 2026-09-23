@@ -1,6 +1,8 @@
-import React, { useState } from "react";
+import React, { useState, useMemo } from "react";
 import { View, Text, Image, StyleSheet } from "react-native";
 import { getInitials } from "@/lib/helpers";
+import { useTheme } from "@/lib/theme-context";
+import type { ThemeColors } from "@/constants/colors";
 
 interface AvatarProps {
   name: string;
@@ -10,6 +12,8 @@ interface AvatarProps {
 }
 
 export function Avatar({ name, color, size = 44, photoUri }: AvatarProps) {
+  const { colors: Colors, mode } = useTheme();
+  const styles = useMemo(() => createStyles(Colors), [Colors]);
   const [imgError, setImgError] = useState(false);
   const fontSize = size * 0.38;
 
@@ -48,7 +52,7 @@ export function Avatar({ name, color, size = 44, photoUri }: AvatarProps) {
           styles.text,
           {
             fontSize,
-            color,
+             color: mode === "dark" ? color : Colors.text,
           },
         ]}
       >
@@ -58,7 +62,7 @@ export function Avatar({ name, color, size = 44, photoUri }: AvatarProps) {
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (_Colors: ThemeColors) => StyleSheet.create({
   container: {
     alignItems: "center",
     justifyContent: "center",

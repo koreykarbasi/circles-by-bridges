@@ -4,7 +4,8 @@ import { Gesture, GestureDetector } from "react-native-gesture-handler";
 import Reanimated, { useSharedValue, useAnimatedStyle, withTiming, withSpring, runOnJS } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
-import Colors from "@/constants/colors";
+import type { ThemeColors } from "@/constants/colors";
+import { useThemeColors } from "@/lib/theme-context";
 import { useContacts } from "@/lib/contacts-context";
 import { useAuth } from "@/lib/auth-context";
 import { computeProfileCompletion } from "@/lib/profile-completion";
@@ -52,7 +53,7 @@ function getReminderIconLibrary(reminder: Reminder): "material" | undefined {
   return "material";
 }
 
-function getReminderIconColor(reminder: Reminder): string {
+function getReminderIconColor(reminder: Reminder, Colors: ThemeColors): string {
   if (reminder.type === "custom-reminder") return Colors.primary;
   return Colors.accent;
 }
@@ -133,6 +134,8 @@ function SwipableSuggestionRow({ children, onSwipeDismiss }: { children: React.R
 }
 
 export default function HomeScreen() {
+  const Colors = useThemeColors();
+  const styles = useMemo(() => createStyles(Colors), [Colors]);
   const insets = useSafeAreaInsets();
   const { user } = useAuth();
   const { contacts, markContacted, refreshContacts, savePhoneNumber, isLoading } = useContacts();
@@ -741,8 +744,8 @@ export default function HomeScreen() {
 
   const profileCompletion = useMemo(() => computeProfileCompletion(contacts), [contacts]);
   const bellDotColor = useMemo(
-    () => computeBellDotColor(contacts, profileCompletion.isComplete),
-    [contacts, profileCompletion.isComplete],
+    () => computeBellDotColor(contacts, profileCompletion.isComplete, Colors),
+    [contacts, profileCompletion.isComplete, Colors],
   );
   const webTopInset = Platform.OS === "web" ? 67 : 0;
 
@@ -893,7 +896,7 @@ export default function HomeScreen() {
                   key={reminder.id}
                   icon={getReminderIcon(reminder)}
                   iconLibrary={getReminderIconLibrary(reminder)}
-                  iconColor={getReminderIconColor(reminder)}
+                  iconColor={getReminderIconColor(reminder, Colors)}
                   title={reminder.title}
                   subtitle={reminder.subtitle}
                   priorityLevel={getPriorityLevel(reminder.priority)}
@@ -1004,7 +1007,7 @@ export default function HomeScreen() {
                       hitSlop={8}
                       style={({ pressed }) => [styles.suggestionDoneBtn, pressed && { opacity: 0.7 }]}
                     >
-                      <Ionicons name="checkmark" size={16} color="#fff" />
+                      <Ionicons name="checkmark" size={16} color={Colors.onPrimary} />
                     </Pressable>
                   </View>
                 </View>
@@ -1069,8 +1072,8 @@ export default function HomeScreen() {
           },
         ]}
       >
-        <Ionicons name="alert-circle" size={16} color="#fff" />
-        <Text style={[styles.copiedToastText, { color: "#fff" }]}>{errorToastMessage}</Text>
+        <Ionicons name="alert-circle" size={16} color={Colors.onPrimary} />
+        <Text style={[styles.copiedToastText, { color: Colors.onPrimary }]}>{errorToastMessage}</Text>
       </Animated.View>
     )}
 
@@ -1097,7 +1100,7 @@ export default function HomeScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (Colors: ThemeColors) => StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: Colors.background,
@@ -1263,7 +1266,7 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     backgroundColor: Colors.surface,
     borderWidth: 1,
-    borderColor: "#9B7DFF30",
+    borderColor: Colors.primary + "30",
     borderRadius: 14,
     paddingVertical: 12,
     paddingHorizontal: 14,
@@ -1279,7 +1282,7 @@ const styles = StyleSheet.create({
     width: 36,
     height: 36,
     borderRadius: 18,
-    backgroundColor: "#9B7DFF18",
+    backgroundColor: Colors.primary + "18",
     alignItems: "center",
     justifyContent: "center",
   },
@@ -1322,7 +1325,7 @@ const styles = StyleSheet.create({
   badgeText: {
     fontSize: 12,
     fontFamily: "Nunito_700Bold",
-    color: "#fff",
+    color: Colors.onPrimary,
   },
   allGoodContainer: {
     backgroundColor: Colors.success + "15",

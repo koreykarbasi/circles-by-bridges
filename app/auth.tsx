@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useMemo, useState } from "react";
 import {
   View,
   Text,
@@ -15,11 +15,14 @@ import {
 import { KeyboardAwareScrollView } from "react-native-keyboard-controller";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
-import Colors from "@/constants/colors";
+import type { ThemeColors } from "@/constants/colors";
+import { useThemeColors } from "@/lib/theme-context";
 import { useAuth } from "@/lib/auth-context";
 import { apiRequest } from "@/lib/query-client";
 
 export default function AuthScreen() {
+  const Colors = useThemeColors();
+  const styles = useMemo(() => createStyles(Colors), [Colors]);
   const insets = useSafeAreaInsets();
   const { login, register } = useAuth();
   const [isLogin, setIsLogin] = useState(true);
@@ -224,7 +227,7 @@ export default function AuthScreen() {
             testID="auth-submit"
           >
             {isSubmitting ? (
-              <ActivityIndicator color="#fff" />
+              <ActivityIndicator color={Colors.onPrimary} />
             ) : (
               <Text style={styles.submitText}>
                 {isLogin ? "Sign In" : "Create Account"}
@@ -331,7 +334,7 @@ export default function AuthScreen() {
                     testID="forgot-submit"
                   >
                     {forgotSubmitting ? (
-                      <ActivityIndicator color="#fff" />
+                      <ActivityIndicator color={Colors.onPrimary} />
                     ) : (
                       <Text style={styles.submitText}>Send reset link</Text>
                     )}
@@ -346,7 +349,7 @@ export default function AuthScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (Colors: ThemeColors) => StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: Colors.background,
@@ -390,12 +393,12 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: 8,
-    backgroundColor: "rgba(255, 71, 87, 0.1)",
+    backgroundColor: Colors.danger + "1A",
     paddingHorizontal: 14,
     paddingVertical: 10,
     borderRadius: 10,
     borderWidth: 1,
-    borderColor: "rgba(255, 71, 87, 0.2)",
+    borderColor: Colors.danger + "33",
   },
   errorText: {
     color: Colors.danger,
@@ -448,7 +451,7 @@ const styles = StyleSheet.create({
   submitText: {
     fontSize: 16,
     fontFamily: "Nunito_700Bold",
-    color: "#fff",
+    color: Colors.onPrimary,
   },
   forgotRow: {
     alignItems: "center",
@@ -481,12 +484,12 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: 8,
-    backgroundColor: "rgba(74, 222, 128, 0.1)",
+    backgroundColor: Colors.success + "1A",
     paddingHorizontal: 14,
     paddingVertical: 10,
     borderRadius: 10,
     borderWidth: 1,
-    borderColor: "rgba(74, 222, 128, 0.2)",
+    borderColor: Colors.success + "33",
   },
   successText: {
     color: Colors.success,
@@ -511,7 +514,7 @@ const styles = StyleSheet.create({
   },
   modalOverlay: {
     flex: 1,
-    backgroundColor: "rgba(0,0,0,0.7)",
+    backgroundColor: Colors.text + "B3",
     justifyContent: "flex-end",
     alignItems: "center",
     paddingHorizontal: 16,
@@ -580,6 +583,6 @@ const styles = StyleSheet.create({
   forgotDoneText: {
     fontSize: 15,
     fontFamily: "Nunito_700Bold",
-    color: "#fff",
+    color: Colors.onPrimary,
   },
 });

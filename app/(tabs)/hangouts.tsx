@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from "react";
+import React, { useState, useCallback, useMemo } from "react";
 import {
   View, Text, StyleSheet, ScrollView, Pressable, Platform, ActivityIndicator,
 } from "react-native";
@@ -7,7 +7,8 @@ import { Ionicons } from "@expo/vector-icons";
 import { router, useFocusEffect } from "expo-router";
 import { useQuery } from "@tanstack/react-query";
 import * as Haptics from "expo-haptics";
-import Colors from "@/constants/colors";
+import type { ThemeColors } from "@/constants/colors";
+import { useThemeColors } from "@/lib/theme-context";
 import { EmptyState } from "@/components/EmptyState";
 import type { HangoutPlan } from "@/lib/types";
 import { getViewedTimestamps, hasUnreadVotes, countNewVoters } from "@/lib/hangout-notifications";
@@ -16,6 +17,8 @@ import { useSequentialHints, HINT_TEXT } from "@/lib/hints-store";
 import { HintTooltip } from "@/components/HintTooltip";
 
 function HangoutCard({ plan, viewedAt }: { plan: HangoutPlan; viewedAt: string | undefined }) {
+  const Colors = useThemeColors();
+  const styles = useMemo(() => createStyles(Colors), [Colors]);
   const isFinalized = plan.status === "finalized";
   const totalVotes = (plan.options || []).reduce((sum, o) => sum + (o.voteCount || 0), 0);
   const unread = !isFinalized && hasUnreadVotes(plan, viewedAt);
@@ -85,6 +88,8 @@ function HangoutCard({ plan, viewedAt }: { plan: HangoutPlan; viewedAt: string |
 }
 
 export default function HangoutsScreen() {
+  const Colors = useThemeColors();
+  const styles = useMemo(() => createStyles(Colors), [Colors]);
   const insets = useSafeAreaInsets();
   const { user } = useAuth();
   const webTopInset = Platform.OS === "web" ? 67 : 0;
@@ -169,7 +174,7 @@ export default function HangoutsScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (Colors: ThemeColors) => StyleSheet.create({
   screen: {
     flex: 1,
     backgroundColor: Colors.background,

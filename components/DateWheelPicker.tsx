@@ -1,4 +1,4 @@
-import React, { useRef, useCallback, useEffect, useState } from "react";
+import React, { useRef, useCallback, useEffect, useState, useMemo } from "react";
 import {
   View,
   Text,
@@ -8,7 +8,8 @@ import {
   NativeSyntheticEvent,
   NativeScrollEvent,
 } from "react-native";
-import Colors from "@/constants/colors";
+import type { ThemeColors } from "@/constants/colors";
+import { useThemeColors } from "@/lib/theme-context";
 
 const ITEM_HEIGHT = 34;
 const VISIBLE_ITEMS = 3;
@@ -71,6 +72,8 @@ interface WheelColumnProps {
 }
 
 function WheelColumn({ items, selectedIndex, onIndexChange, width }: WheelColumnProps) {
+  const Colors = useThemeColors();
+  const styles = useMemo(() => createStyles(Colors), [Colors]);
   const scrollRef = useRef<ScrollView>(null);
   const isScrolling = useRef(false);
   const mounted = useRef(false);
@@ -233,6 +236,8 @@ function parseDatetimeValue(v?: string): ParsedDate {
 }
 
 export function DateWheelPicker({ value, onChange, mode = "birthday" }: DateWheelPickerProps) {
+  const Colors = useThemeColors();
+  const styles = useMemo(() => createStyles(Colors), [Colors]);
   const ALL_YEARS =
     mode === "deadline" ? DEADLINE_YEARS :
     mode === "datetime" ? DATETIME_YEARS :
@@ -476,7 +481,7 @@ export function DateWheelPicker({ value, onChange, mode = "birthday" }: DateWhee
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (Colors: ThemeColors) => StyleSheet.create({
   container: {
     flexDirection: "row",
     backgroundColor: Colors.surface,

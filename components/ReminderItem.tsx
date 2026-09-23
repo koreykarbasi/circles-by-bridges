@@ -1,8 +1,8 @@
-import React, { useCallback } from "react";
+import React, { useCallback, useMemo } from "react";
 import { View, Text, StyleSheet, Pressable } from "react-native";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
-import Colors from "@/constants/colors";
-import { CIRCLE_CONFIG } from "@/lib/types";
+import { useThemeColors } from "@/lib/theme-context";
+import type { ThemeColors } from "@/constants/colors";
 import * as Haptics from "expo-haptics";
 import type { Reminder } from "@/lib/reminders";
 import { QuickPickRow } from "./QuickPickRow";
@@ -25,13 +25,13 @@ const TYPE_ICONS: Record<string, keyof typeof Ionicons.glyphMap> = {
   "profile-completion-low": "person-circle-outline",
 };
 
-function getPriorityColor(priority: number): string {
+function getPriorityColor(priority: number, Colors: ThemeColors): string {
   if (priority >= 150) return Colors.danger;
   if (priority >= 100) return Colors.warning;
   return Colors.primaryLight;
 }
 
-function getProfileCompletionColor(type: string): string | null {
+function getProfileCompletionColor(type: string, Colors: ThemeColors): string | null {
   if (type === "profile-completion-high") return Colors.danger;
   if (type === "profile-completion-medium") return Colors.warning;
   if (type === "profile-completion-low") return Colors.yellow;
@@ -45,11 +45,13 @@ function getProfileCompletionRoute(type: string): { circle?: string; filter: str
 }
 
 export function ReminderItem({ reminder, onComplete, onQuickPick, onCalendarPress, onTextPress }: ReminderItemProps) {
+  const Colors = useThemeColors();
+  const styles = useMemo(() => createStyles(Colors), [Colors]);
   const isProfileCompletion = reminder.type.startsWith("profile-completion");
   const circleColor = isProfileCompletion
-    ? (getProfileCompletionColor(reminder.type) ?? Colors.primary)
-    : (CIRCLE_CONFIG[reminder.circleLevel as 1 | 2 | 3]?.color ?? Colors.primary);
-  const priorityColor = getProfileCompletionColor(reminder.type) ?? getPriorityColor(reminder.priority);
+    ? (getProfileCompletionColor(reminder.type, Colors) ?? Colors.primary)
+    : (reminder.circleLevel === 1 ? Colors.circle1 : reminder.circleLevel === 2 ? Colors.circle2 : Colors.circle3);
+  const priorityColor = getProfileCompletionColor(reminder.type, Colors) ?? getPriorityColor(reminder.priority, Colors);
   const typeIcon = TYPE_ICONS[reminder.type] ?? "alert-circle-outline";
   const isBirthday = reminder.type === "birthday";
   const isQuickPick = (reminder.type === "check-in-quickpick" || reminder.type === "hangout-quickpick") && !!onQuickPick;
@@ -137,7 +139,7 @@ export function ReminderItem({ reminder, onComplete, onQuickPick, onCalendarPres
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (Colors: ThemeColors) => StyleSheet.create({
   container: {
     backgroundColor: Colors.surface,
     borderRadius: 14,

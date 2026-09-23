@@ -1,4 +1,4 @@
-import React, { useState, useRef, useCallback, useEffect } from "react";
+import React, { useState, useRef, useCallback, useEffect, useMemo } from "react";
 import {
   View,
   Text,
@@ -17,7 +17,8 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import Animated, { FadeIn } from "react-native-reanimated";
-import Colors from "@/constants/colors";
+import type { ThemeColors } from "@/constants/colors";
+import { useThemeColors } from "@/lib/theme-context";
 import { CIRCLE_CONFIG } from "@/lib/types";
 import { ContactsImport, ImportedContact } from "@/components/ContactsImport";
 import { useOnboarding } from "@/lib/onboarding-context";
@@ -54,6 +55,8 @@ const STEPS: OnboardingStep[] = [
 ];
 
 export default function OnboardingScreen() {
+  const Colors = useThemeColors();
+  const styles = useMemo(() => createStyles(Colors), [Colors]);
   const insets = useSafeAreaInsets();
   const { completeOnboarding } = useOnboarding();
   const { addContact, getCircleContacts } = useContacts();
@@ -244,7 +247,7 @@ export default function OnboardingScreen() {
               style={({ pressed }) => [styles.primaryButton, pressed && { opacity: 0.8 }]}
             >
               <Text style={styles.primaryButtonText}>Next</Text>
-              <Ionicons name="arrow-forward" size={18} color="#fff" />
+              <Ionicons name="arrow-forward" size={18} color={Colors.onPrimary} />
             </Pressable>
           )}
         </View>
@@ -256,6 +259,9 @@ export default function OnboardingScreen() {
 // ─── Auth Page ────────────────────────────────────────────────────────────────
 
 function AuthPage({ onSuccess, isActive }: { onSuccess: () => void; isActive: boolean }) {
+  const Colors = useThemeColors();
+  const pageStyles = useMemo(() => createPageStyles(Colors), [Colors]);
+  const authStyles = useMemo(() => createAuthStyles(Colors), [Colors]);
   const { user, login, register, loginWithApple, loginWithGoogle } = useAuth();
   const insets = useSafeAreaInsets();
   const webBottomInset = Platform.OS === "web" ? 34 : 0;
@@ -546,7 +552,7 @@ function AuthPage({ onSuccess, isActive }: { onSuccess: () => void; isActive: bo
             disabled={isSubmitting}
           >
             {isSubmitting ? (
-              <ActivityIndicator size="small" color="#fff" />
+              <ActivityIndicator size="small" color={Colors.onPrimary} />
             ) : (
               <Text style={authStyles.submitButtonText}>
                 {mode === "signup" ? "Create account" : "Sign in"}
@@ -588,6 +594,8 @@ function GoogleAuthButton({
   onError: (message: string) => void;
   disabled: boolean;
 }) {
+  const Colors = useThemeColors();
+  const authStyles = useMemo(() => createAuthStyles(Colors), [Colors]);
   const [, response, promptAsync] = Google.useAuthRequest({
     webClientId: process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID,
     iosClientId: process.env.EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID,
@@ -620,6 +628,8 @@ function GoogleAuthButton({
 // ─── Welcome Page ─────────────────────────────────────────────────────────────
 
 function WelcomePage() {
+  const Colors = useThemeColors();
+  const pageStyles = useMemo(() => createPageStyles(Colors), [Colors]);
   return (
     <View style={pageStyles.page}>
       <ScrollView
@@ -658,6 +668,8 @@ function WelcomePage() {
 // ─── Circles Page ─────────────────────────────────────────────────────────────
 
 function CirclesPage() {
+  const Colors = useThemeColors();
+  const pageStyles = useMemo(() => createPageStyles(Colors), [Colors]);
   return (
     <View style={pageStyles.page}>
       <ScrollView
@@ -678,8 +690,8 @@ function CirclesPage() {
                       width: sizes[level],
                       height: sizes[level],
                       borderRadius: sizes[level] / 2,
-                      borderColor: cfg.color + "60",
-                      backgroundColor: cfg.color + "12",
+                       borderColor: Colors[`circle${level}` as "circle1" | "circle2" | "circle3"] + "60",
+                       backgroundColor: Colors[`circle${level}` as "circle1" | "circle2" | "circle3"] + "12",
                     },
                   ]}
                 />
@@ -700,7 +712,7 @@ function CirclesPage() {
             const cfg = CIRCLE_CONFIG[level];
             return (
               <View key={level} style={pageStyles.circleItem}>
-                <View style={[pageStyles.circleDot, { backgroundColor: cfg.color }]} />
+                 <View style={[pageStyles.circleDot, { backgroundColor: Colors[`circle${level}` as "circle1" | "circle2" | "circle3"] }]} />
                 <View style={pageStyles.circleItemContent}>
                   <Text style={pageStyles.circleLabel}>
                     {cfg.label}{" "}
@@ -720,6 +732,8 @@ function CirclesPage() {
 // ─── Features Page ────────────────────────────────────────────────────────────
 
 function FeaturesPage() {
+  const Colors = useThemeColors();
+  const pageStyles = useMemo(() => createPageStyles(Colors), [Colors]);
   const features = [
     {
       icon: "chatbubble-ellipses-outline" as const,
@@ -799,7 +813,10 @@ function CircleImportPage({
   onDeselect: (name: string) => void;
   isActive?: boolean;
 }) {
+  const Colors = useThemeColors();
+  const pageStyles = useMemo(() => createPageStyles(Colors), [Colors]);
   const cfg = CIRCLE_CONFIG[circleLevel];
+  const circleColor = Colors[`circle${circleLevel}` as "circle1" | "circle2" | "circle3"];
   const remainingSlots = Math.max(0, cfg.max - existingCount);
 
   const prompts: Record<number, string> = {
@@ -817,12 +834,12 @@ function CircleImportPage({
       >
         <Animated.View entering={FadeIn.duration(400)}>
           <View style={pageStyles.circleHeader}>
-            <View style={[pageStyles.circleBadge, { backgroundColor: cfg.color + "20" }]}>
-              <View style={[pageStyles.circleBadgeDot, { backgroundColor: cfg.color }]} />
-              <Text style={[pageStyles.circleBadgeLabel, { color: cfg.color }]}>
+            <View style={[pageStyles.circleBadge, { backgroundColor: circleColor + "20" }]}>
+              <View style={[pageStyles.circleBadgeDot, { backgroundColor: circleColor }]} />
+              <Text style={[pageStyles.circleBadgeLabel, { color: circleColor }]}>
                 {cfg.label}
               </Text>
-              <Text style={[pageStyles.circleBadgeCount, { color: cfg.color }]}>
+              <Text style={[pageStyles.circleBadgeCount, { color: circleColor }]}>
                 {existingCount + selectedContacts.length}/{cfg.max}
               </Text>
             </View>
@@ -853,6 +870,9 @@ function CircleImportPage({
 // ─── Notifications Page ───────────────────────────────────────────────────────
 
 function NotificationsPage({ onNext, isActive }: { onNext: () => void; isActive: boolean }) {
+  const Colors = useThemeColors();
+  const pageStyles = useMemo(() => createPageStyles(Colors), [Colors]);
+  const notifStyles = useMemo(() => createNotifStyles(Colors), [Colors]);
   const { updateNotificationPreferences } = useAuth();
   const [frequency, setFrequency] = useState<string>("daily");
   const [time, setTime] = useState<string>("morning");
@@ -936,7 +956,7 @@ function NotificationsPage({ onNext, isActive }: { onNext: () => void; isActive:
               onPress={handleEnableNotifications}
               style={({ pressed }) => [notifStyles.enableBtn, pressed && { opacity: 0.75 }]}
             >
-              <Ionicons name="notifications-outline" size={18} color="#fff" />
+              <Ionicons name="notifications-outline" size={18} color={Colors.onPrimary} />
               <Text style={notifStyles.enableBtnText}>Enable notifications</Text>
             </Pressable>
           </Animated.View>
@@ -1006,14 +1026,14 @@ function NotificationsPage({ onNext, isActive }: { onNext: () => void; isActive:
         <Pressable
           onPress={handleContinue}
           disabled={saving}
-          style={({ pressed }) => [styles.primaryButton, (pressed || saving) && { opacity: 0.8 }]}
+          style={({ pressed }) => [notifStyles.enableBtn, (pressed || saving) && { opacity: 0.8 }]}
         >
           {saving ? (
-            <ActivityIndicator size="small" color="#fff" />
+            <ActivityIndicator size="small" color={Colors.onPrimary} />
           ) : (
             <>
-              <Text style={styles.primaryButtonText}>Continue</Text>
-              <Ionicons name="arrow-forward" size={18} color="#fff" />
+              <Text style={notifStyles.enableBtnText}>Continue</Text>
+              <Ionicons name="arrow-forward" size={18} color={Colors.onPrimary} />
             </>
           )}
         </Pressable>
@@ -1025,6 +1045,8 @@ function NotificationsPage({ onNext, isActive }: { onNext: () => void; isActive:
 // ─── Done Page ────────────────────────────────────────────────────────────────
 
 function DonePage({ total }: { total: number }) {
+  const Colors = useThemeColors();
+  const pageStyles = useMemo(() => createPageStyles(Colors), [Colors]);
   return (
     <View style={pageStyles.page}>
       <ScrollView
@@ -1067,7 +1089,7 @@ function DonePage({ total }: { total: number }) {
 
 // ─── Styles ───────────────────────────────────────────────────────────────────
 
-const styles = StyleSheet.create({
+const createStyles = (Colors: ThemeColors) => StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: Colors.background,
@@ -1115,11 +1137,11 @@ const styles = StyleSheet.create({
   primaryButtonText: {
     fontSize: 17,
     fontFamily: "Nunito_700Bold",
-    color: "#fff",
+    color: Colors.onPrimary,
   },
 });
 
-const pageStyles = StyleSheet.create({
+const createPageStyles = (Colors: ThemeColors) => StyleSheet.create({
   page: {
     width: SCREEN_WIDTH,
     flex: 1,
@@ -1347,7 +1369,7 @@ const pageStyles = StyleSheet.create({
   },
 });
 
-const notifStyles = StyleSheet.create({
+const createNotifStyles = (Colors: ThemeColors) => StyleSheet.create({
   group: {
     marginTop: 28,
   },
@@ -1437,7 +1459,7 @@ const notifStyles = StyleSheet.create({
   enableBtnText: {
     fontSize: 15,
     fontFamily: "Nunito_600SemiBold",
-    color: "#fff",
+    color: Colors.onPrimary,
   },
   deniedBanner: {
     marginTop: 16,
@@ -1462,7 +1484,7 @@ const notifStyles = StyleSheet.create({
   },
 });
 
-const authStyles = StyleSheet.create({
+const createAuthStyles = (Colors: ThemeColors) => StyleSheet.create({
   scrollContent: {
     paddingHorizontal: 28,
     paddingTop: 16,
@@ -1530,7 +1552,7 @@ const authStyles = StyleSheet.create({
     color: Colors.textSecondary,
   },
   modeTabTextActive: {
-    color: "#fff",
+    color: Colors.onPrimary,
   },
   inputGroup: {
     marginBottom: 14,
@@ -1591,6 +1613,6 @@ const authStyles = StyleSheet.create({
   submitButtonText: {
     fontSize: 16,
     fontFamily: "Nunito_700Bold",
-    color: "#fff",
+    color: Colors.onPrimary,
   },
 });

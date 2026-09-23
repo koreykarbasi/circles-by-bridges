@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useEffect, useRef } from "react";
+import React, { useState, useCallback, useEffect, useRef, useMemo } from "react";
 import {
   View,
   Text,
@@ -13,6 +13,7 @@ import {
   ActivityIndicator,
   AppState,
   AppStateStatus,
+  Switch,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
@@ -24,7 +25,8 @@ import {
   setCachedNotifPermission,
   refreshNotifPermission,
 } from "@/lib/notification-permission";
-import Colors from "@/constants/colors";
+import type { ThemeColors } from "@/constants/colors";
+import { useTheme } from "@/lib/theme-context";
 import { useContacts } from "@/lib/contacts-context";
 import { useOnboarding } from "@/lib/onboarding-context";
 import { useAuth } from "@/lib/auth-context";
@@ -35,6 +37,10 @@ import { apiRequest } from "@/lib/query-client";
 import { scheduleSuggestionNudge, sendTestNotification } from "@/lib/reminder-notifications";
 
 export default function ProfileScreen() {
+  const { colors: Colors, mode, setMode } = useTheme();
+  const styles = useMemo(() => createStyles(Colors), [Colors]);
+  const pwStyles = useMemo(() => createPasswordStyles(Colors), [Colors]);
+  const profileNotifStyles = useMemo(() => createNotificationStyles(Colors), [Colors]);
   const insets = useSafeAreaInsets();
   const { contacts } = useContacts();
   const { resetOnboarding } = useOnboarding();
@@ -362,7 +368,7 @@ export default function ProfileScreen() {
                 <Ionicons name="person" size={40} color={Colors.primaryLight} />
               )}
               <View style={styles.cameraButton}>
-                <Ionicons name="camera" size={14} color="#fff" />
+                <Ionicons name="camera" size={14} color={Colors.onPrimary} />
               </View>
             </View>
           </Pressable>
@@ -374,11 +380,11 @@ export default function ProfileScreen() {
 
         <View style={styles.statsRow}>
           {([1, 2, 3] as const).map((level) => {
-            const cfg = CIRCLE_CONFIG[level];
+             const cfg = CIRCLE_CONFIG[level];
             const count = level === 1 ? circle1Count : level === 2 ? circle2Count : circle3Count;
             return (
               <View key={level} style={styles.statItem}>
-                <View style={[styles.statDot, { backgroundColor: cfg.color }]} />
+                 <View style={[styles.statDot, { backgroundColor: Colors[`circle${level}`] }]} />
                 <Text style={styles.statCount}>{count}</Text>
                 <Text style={styles.statLabel}>{cfg.label}</Text>
               </View>
@@ -520,6 +526,28 @@ export default function ProfileScreen() {
           </View>
         </View>
 
+        <View style={styles.section}>
+          <Text style={styles.sectionLabel}>Appearance</Text>
+          <View style={styles.menuItem}>
+            <View style={[styles.menuIcon, { backgroundColor: Colors.primaryMuted }]}>
+              <Ionicons name={mode === "dark" ? "moon-outline" : "sunny-outline"} size={20} color={Colors.primary} />
+            </View>
+            <View style={styles.menuContent}>
+              <Text style={styles.menuTitle}>Light mode</Text>
+              <Text style={styles.menuDesc}>Brighten the app with a softer purple palette</Text>
+            </View>
+            <Switch
+              value={mode === "light"}
+              onValueChange={(enabled) => setMode(enabled ? "light" : "dark")}
+              trackColor={{ false: Colors.border, true: Colors.primary }}
+              thumbColor={Colors.onPrimary}
+              accessibilityLabel="Light mode"
+              accessibilityHint="Switch between light and dark appearance"
+              testID="appearance-light-mode-switch"
+            />
+          </View>
+        </View>
+
         {user?.hasPassword !== false && (
           <View style={styles.section}>
             <Text style={styles.sectionLabel}>Security</Text>
@@ -601,7 +629,7 @@ export default function ProfileScreen() {
                 testID="profile-change-password-submit"
               >
                 {changePwSubmitting ? (
-                  <ActivityIndicator size="small" color="#fff" />
+                  <ActivityIndicator size="small" color={Colors.onPrimary} />
                 ) : (
                   <Text style={pwStyles.saveButtonText}>Update password</Text>
                 )}
@@ -645,7 +673,7 @@ export default function ProfileScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (Colors: ThemeColors) => StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: Colors.background,
@@ -792,7 +820,7 @@ const styles = StyleSheet.create({
   },
 });
 
-const pwStyles = StyleSheet.create({
+const createPasswordStyles = (Colors: ThemeColors) => StyleSheet.create({
   fieldGroup: {
     width: "100%",
     gap: 5,
@@ -831,19 +859,19 @@ const pwStyles = StyleSheet.create({
   saveButtonText: {
     fontSize: 14,
     fontFamily: "Nunito_700Bold",
-    color: "#fff",
+    color: Colors.onPrimary,
   },
   successBanner: {
     flexDirection: "row" as const,
     alignItems: "center",
     gap: 8,
-    backgroundColor: "rgba(74,222,128,0.1)",
+    backgroundColor: Colors.success + "18",
     borderRadius: 8,
     paddingHorizontal: 12,
     paddingVertical: 8,
     width: "100%",
     borderWidth: 1,
-    borderColor: "rgba(74,222,128,0.2)",
+    borderColor: Colors.success + "33",
   },
   successText: {
     fontSize: 13,
@@ -855,13 +883,13 @@ const pwStyles = StyleSheet.create({
     flexDirection: "row" as const,
     alignItems: "center",
     gap: 8,
-    backgroundColor: "rgba(255,71,87,0.1)",
+    backgroundColor: Colors.danger + "18",
     borderRadius: 8,
     paddingHorizontal: 12,
     paddingVertical: 8,
     width: "100%",
     borderWidth: 1,
-    borderColor: "rgba(255,71,87,0.2)",
+    borderColor: Colors.danger + "33",
   },
   errorText: {
     fontSize: 13,
@@ -871,7 +899,7 @@ const pwStyles = StyleSheet.create({
   },
 });
 
-const profileNotifStyles = StyleSheet.create({
+const createNotificationStyles = (Colors: ThemeColors) => StyleSheet.create({
   tilesGrid: {
     flexDirection: "row",
     flexWrap: "wrap" as const,

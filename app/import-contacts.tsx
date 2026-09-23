@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useMemo } from "react";
 import {
   View,
   Text,
@@ -12,13 +12,16 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { router, useLocalSearchParams } from "expo-router";
-import Colors from "@/constants/colors";
+import type { ThemeColors } from "@/constants/colors";
+import { useThemeColors } from "@/lib/theme-context";
 import { useContacts } from "@/lib/contacts-context";
 import { CIRCLE_CONFIG, AVATAR_COLORS } from "@/lib/types";
 import { ContactsImport, ImportedContact } from "@/components/ContactsImport";
 import * as Haptics from "expo-haptics";
 
 export default function ImportContactsScreen() {
+  const Colors = useThemeColors();
+  const styles = useMemo(() => createStyles(Colors), [Colors]);
   const insets = useSafeAreaInsets();
   const params = useLocalSearchParams<{ circle?: string }>();
   const initialCircle = params.circle ? (parseInt(params.circle) as 1 | 2 | 3) : 1;
@@ -116,6 +119,7 @@ export default function ImportContactsScreen() {
       <View style={styles.circleTabs}>
         {([1, 2, 3] as const).map((level) => {
           const cfg = CIRCLE_CONFIG[level];
+          const circleColor = level === 1 ? Colors.circle1 : level === 2 ? Colors.circle2 : Colors.circle3;
           const isActive = activeCircle === level;
           return (
             <Pressable
@@ -127,11 +131,11 @@ export default function ImportContactsScreen() {
               }}
               style={[
                 styles.circleTab,
-                isActive && { backgroundColor: cfg.color + "18", borderColor: cfg.color + "50" },
+                isActive && { backgroundColor: circleColor + "18", borderColor: circleColor + "50" },
               ]}
             >
-              <View style={[styles.tabDot, { backgroundColor: cfg.color }]} />
-              <Text style={[styles.tabLabel, isActive && { color: cfg.color }]} numberOfLines={1}>
+              <View style={[styles.tabDot, { backgroundColor: circleColor }]} />
+              <Text style={[styles.tabLabel, isActive && { color: circleColor }]} numberOfLines={1}>
                 {cfg.label}
               </Text>
             </Pressable>
@@ -170,7 +174,7 @@ export default function ImportContactsScreen() {
           ]}
         >
           {saving ? (
-            <ActivityIndicator color="#fff" size="small" />
+            <ActivityIndicator color={Colors.onPrimary} size="small" />
           ) : (
             <Text style={styles.importButtonText}>
               {selected.length === 0
@@ -186,7 +190,7 @@ export default function ImportContactsScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (Colors: ThemeColors) => StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: Colors.background,
@@ -268,6 +272,6 @@ const styles = StyleSheet.create({
   importButtonText: {
     fontSize: 16,
     fontFamily: "Nunito_700Bold",
-    color: "#fff",
+    color: Colors.onPrimary,
   },
 });

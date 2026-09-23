@@ -17,7 +17,8 @@ import {
   Nunito_800ExtraBold,
 } from "@expo-google-fonts/nunito";
 import { View, ActivityIndicator, Platform, AppState } from "react-native";
-import Colors from "@/constants/colors";
+import { StatusBar } from "expo-status-bar";
+import { ThemeProvider, useTheme } from "@/lib/theme-context";
 import * as Notifications from "expo-notifications";
 import Constants from "expo-constants";
 import { apiRequest } from "@/lib/query-client";
@@ -92,6 +93,7 @@ async function savePushToken(token: string) {
 }
 
 function RootLayoutNav() {
+  const { colors: Colors, mode, ready: themeReady } = useTheme();
   const { user, isCacheHydrated, isLoading: authIsLoading } = useAuth();
   const { hasCompletedOnboarding, isReplayRequested } = useOnboarding();
   const segments = useSegments();
@@ -180,16 +182,19 @@ function RootLayoutNav() {
     }
   }, [user?.id, hasCompletedOnboarding, isReplayRequested, isCacheHydrated]);
 
-  if (hasCompletedOnboarding === null || !isCacheHydrated) {
+  if (hasCompletedOnboarding === null || !isCacheHydrated || !themeReady) {
     return (
       <View style={{ flex: 1, backgroundColor: Colors.background, alignItems: "center", justifyContent: "center" }}>
+        <StatusBar style={mode === "dark" ? "light" : "dark"} backgroundColor={Colors.background} />
         <ActivityIndicator size="large" color={Colors.primary} />
       </View>
     );
   }
 
   return (
-    <Stack screenOptions={{ headerBackTitle: "Back" }}>
+    <>
+    <StatusBar style={mode === "dark" ? "light" : "dark"} backgroundColor={Colors.background} />
+    <Stack screenOptions={{ headerBackTitle: "Back", contentStyle: { backgroundColor: Colors.background } }}>
       <Stack.Screen name="onboarding" options={{ headerShown: false, gestureEnabled: false }} />
       <Stack.Screen name="auth" options={{ headerShown: false, gestureEnabled: false }} />
       <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
@@ -222,24 +227,19 @@ function RootLayoutNav() {
         options={{ headerShown: false, presentation: "modal" }}
       />
     </Stack>
+    </>
   );
 }
 
-export default function RootLayout() {
-  const [fontsLoaded] = useFonts({
-    Nunito_400Regular,
-    Nunito_600SemiBold,
-    Nunito_700Bold,
-    Nunito_800ExtraBold,
-  });
-
+function LoadedApp({ fontsLoaded }: { fontsLoaded: boolean }) {
+  const { ready } = useTheme();
   useEffect(() => {
-    if (fontsLoaded) {
+    if (fontsLoaded && ready) {
       SplashScreen.hideAsync();
     }
-  }, [fontsLoaded]);
+  }, [fontsLoaded, ready]);
 
-  if (!fontsLoaded) return null;
+  if (!fontsLoaded || !ready) return null;
 
   return (
     <ErrorBoundary>
@@ -257,5 +257,20 @@ export default function RootLayout() {
         </AuthProvider>
       </QueryClientProvider>
     </ErrorBoundary>
+  );
+}
+
+export default function RootLayout() {
+  const [fontsLoaded] = useFonts({
+    Nunito_400Regular,
+    Nunito_600SemiBold,
+    Nunito_700Bold,
+    Nunito_800ExtraBold,
+  });
+
+  return (
+    <ThemeProvider>
+      <LoadedApp fontsLoaded={fontsLoaded} />
+    </ThemeProvider>
   );
 }

@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from "react";
+import React, { useState, useCallback, useMemo } from "react";
 import {
   View,
   Text,
@@ -13,7 +13,8 @@ import {
 import * as Contacts from "expo-contacts";
 import { Ionicons } from "@expo/vector-icons";
 import { Avatar } from "./Avatar";
-import Colors from "@/constants/colors";
+import type { ThemeColors } from "@/constants/colors";
+import { useThemeColors } from "@/lib/theme-context";
 import { AVATAR_COLORS } from "@/lib/types";
 import * as Haptics from "expo-haptics";
 
@@ -86,6 +87,8 @@ export function ContactsImport({
   onDeselect,
   maxSelections,
 }: ContactsImportProps) {
+  const Colors = useThemeColors();
+  const styles = useMemo(() => createStyles(Colors), [Colors]);
   const [permState, setPermState] = useState<PermissionState>("idle");
   const [deviceContacts, setDeviceContacts] = useState<DeviceContact[]>([]);
   const [search, setSearch] = useState("");
@@ -181,7 +184,7 @@ export function ContactsImport({
             pressed && { opacity: 0.7 },
           ]}
         >
-          <Ionicons name="add" size={22} color="#fff" />
+          <Ionicons name="add" size={22} color={Colors.onPrimary} />
         </Pressable>
       </View>
     </View>
@@ -308,7 +311,7 @@ export function ContactsImport({
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (Colors: ThemeColors) => StyleSheet.create({
   container: {
     flex: 1,
   },
@@ -368,7 +371,7 @@ const styles = StyleSheet.create({
   settingsBtnText: {
     fontSize: 14,
     fontFamily: "Nunito_600SemiBold",
-    color: "#fff",
+    color: Colors.onPrimary,
   },
   manualEntry: {
     marginTop: 4,
