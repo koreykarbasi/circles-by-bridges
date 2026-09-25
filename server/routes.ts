@@ -5,6 +5,7 @@ import bcrypt from "bcryptjs";
 import session from "express-session";
 import connectPgSimple from "connect-pg-simple";
 import rateLimit from "express-rate-limit";
+import crypto from "crypto";
 import { pool } from "./db";
 import { getPrompts, syncFromSheet } from "./prompts-sync";
 import {

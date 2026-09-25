@@ -803,6 +803,9 @@ const createStyles = (Colors: ThemeColors) => StyleSheet.create({
     borderWidth: 1, borderColor: Colors.primary + "25",
     borderRadius: 14, padding: 14, marginBottom: 20,
   },
+  inviteesTitle: {
+    fontSize: 14, fontFamily: "Nunito_700Bold", color: Colors.text, marginBottom: 4,
+  },
   progressHint: {
     flexDirection: "row", alignItems: "center", gap: 7,
     backgroundColor: Colors.success + "10", borderRadius: 10,
