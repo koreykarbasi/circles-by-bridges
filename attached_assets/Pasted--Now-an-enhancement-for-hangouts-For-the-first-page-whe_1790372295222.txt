@@ -1,0 +1,34 @@
+     - Now an enhancement for hangouts. For the first page where you name your hangout and add a description for it, under those fields you can fill (see screenshot for location), add a bunch of preset options you can choose like “Bowling🎳” “My Birthday 🎂 ” “BBQ 🍗” and a few other creative hangout options so like a hangout where you do a little presentation “Prezzy hangout” where a bunch of us get together and do presentations about something we’re passionate about not work related. no PPT required. This explanation or a better one should automatically populate the description section when you select the preset. or “cocktail party” where everyone brings ingredients and make coctails together. find a bunch of these and make these hangout suggestions appear in the new hangout window as buttons. kinda like the label or interest buttons in the edit contacts page. when you press these hangouts suggestion buttons, your name and description fields for the hangout fills out automatically for the hangout you’re creating. Then you can press next to set a voting limit and chose dates for your survey as usual. 
+
+Here are ideas from Claude: 
+🎳 Bowling Night
+"Let's hit the lanes! Casual bowling, no skill required — just good vibes and questionable scores."
+🎂 My Birthday
+"Come celebrate with me! Details on time and place to follow — just bring yourself."
+🍗 Backyard BBQ
+"Grilling, good food, and good company. Bring a side or drink if you'd like!"
+🎤 Prezzy Hangout
+"Everyone brings a 5-minute presentation about something they're passionate about — no work talk, no PowerPoint required. Just show up ready to nerd out about whatever you love."
+🍸 Cocktail Night
+"Everyone brings an ingredient or a bottle, and we make cocktails together. Come with a recipe idea or just your taste buds."
+🎲 Game Night
+"Board games, card games, maybe some trash talk. Bring a favorite game if you have one."
+🥾 Hike & Picnic
+"A scenic hike followed by a picnic at the top (or somewhere pretty). Bring snacks and water."
+🎨 Paint & Chat
+"Casual painting session, zero pressure on talent. Bring a canvas if you have one, or we'll figure it out."
+📽️ Movie Marathon
+"Cozy up for a few movies back to back. Suggest a theme or just bring snacks."
+☕ Coffee & Catch-up
+"Nothing fancy — just coffee and real conversation. Let's actually catch up."
+🍕 Pizza & Trivia
+"Pizza, drinks, and a trivia night. Bragging rights on the line."
+🎧 Vinyl & Vibes
+"Bring a record or a playlist you love and tell us why. Casual listening party."
+🍜 Potluck Night
+"Everyone brings a dish — bonus points for something you've never made before."
+🌅 Sunrise/Sunset Walk
+"A relaxed walk to catch the sunrise or sunset together. Bring a coffee or a snack."
+🎯 Mini Golf / Arcade
+"Some friendly competition, low stakes, high fun."
+

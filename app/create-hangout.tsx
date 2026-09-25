@@ -14,6 +14,7 @@ import { Avatar } from "@/components/Avatar";
 import { DateWheelPicker } from "@/components/DateWheelPicker";
 import { useSequentialHints, HINT_TEXT } from "@/lib/hints-store";
 import { HintTooltip } from "@/components/HintTooltip";
+import { HANGOUT_PRESETS, type HangoutPreset } from "@/lib/hangout-presets";
 
 type SurveyMode = "standard" | "fixed-activity";
 
@@ -44,6 +45,14 @@ export default function CreateHangoutScreen() {
   // Step 1
   const [title, setTitle] = useState(prefillTitle ?? "");
   const [description, setDescription] = useState("");
+  const [selectedPreset, setSelectedPreset] = useState<string | null>(null);
+
+  const applyPreset = (preset: HangoutPreset) => {
+    Haptics.selectionAsync();
+    setTitle(preset.title);
+    setDescription(preset.description);
+    setSelectedPreset(preset.title);
+  };
 
   // Step 2
   const [selectedContacts, setSelectedContacts] = useState<Set<string>>(new Set());
@@ -243,7 +252,7 @@ export default function CreateHangoutScreen() {
         <TextInput
           style={styles.textInput}
           value={title}
-          onChangeText={setTitle}
+          onChangeText={(value) => { setTitle(value); setSelectedPreset(null); }}
           placeholder="Saturday brunch, birthday party..."
           placeholderTextColor={Colors.textTertiary}
         />
@@ -254,12 +263,37 @@ export default function CreateHangoutScreen() {
         <TextInput
           style={[styles.textInput, styles.textArea]}
           value={description}
-          onChangeText={setDescription}
+          onChangeText={(value) => { setDescription(value); setSelectedPreset(null); }}
           placeholder="Any extra details..."
           placeholderTextColor={Colors.textTertiary}
           multiline
           numberOfLines={3}
         />
+      </View>
+
+      <View style={styles.presetsSection}>
+        <Text style={styles.presetsTitle}>Need an idea?</Text>
+        <Text style={styles.presetsHint}>Pick a hangout to fill in the title and description. You can edit both afterwards.</Text>
+        <View style={styles.presetChips}>
+          {HANGOUT_PRESETS.map((preset) => {
+            const selected = selectedPreset === preset.title;
+            return (
+              <Pressable
+                key={preset.title}
+                onPress={() => applyPreset(preset)}
+                accessibilityRole="button"
+                accessibilityState={{ selected }}
+                style={({ pressed }) => [
+                  styles.presetChip,
+                  selected && styles.presetChipSelected,
+                  pressed && { opacity: 0.75 },
+                ]}
+              >
+                <Text style={[styles.presetChipText, selected && styles.presetChipTextSelected]}>{preset.title}</Text>
+              </Pressable>
+            );
+          })}
+        </View>
       </View>
 
       <View style={styles.bottomActions}>
@@ -660,6 +694,20 @@ const createStyles = (Colors: ThemeColors) => StyleSheet.create({
     fontSize: 15, fontFamily: "Nunito_400Regular", color: Colors.text,
   },
   textArea: { minHeight: 80, textAlignVertical: "top" },
+  presetsSection: { marginTop: 4, marginBottom: 18 },
+  presetsTitle: { fontSize: 16, fontFamily: "Nunito_700Bold", color: Colors.text, marginBottom: 4 },
+  presetsHint: {
+    fontSize: 13, fontFamily: "Nunito_400Regular", color: Colors.textSecondary,
+    lineHeight: 18, marginBottom: 12,
+  },
+  presetChips: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
+  presetChip: {
+    backgroundColor: Colors.surface, borderWidth: 1, borderColor: Colors.border,
+    borderRadius: 20, paddingVertical: 9, paddingHorizontal: 12,
+  },
+  presetChipSelected: { borderColor: Colors.primary, backgroundColor: Colors.primary + "20" },
+  presetChipText: { fontSize: 13, fontFamily: "Nunito_600SemiBold", color: Colors.text },
+  presetChipTextSelected: { color: Colors.primaryLight },
   sectionCard: {
     backgroundColor: Colors.surface, borderRadius: 16, padding: 16,
     marginBottom: 16, borderWidth: 1, borderColor: Colors.border,
