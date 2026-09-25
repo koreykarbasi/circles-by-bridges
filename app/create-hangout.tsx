@@ -130,7 +130,7 @@ export default function CreateHangoutScreen() {
   const canProceedStep1 = title.trim().length > 0;
   const parsedVoteLimit = Number(voteLimitInput);
   const canProceedStep2 = !limitVoting ||
-    (/^[1-9]\d*$/.test(voteLimitInput) && Number.isSafeInteger(parsedVoteLimit) && parsedVoteLimit <= 10000);
+    (/^[1-9]\d*$/.test(voteLimitInput) && Number.isSafeInteger(parsedVoteLimit) && parsedVoteLimit <= 100);
   const canSubmit = (() => {
     const hasTime = timeOptions.length > 0;
     if (surveyMode === "standard") {
@@ -342,7 +342,7 @@ export default function CreateHangoutScreen() {
         </View>
         {limitVoting && (
           <View style={styles.inputGroup}>
-            <Text style={styles.inputLabel}>Maximum voters (1–10,000)</Text>
+            <Text style={styles.inputLabel}>Maximum voters (1–100)</Text>
             <TextInput
               style={styles.textInput}
               value={voteLimitInput}
@@ -353,7 +353,7 @@ export default function CreateHangoutScreen() {
               accessibilityLabel="Maximum number of voters"
             />
             {!canProceedStep2 && voteLimitInput.length > 0 &&
-              <Text style={styles.limitError}>Enter a whole number from 1 to 10,000.</Text>}
+              <Text style={styles.limitError}>Enter a whole number from 1 to 100.</Text>}
           </View>
         )}
       </View>

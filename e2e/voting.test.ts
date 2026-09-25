@@ -230,6 +230,42 @@ test("creator can make a survey without selecting friends or setting a limit", a
   }
 });
 
+test("creator can set 100 voters but cannot set more on creation or update", async ({ request }) => {
+  const cookie = await createTestSessionCookie(await getDemoUserId());
+  const headers = { Cookie: `connect.sid=${encodeURIComponent(cookie)}` };
+  let createdId: string | undefined;
+  const data = {
+    title: "Voter limit boundary test",
+    inviteeNames: [],
+    surveyMode: "standard",
+    options: [
+      { label: "Walk", questionType: "activity" },
+      { label: "Tomorrow", questionType: "time" },
+    ],
+  };
+  try {
+    const tooMany = await request.post("/api/hangouts", { headers, data: { ...data, voteLimit: 101 } });
+    expect(tooMany.status()).toBe(400);
+    expect((await tooMany.json()).message).toContain("1 and 100");
+
+    const created = await request.post("/api/hangouts", { headers, data: { ...data, voteLimit: 100 } });
+    expect(created.status(), await created.text()).toBe(201);
+    const plan = await created.json();
+    createdId = plan.id;
+    expect(plan.voteLimit).toBe(100);
+
+    const rejectedUpdate = await request.put(`/api/hangouts/${createdId}`, { headers, data: { voteLimit: 101 } });
+    expect(rejectedUpdate.status()).toBe(400);
+    expect((await rejectedUpdate.json()).message).toContain("1 and 100");
+  } finally {
+    if (createdId) {
+      await query("DELETE FROM hangout_options WHERE plan_id = $1", [createdId]);
+      await query("DELETE FROM hangout_plans WHERE id = $1", [createdId]);
+    }
+    await deleteTestSession(cookie);
+  }
+});
+
 test("X rejects activity and date, submits null ranks and compacts the remaining ranks", async ({ page }) => {
   await page.route(`**/api/vote/${shareCode}`, (route) => route.continue({
     headers: { ...route.request().headers(), "x-forwarded-for": "198.51.100.56" },

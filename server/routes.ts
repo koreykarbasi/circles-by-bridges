@@ -1532,8 +1532,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return bad(res, "Invitees must be an array of names");
       }
       if (voteLimit !== undefined && voteLimit !== null &&
-          (typeof voteLimit !== "number" || !Number.isSafeInteger(voteLimit) || voteLimit < 1 || voteLimit > 10000)) {
-        return bad(res, "Voting limit must be a whole number between 1 and 10000");
+          (typeof voteLimit !== "number" || !Number.isSafeInteger(voteLimit) || voteLimit < 1 || voteLimit > 100)) {
+        return bad(res, "Voting limit must be a whole number between 1 and 100");
       }
       if (!Array.isArray(options) || !options.some((o) => o.questionType === "time")) {
         return bad(res, "At least one time option is required");
@@ -1606,8 +1606,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return bad(res, "inviteeNames must be an array");
       }
       if (voteLimit !== undefined && voteLimit !== null &&
-          (typeof voteLimit !== "number" || !Number.isSafeInteger(voteLimit) || voteLimit < 1 || voteLimit > 10000)) {
-        return bad(res, "Voting limit must be a whole number between 1 and 10000");
+          (typeof voteLimit !== "number" || !Number.isSafeInteger(voteLimit) || voteLimit < 1 || voteLimit > 100)) {
+        return bad(res, "Voting limit must be a whole number between 1 and 100");
       }
       const updateData: any = {};
       if (title !== undefined) updateData.title = title.trim();
