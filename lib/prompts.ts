@@ -1,4 +1,12 @@
 import { getApiUrl } from "@/lib/query-client";
+import {
+  chooseAllowedAction,
+  inferAllowedActions,
+  type ActionType,
+} from "@/lib/prompt-actions";
+
+export { inferAllowedActions };
+export type { ActionType };
 
 interface SyncedPromptsData {
   circle1Call: string[];
@@ -15,6 +23,7 @@ interface SyncedPromptsData {
   overdue: string[];
   labelPrompts: Record<string, string[]>;
   interestPrompts: Record<string, string[]>;
+  promptActions?: Record<string, ActionType[]>;
   lastSynced: string | null;
 }
 
@@ -29,6 +38,8 @@ export async function loadSyncedPrompts(): Promise<void> {
       const resp = await fetch(url.toString(), { credentials: "include" });
       if (resp.ok) {
         syncedData = await resp.json();
+        taggedPromptCache.clear();
+        hydrateSyncedActionCache();
       }
     } catch (e) {
       console.log("Failed to load synced prompts, using hardcoded fallback");
@@ -377,14 +388,60 @@ const LABEL_PROMPTS: Record<string, string[]> = {
   ],
 };
 
-type ActionType = "call" | "text" | "hangout";
-
 interface TaggedPrompt {
   text: string;
   actionType: ActionType;
 }
 
-const taggedPromptCache = new Map<string, ActionType>();
+const taggedPromptCache = new Map<string, ActionType[]>();
+
+function getExplicitAllowedActions(prompt: string): ActionType[] | undefined {
+  const actions = syncedData?.promptActions;
+  if (!actions) return undefined;
+  if (actions[prompt]?.length) return actions[prompt];
+
+  for (const [template, allowed] of Object.entries(actions)) {
+    if (!template.includes("[Name]") || allowed.length === 0) continue;
+    const pattern = template
+      .replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
+      .replace("\\[Name\\]", ".+?");
+    if (new RegExp(`^${pattern}$`, "i").test(prompt)) return allowed;
+  }
+  return undefined;
+}
+
+function findRegisteredActions(prompt: string): ActionType[] | undefined {
+  const exact = taggedPromptCache.get(prompt);
+  if (exact) return exact;
+  for (const [template, allowed] of taggedPromptCache) {
+    if (!template.includes("[Name]")) continue;
+    const pattern = template
+      .replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
+      .replace("\\[Name\\]", ".+?");
+    if (new RegExp(`^${pattern}$`, "i").test(prompt)) return allowed;
+  }
+  return undefined;
+}
+
+function hydrateSyncedActionCache() {
+  if (!syncedData) return;
+  const fixed: Array<[keyof SyncedPromptsData, ActionType]> = [
+    ["circle1Call", "call"], ["circle1Text", "text"], ["circle1Hangout", "hangout"],
+    ["circle2Call", "call"], ["circle2Text", "text"], ["circle2Hangout", "hangout"],
+    ["circle3Call", "call"], ["circle3Text", "text"], ["circle3Hangout", "hangout"],
+    ["universal", "text"], ["birthday", "text"], ["overdue", "text"],
+  ];
+  for (const [key, action] of fixed) {
+    const prompts = syncedData[key];
+    if (Array.isArray(prompts)) prompts.forEach((prompt) => taggedPromptCache.set(prompt, [action]));
+  }
+}
+
+function registerPromptActions(template: string, personalized: string, fallback?: ActionType[]) {
+  const allowed = getExplicitAllowedActions(template) ?? fallback ?? inferAllowedActions(template);
+  taggedPromptCache.set(template, allowed);
+  taggedPromptCache.set(personalized, allowed);
+}
 
 function buildTaggedPrompts(
   circleLevel: 1 | 2 | 3,
@@ -407,7 +464,7 @@ function buildTaggedPrompts(
       hangoutPrompts = getSyncedList("circle2Hangout", CIRCLE_2_HANGOUT_PROMPTS);
       break;
     case 3:
-      callPrompts = [];
+      callPrompts = getSyncedList("circle3Call", CIRCLE_3_CALL_PROMPTS);
       textPrompts = getSyncedList("circle3Text", CIRCLE_3_TEXT_PROMPTS);
       hangoutPrompts = getSyncedList("circle3Hangout", CIRCLE_3_HANGOUT_PROMPTS);
       break;
@@ -415,15 +472,15 @@ function buildTaggedPrompts(
 
   callPrompts.forEach((p) => {
     tagged.push({ text: p, actionType: "call" });
-    taggedPromptCache.set(p, "call");
+    taggedPromptCache.set(p, ["call"]);
   });
   textPrompts.forEach((p) => {
     tagged.push({ text: p, actionType: "text" });
-    taggedPromptCache.set(p, "text");
+    taggedPromptCache.set(p, ["text"]);
   });
   hangoutPrompts.forEach((p) => {
     tagged.push({ text: p, actionType: "hangout" });
-    taggedPromptCache.set(p, "hangout");
+    taggedPromptCache.set(p, ["hangout"]);
   });
 
   return tagged;
@@ -488,18 +545,18 @@ export function getPromptsForContact(
 
   const universalList = getSyncedList("universal", UNIVERSAL_PROMPTS);
   allPrompts.push(...universalList);
-  universalList.forEach((p) => taggedPromptCache.set(p, "text"));
+  universalList.forEach((p) => taggedPromptCache.set(p, ["text"]));
 
   if (options?.isOverdue) {
     const overdueList = getSyncedList("overdue", OVERDUE_PROMPTS);
     allPrompts.push(...overdueList);
-    overdueList.forEach((p) => taggedPromptCache.set(p, "text"));
+    overdueList.forEach((p) => taggedPromptCache.set(p, ["text"]));
   }
 
   if (options?.hasBirthdaySoon) {
     const birthdayList = getSyncedList("birthday", BIRTHDAY_PROMPTS);
     allPrompts.push(...birthdayList);
-    birthdayList.forEach((p) => taggedPromptCache.set(p, "text"));
+    birthdayList.forEach((p) => taggedPromptCache.set(p, ["text"]));
   }
 
   const activeInterestPrompts = getSyncedRecord("interestPrompts", INTEREST_PROMPTS);
@@ -509,14 +566,7 @@ export function getPromptsForContact(
     if (activeInterestPrompts[key]) {
       activeInterestPrompts[key].forEach((p) => {
         interestPrompts.push(p);
-        if (!taggedPromptCache.has(p)) {
-          const lower = p.toLowerCase();
-          if (lower.includes("together") || lower.includes("invite") || lower.includes("suggest") || lower.includes("plan") || lower.includes("potluck") || lower.includes("concert") || lower.includes("game night") || lower.includes("hike") || lower.includes("trip") || lower.includes("club")) {
-            taggedPromptCache.set(p, "hangout");
-          } else {
-            taggedPromptCache.set(p, "text");
-          }
-        }
+        registerPromptActions(p, p);
       });
     }
   });
@@ -528,29 +578,20 @@ export function getPromptsForContact(
       if (activeLabelPrompts[key]) {
         activeLabelPrompts[key].forEach((p) => {
           allPrompts.push(p);
-          if (!taggedPromptCache.has(p)) {
-            const lower = p.toLowerCase();
-            if (
-              lower.includes("hangout") || lower.includes("invite") || lower.includes("dinner") ||
-              lower.includes("outing") || lower.includes("trip") || lower.includes("collaboration") ||
-              lower.includes("class") || lower.includes("lunch") || lower.includes("coffee break") ||
-              lower.includes("make a plan") || lower.includes("same city") || lower.includes("visit") ||
-              lower.includes("calendar") || lower.includes("put a date")
-            ) {
-              taggedPromptCache.set(p, "hangout");
-            } else if (lower.includes("call") || lower.includes("voice") || lower.includes("facetime") || lower.includes("video call")) {
-              taggedPromptCache.set(p, "call");
-            } else {
-              taggedPromptCache.set(p, "text");
-            }
-          }
+          registerPromptActions(p, p.replace(/\[Name\]/g, name));
         });
       }
     });
   }
 
   const combined = [...allPrompts, ...interestPrompts];
-  return combined.map((p) => p.replace(/\[Name\]/g, name));
+  return combined.map((p) => {
+    const personalized = p.replace(/\[Name\]/g, name);
+    if (!taggedPromptCache.has(personalized)) {
+      registerPromptActions(p, personalized, taggedPromptCache.get(p));
+    }
+    return personalized;
+  });
 }
 
 export function getSmartPrompt(
@@ -618,32 +659,9 @@ export function getRandomPrompt(
   return prompts[Math.floor(Math.random() * prompts.length)];
 }
 
-export function getActionType(circleLevel: 1 | 2 | 3, prompt: string): "call" | "text" | "hangout" {
-  const originalPrompt = prompt.replace(/\b[A-Z][a-z]+(?:\s[A-Z][a-z]+)*\b/g, "[Name]");
-
-  const cached = taggedPromptCache.get(prompt) || taggedPromptCache.get(originalPrompt);
-  if (cached) {
-    return cached;
-  }
-
-  const lower = prompt.toLowerCase();
-
-  if (lower.includes("voice note") || lower.includes("phone call") || lower.includes("call") || lower.includes("facetime") || lower.includes("video call")) {
-    return "call";
-  }
-  if (
-    lower.includes("hangout") || lower.includes("hang out") ||
-    lower.includes("plan") ||
-    lower.includes("invite") || lower.includes("date") ||
-    lower.includes("trip") || lower.includes("concert") ||
-    lower.includes("game night") || lower.includes("hike") ||
-    lower.includes("potluck") || lower.includes("watch") ||
-    lower.includes("dinner") || lower.includes("outing") ||
-    lower.includes("lunch") || lower.includes("coffee break")
-  ) {
-    return "hangout";
-  }
-  return "text";
+export function getActionType(circleLevel: 1 | 2 | 3, prompt: string, contactId = ""): ActionType {
+  const allowed = findRegisteredActions(prompt) ?? getExplicitAllowedActions(prompt) ?? inferAllowedActions(prompt);
+  return chooseAllowedAction(allowed, circleLevel, prompt, contactId);
 }
 
 export const AVAILABLE_INTERESTS = [

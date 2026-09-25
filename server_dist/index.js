@@ -484,6 +484,30 @@ var TAB_NAMES = [
   "Label Prompts",
   "Interest Prompts"
 ];
+var MEMORY_PROMPT_PATTERN = /\b(reminisce|memory|memories|remember|throwback)\b/i;
+function inferAllowedActions(prompt) {
+  const lower = prompt.toLowerCase();
+  if (lower.startsWith("recreate an early date") || lower.includes("neighborhood walk") || lower.includes("new class or gym together")) {
+    return ["hangout"];
+  }
+  if (MEMORY_PROMPT_PATTERN.test(prompt)) return ["text", "call"];
+  if (lower.includes("voice note") || lower.includes("phone call") || lower.includes("call ") || lower.includes("facetime") || lower.includes("video call")) {
+    return ["call"];
+  }
+  if (lower.includes("hangout") || lower.includes("hang out") || lower.includes("invite") || lower.includes("date with") || lower.includes("concert") || lower.includes("game night") || lower.includes("hike") || lower.includes("potluck") || lower.includes("watch a game together") || lower.includes("dinner") || lower.includes("outing") || lower.includes("coffee break") || lower.includes("work out together") || lower.includes("cooking date") || lower.includes("mini book club") || lower.includes("camping") || lower.includes("nature trip") || lower.includes("creative collaboration") || lower.includes("same city") || lower.includes("trip to visit") || lower.startsWith("plan a ") || lower.startsWith("start planning ")) {
+    return ["hangout"];
+  }
+  return ["text", "call"];
+}
+function buildDefaultPromptActions(prompts) {
+  const result = {};
+  for (const group of [prompts.labelPrompts, prompts.interestPrompts]) {
+    for (const list of Object.values(group)) {
+      for (const prompt of list) result[prompt] = inferAllowedActions(prompt);
+    }
+  }
+  return result;
+}
 function ensureDataDir() {
   const dataDir = path.resolve(process.cwd(), "data");
   if (!fs.existsSync(dataDir)) {
@@ -718,6 +742,20 @@ var HARDCODED_PROMPTS = {
       "Suggest an easy group hangout and invite [Name] along.",
       "Share a small win or funny moment from your week with [Name]."
     ],
+    partner: [
+      "Tell [Name] one specific thing you love about the life you're building together.",
+      "Plan a date with [Name] around something you both enjoy.",
+      "Recreate an early date or favorite memory with [Name].",
+      "Send [Name] a message about a small moment when you felt especially close to them.",
+      "Ask [Name] what has made them feel most loved lately.",
+      "Share your favorite recent memory with [Name] and ask for theirs.",
+      "Plan a phone-free evening with [Name] focused on quality time.",
+      "Surprise [Name] with a small gesture that shows you notice the details.",
+      "Ask [Name] what they're most excited to experience together next.",
+      "Thank [Name] for an everyday thing they do that you never want to take for granted.",
+      "Make [Name] a short playlist or photo collection that tells part of your story.",
+      "Ask [Name] how you can support them better this week."
+    ],
     "international friend": [
       "Ask [Name] when they started feeling at home in their new city.",
       "Ask [Name] if there's something they miss about home that surprised them.",
@@ -787,15 +825,24 @@ var HARDCODED_PROMPTS = {
       "Plan a camping or nature trip together"
     ]
   },
+  promptActions: {},
   lastSynced: null
 };
+HARDCODED_PROMPTS.promptActions = buildDefaultPromptActions(HARDCODED_PROMPTS);
 var currentPrompts = { ...HARDCODED_PROMPTS };
 var syncTimer = null;
 function getPrompts() {
   return currentPrompts;
 }
 function mergePrompts(base, sheet) {
-  const merged = { ...base };
+  const merged = {
+    ...base,
+    promptActions: {
+      ...buildDefaultPromptActions(base),
+      ...base.promptActions || {},
+      ...sheet.promptActions || {}
+    }
+  };
   const simpleKeys = [
     "circle1Call",
     "circle1Text",
@@ -866,7 +913,7 @@ async function readSheetTab(sheets, spreadsheetId, tabName) {
   try {
     const response = await sheets.spreadsheets.values.get({
       spreadsheetId,
-      range: `'${tabName}'!A:B`
+      range: `'${tabName}'!A:C`
     });
     return { rows: response.data.values || [], success: true };
   } catch (e) {
@@ -877,17 +924,23 @@ async function readSheetTab(sheets, spreadsheetId, tabName) {
 function parseSimpleTab(rows) {
   return rows.slice(1).map((row) => row[0]?.trim()).filter(Boolean);
 }
+function parseAllowedActions(value, prompt) {
+  const parsed = (value || "").split(",").map((item) => item.trim().toLowerCase()).filter((item) => item === "text" || item === "call" || item === "hangout");
+  return parsed.length > 0 ? [...new Set(parsed)] : inferAllowedActions(prompt);
+}
 function parseKeyedTab(rows) {
-  const result = {};
+  const prompts = {};
+  const actions = {};
   for (const row of rows.slice(1)) {
     const key = row[0]?.trim().toLowerCase();
     const prompt = row[1]?.trim();
     if (key && prompt) {
-      if (!result[key]) result[key] = [];
-      result[key].push(prompt);
+      if (!prompts[key]) prompts[key] = [];
+      prompts[key].push(prompt);
+      actions[prompt] = parseAllowedActions(row[2], prompt);
     }
   }
-  return result;
+  return { prompts, actions };
 }
 async function readAllFromSheet(spreadsheetId) {
   const sheets = await getUncachableGoogleSheetClient();
@@ -917,13 +970,17 @@ async function readAllFromSheet(spreadsheetId) {
   }
   const labelResult = await readSheetTab(sheets, spreadsheetId, "Label Prompts");
   if (labelResult.success) {
-    data.labelPrompts = parseKeyedTab(labelResult.rows);
+    const parsed = parseKeyedTab(labelResult.rows);
+    data.labelPrompts = parsed.prompts;
+    data.promptActions = { ...data.promptActions || {}, ...parsed.actions };
   } else {
     failedTabs.push("Label Prompts");
   }
   const interestResult = await readSheetTab(sheets, spreadsheetId, "Interest Prompts");
   if (interestResult.success) {
-    data.interestPrompts = parseKeyedTab(interestResult.rows);
+    const parsed = parseKeyedTab(interestResult.rows);
+    data.interestPrompts = parsed.prompts;
+    data.promptActions = { ...data.promptActions || {}, ...parsed.actions };
   } else {
     failedTabs.push("Interest Prompts");
   }
@@ -968,20 +1025,20 @@ async function createSpreadsheetWithPrompts() {
       values: [["Prompt"], ...prompts.map((p) => [p])]
     });
   }
-  const labelRows = [["Label", "Prompt"]];
+  const labelRows = [["Label", "Prompt", "Allowed Actions"]];
   for (const [label, prompts] of Object.entries(base.labelPrompts)) {
     for (const prompt of prompts) {
-      labelRows.push([label, prompt]);
+      labelRows.push([label, prompt, base.promptActions[prompt].join(", ")]);
     }
   }
   batchData.push({
     range: `'Label Prompts'!A1`,
     values: labelRows
   });
-  const interestRows = [["Interest", "Prompt"]];
+  const interestRows = [["Interest", "Prompt", "Allowed Actions"]];
   for (const [interest, prompts] of Object.entries(base.interestPrompts)) {
     for (const prompt of prompts) {
-      interestRows.push([interest, prompt]);
+      interestRows.push([interest, prompt, base.promptActions[prompt].join(", ")]);
     }
   }
   batchData.push({
@@ -1061,7 +1118,13 @@ async function initPromptSync() {
   ensureDataDir();
   const cached = getCachedPrompts();
   if (cached) {
-    currentPrompts = cached;
+    currentPrompts = {
+      ...cached,
+      promptActions: {
+        ...buildDefaultPromptActions(cached),
+        ...cached.promptActions || {}
+      }
+    };
     console.log(`[prompts-sync] Loaded ${countTotalPrompts(cached)} cached prompts (last synced: ${cached.lastSynced})`);
   }
   try {

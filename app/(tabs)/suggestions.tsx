@@ -68,8 +68,7 @@ function buildSuggestion(contact: Contact): GeneratedSuggestion {
     { isOverdue: urgency === "overdue", hasBirthdaySoon, labels: contact.labels },
   );
 
-  let type = getActionType(contact.circleLevel as 1 | 2 | 3, prompt);
-  if (contact.circleLevel === 3 && type === "call") type = "text";
+  let type = getActionType(contact.circleLevel as 1 | 2 | 3, prompt, contact.id);
   // DISABLED: hangout tracking — lastHangout gate removed so hangout suggestions appear freely
   // if (type === "hangout") {
   //   const daysSinceHangout = getDaysSince(contact.lastHangout ?? undefined);
@@ -323,8 +322,7 @@ export default function SuggestionsScreen() {
               const urgency = getContactUrgency(contact.circleLevel as 1 | 2 | 3, contact.lastContacted ?? undefined);
               const bday = getDaysUntilBirthday(contact.birthday ?? undefined);
               const hasBirthdaySoon = bday !== null && bday <= 14;
-              let type = getActionType(contact.circleLevel as 1 | 2 | 3, cachedPromptText);
-              if (contact.circleLevel === 3 && type === "call") type = "text";
+              const type = getActionType(contact.circleLevel as 1 | 2 | 3, cachedPromptText, contact.id);
               updated[contact.id] = {
                 contact,
                 prompt: cachedPromptText,
@@ -382,8 +380,7 @@ export default function SuggestionsScreen() {
       { isOverdue: urgency === "overdue", hasBirthdaySoon, labels: contact.labels },
     );
 
-    let type = getActionType(contact.circleLevel as 1 | 2 | 3, newPrompt);
-    if (contact.circleLevel === 3 && type === "call") type = "text";
+    const type = getActionType(contact.circleLevel as 1 | 2 | 3, newPrompt, contact.id);
     const birthdayLabel = formatBirthdayCountdown(contact.birthday ?? undefined);
     const lastContactedLabel = formatLastContacted(contact.lastContacted ?? undefined);
 

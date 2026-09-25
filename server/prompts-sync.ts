@@ -25,6 +25,8 @@ const TAB_NAMES = [
   "Interest Prompts",
 ];
 
+type ActionType = "call" | "text" | "hangout";
+
 export interface SyncedPrompts {
   circle1Call: string[];
   circle1Text: string[];
@@ -40,7 +42,51 @@ export interface SyncedPrompts {
   overdue: string[];
   labelPrompts: Record<string, string[]>;
   interestPrompts: Record<string, string[]>;
+  promptActions: Record<string, ActionType[]>;
   lastSynced: string | null;
+}
+
+const MEMORY_PROMPT_PATTERN = /\b(reminisce|memory|memories|remember|throwback)\b/i;
+
+function inferAllowedActions(prompt: string): ActionType[] {
+  const lower = prompt.toLowerCase();
+  if (
+    lower.startsWith("recreate an early date") ||
+    lower.includes("neighborhood walk") ||
+    lower.includes("new class or gym together")
+  ) {
+    return ["hangout"];
+  }
+  if (MEMORY_PROMPT_PATTERN.test(prompt)) return ["text", "call"];
+  if (lower.includes("voice note") || lower.includes("phone call") || lower.includes("call ") || lower.includes("facetime") || lower.includes("video call")) {
+    return ["call"];
+  }
+  if (
+    lower.includes("hangout") || lower.includes("hang out") ||
+    lower.includes("invite") || lower.includes("date with") ||
+    lower.includes("concert") || lower.includes("game night") ||
+    lower.includes("hike") || lower.includes("potluck") ||
+    lower.includes("watch a game together") || lower.includes("dinner") ||
+    lower.includes("outing") || lower.includes("coffee break") ||
+    lower.includes("work out together") || lower.includes("cooking date") ||
+    lower.includes("mini book club") || lower.includes("camping") ||
+    lower.includes("nature trip") || lower.includes("creative collaboration") ||
+    lower.includes("same city") || lower.includes("trip to visit") ||
+    lower.startsWith("plan a ") || lower.startsWith("start planning ")
+  ) {
+    return ["hangout"];
+  }
+  return ["text", "call"];
+}
+
+function buildDefaultPromptActions(prompts: Pick<SyncedPrompts, "labelPrompts" | "interestPrompts">) {
+  const result: Record<string, ActionType[]> = {};
+  for (const group of [prompts.labelPrompts, prompts.interestPrompts]) {
+    for (const list of Object.values(group)) {
+      for (const prompt of list) result[prompt] = inferAllowedActions(prompt);
+    }
+  }
+  return result;
 }
 
 function ensureDataDir() {
@@ -363,8 +409,11 @@ const HARDCODED_PROMPTS: SyncedPrompts = {
       "Plan a camping or nature trip together",
     ],
   },
+  promptActions: {},
   lastSynced: null,
 };
+
+HARDCODED_PROMPTS.promptActions = buildDefaultPromptActions(HARDCODED_PROMPTS);
 
 let currentPrompts: SyncedPrompts = { ...HARDCODED_PROMPTS };
 let syncTimer: ReturnType<typeof setInterval> | null = null;
@@ -374,7 +423,14 @@ export function getPrompts(): SyncedPrompts {
 }
 
 function mergePrompts(base: SyncedPrompts, sheet: Partial<SyncedPrompts>): SyncedPrompts {
-  const merged = { ...base };
+  const merged = {
+    ...base,
+    promptActions: {
+      ...buildDefaultPromptActions(base),
+      ...(base.promptActions || {}),
+      ...(sheet.promptActions || {}),
+    },
+  };
 
   const simpleKeys: (keyof SyncedPrompts)[] = [
     "circle1Call", "circle1Text", "circle1Hangout",
@@ -442,7 +498,7 @@ async function readSheetTab(sheets: any, spreadsheetId: string, tabName: string)
   try {
     const response = await sheets.spreadsheets.values.get({
       spreadsheetId,
-      range: `'${tabName}'!A:B`,
+      range: `'${tabName}'!A:C`,
     });
     return { rows: response.data.values || [], success: true };
   } catch (e: any) {
@@ -458,17 +514,30 @@ function parseSimpleTab(rows: string[][]): string[] {
     .filter(Boolean);
 }
 
-function parseKeyedTab(rows: string[][]): Record<string, string[]> {
-  const result: Record<string, string[]> = {};
+function parseAllowedActions(value: string | undefined, prompt: string): ActionType[] {
+  const parsed = (value || "")
+    .split(",")
+    .map((item) => item.trim().toLowerCase())
+    .filter((item): item is ActionType => item === "text" || item === "call" || item === "hangout");
+  return parsed.length > 0 ? [...new Set(parsed)] : inferAllowedActions(prompt);
+}
+
+function parseKeyedTab(rows: string[][]): {
+  prompts: Record<string, string[]>;
+  actions: Record<string, ActionType[]>;
+} {
+  const prompts: Record<string, string[]> = {};
+  const actions: Record<string, ActionType[]> = {};
   for (const row of rows.slice(1)) {
     const key = row[0]?.trim().toLowerCase();
     const prompt = row[1]?.trim();
     if (key && prompt) {
-      if (!result[key]) result[key] = [];
-      result[key].push(prompt);
+      if (!prompts[key]) prompts[key] = [];
+      prompts[key].push(prompt);
+      actions[prompt] = parseAllowedActions(row[2], prompt);
     }
   }
-  return result;
+  return { prompts, actions };
 }
 
 interface SheetReadResult {
@@ -508,14 +577,18 @@ async function readAllFromSheet(spreadsheetId: string): Promise<SheetReadResult>
 
   const labelResult = await readSheetTab(sheets, spreadsheetId, "Label Prompts");
   if (labelResult.success) {
-    data.labelPrompts = parseKeyedTab(labelResult.rows);
+    const parsed = parseKeyedTab(labelResult.rows);
+    data.labelPrompts = parsed.prompts;
+    data.promptActions = { ...(data.promptActions || {}), ...parsed.actions };
   } else {
     failedTabs.push("Label Prompts");
   }
 
   const interestResult = await readSheetTab(sheets, spreadsheetId, "Interest Prompts");
   if (interestResult.success) {
-    data.interestPrompts = parseKeyedTab(interestResult.rows);
+    const parsed = parseKeyedTab(interestResult.rows);
+    data.interestPrompts = parsed.prompts;
+    data.promptActions = { ...(data.promptActions || {}), ...parsed.actions };
   } else {
     failedTabs.push("Interest Prompts");
   }
@@ -569,10 +642,10 @@ export async function createSpreadsheetWithPrompts(): Promise<string> {
     });
   }
 
-  const labelRows: string[][] = [["Label", "Prompt"]];
+  const labelRows: string[][] = [["Label", "Prompt", "Allowed Actions"]];
   for (const [label, prompts] of Object.entries(base.labelPrompts)) {
     for (const prompt of prompts) {
-      labelRows.push([label, prompt]);
+      labelRows.push([label, prompt, base.promptActions[prompt].join(", ")]);
     }
   }
   batchData.push({
@@ -580,10 +653,10 @@ export async function createSpreadsheetWithPrompts(): Promise<string> {
     values: labelRows,
   });
 
-  const interestRows: string[][] = [["Interest", "Prompt"]];
+  const interestRows: string[][] = [["Interest", "Prompt", "Allowed Actions"]];
   for (const [interest, prompts] of Object.entries(base.interestPrompts)) {
     for (const prompt of prompts) {
-      interestRows.push([interest, prompt]);
+      interestRows.push([interest, prompt, base.promptActions[prompt].join(", ")]);
     }
   }
   batchData.push({
@@ -668,7 +741,13 @@ export async function initPromptSync() {
 
   const cached = getCachedPrompts();
   if (cached) {
-    currentPrompts = cached;
+    currentPrompts = {
+      ...cached,
+      promptActions: {
+        ...buildDefaultPromptActions(cached),
+        ...(cached.promptActions || {}),
+      },
+    };
     console.log(`[prompts-sync] Loaded ${countTotalPrompts(cached)} cached prompts (last synced: ${cached.lastSynced})`);
   }
 

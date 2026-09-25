@@ -316,8 +316,7 @@ export default function HomeScreen() {
         setCachedPrompt(contact.id, prompt);
       }
 
-      let actionType = getActionType(circleLevel, prompt);
-      if (circleLevel === 3 && actionType === "call") actionType = "text";
+      const actionType = getActionType(circleLevel, prompt, contact.id);
 
       return {
         contactId: contact.id,
