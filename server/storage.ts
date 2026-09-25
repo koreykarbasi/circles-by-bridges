@@ -41,7 +41,7 @@ export interface IStorage {
     planId: string,
     voterName: string,
     newVotes: InsertHangoutVote[],
-    guestOpts: { isGuest: boolean; inviteeNames: string[]; guestCap: number } | null,
+    voteLimit: number | null,
   ): Promise<{ capped: true } | { capped: false; votes: HangoutVote[] }>;
   createPasswordResetToken(userId: string, tokenHash: string, expiresAt: Date): Promise<PasswordResetToken>;
   getPasswordResetTokenByHash(tokenHash: string): Promise<PasswordResetToken | undefined>;
@@ -243,18 +243,17 @@ export class DatabaseStorage implements IStorage {
     planId: string,
     voterName: string,
     newVotes: InsertHangoutVote[],
-    guestOpts: { isGuest: boolean; inviteeNames: string[]; guestCap: number } | null,
+    voteLimit: number | null,
   ): Promise<{ capped: true } | { capped: false; votes: HangoutVote[] }> {
     return db.transaction(async (tx) => {
       // Acquire a row-level lock on the hangout plan for the duration of this
       // transaction. This serializes concurrent vote submissions for the same
-      // plan so the guest-count check and the insert are atomic — closing the
+      // plan so the voter-count check and the insert are atomic — closing the
       // race window that allowed concurrent requests to all pass the cap check
       // before any of them had written to the database.
       await tx.execute(drizzleSql`SELECT id FROM hangout_plans WHERE id = ${planId} FOR UPDATE`);
 
-      if (guestOpts) {
-        const { isGuest, inviteeNames, guestCap } = guestOpts;
+      if (voteLimit !== null) {
         const canonicalVoterKey = voterName.toLowerCase().trim();
 
         // Re-read existing votes inside the transaction (after the lock) so
@@ -264,25 +263,9 @@ export class DatabaseStorage implements IStorage {
           (v) => v.voterName.toLowerCase().trim() === canonicalVoterKey,
         );
 
-        if (isGuest) {
-          if (!voterAlreadySubmitted) {
-            const existingGuestKeys = new Set(
-              existingVotes
-                .map((v) => v.voterName.toLowerCase().trim())
-                .filter((n) => !inviteeNames.some((inv) => inv.toLowerCase().trim() === n)),
-            );
-            if (existingGuestKeys.size >= guestCap) {
-              return { capped: true };
-            }
-          }
-        } else if (inviteeNames.length === 0) {
-          // Legacy plans: apply the same cap to total distinct voters.
-          if (!voterAlreadySubmitted) {
-            const totalVoters = new Set(existingVotes.map((v) => v.voterName.toLowerCase().trim())).size;
-            if (totalVoters >= guestCap) {
-              return { capped: true };
-            }
-          }
+        if (!voterAlreadySubmitted) {
+          const totalVoters = new Set(existingVotes.map((v) => v.voterName.toLowerCase().trim())).size;
+          if (totalVoters >= voteLimit) return { capped: true };
         }
       }
 

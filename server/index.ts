@@ -373,6 +373,15 @@ async function ensureHangoutVoterTokensColumn() {
   }
 }
 
+async function ensureHangoutVoteLimitColumn() {
+  try {
+    await pool.query(`ALTER TABLE hangout_plans ADD COLUMN IF NOT EXISTS vote_limit INTEGER`);
+  } catch (err) {
+    console.error("[startup] Failed to add vote_limit column:", err);
+    throw err;
+  }
+}
+
 async function ensureProviderSubColumns() {
   try {
     await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS google_sub TEXT`);
@@ -432,6 +441,7 @@ async function ensureEmptyLastContactPromptDueAtColumn() {
   await ensurePasswordResetTokensTable();
   await ensureHangoutInvitesSentAtColumn();
   await ensureHangoutVoterTokensColumn();
+  await ensureHangoutVoteLimitColumn();
   await ensureProviderSubColumns();
   await ensureUserCreatedAtColumn();
   await ensureEmptyLastContactPromptDueAtColumn();

@@ -5,7 +5,6 @@ import bcrypt from "bcryptjs";
 import session from "express-session";
 import connectPgSimple from "connect-pg-simple";
 import rateLimit from "express-rate-limit";
-import crypto from "crypto";
 import { pool } from "./db";
 import { getPrompts, syncFromSheet } from "./prompts-sync";
 import {
@@ -112,48 +111,6 @@ function generateShareCode(): string {
     code += chars[Math.floor(Math.random() * chars.length)];
   }
   return code;
-}
-
-// Generates an unguessable per-invitee voting token map, keyed by
-// lowercase-trimmed invitee name. Only the holder of a given invitee's
-// personalized link (containing their token) can cast a ballot under that
-// invitee's identity — the shared vote-page link alone does not prove who
-// the visitor is.
-function generateVoterTokens(inviteeNames: string[]): Record<string, string> {
-  const tokens: Record<string, string> = {};
-  for (const name of inviteeNames) {
-    const key = name.toLowerCase().trim();
-    if (!key || tokens[key]) continue;
-    tokens[key] = crypto.randomBytes(24).toString("hex");
-  }
-  return tokens;
-}
-
-// Ensures every invitee on a plan has a token, minting and persisting any
-// that are missing. This backfills legacy plans created before per-invitee
-// tokens existed (or plans whose invitee list changed some other way) so
-// real invitees are never locked out of voting as themselves.
-async function ensureVoterTokens(plan: {
-  id: string;
-  inviteeNames: string[] | null;
-  voterTokens: unknown;
-}): Promise<Record<string, string>> {
-  const inviteeNames = plan.inviteeNames || [];
-  const existing = (plan.voterTokens as Record<string, string>) || {};
-  const merged: Record<string, string> = { ...existing };
-  let changed = false;
-  for (const name of inviteeNames) {
-    const key = name.toLowerCase().trim();
-    if (!key) continue;
-    if (!merged[key]) {
-      merged[key] = crypto.randomBytes(24).toString("hex");
-      changed = true;
-    }
-  }
-  if (changed) {
-    await storage.updateHangoutPlan(plan.id, { voterTokens: merged });
-  }
-  return merged;
 }
 
 // Compute Borda count scores for options grouped by questionType.
@@ -1529,6 +1486,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           const scored = computeBordaScores(options, votes);
           return {
             ...plan,
+            voterTokens: undefined,
             options: scored,
             bestRecommendation: computeBestRecommendation(scored, votes, plan.includePlusOne),
           };
@@ -1551,20 +1509,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const options = await storage.getOptionsByPlanId(plan.id);
       const votes = await storage.getVotesByPlanId(plan.id);
       const scored = computeBordaScores(options, votes);
-      // Personalized per-invitee voting links — only the organizer (authenticated
-      // owner of this plan) can see these. Sharing the personalized link (rather
-      // than name-guessing on the generic link) is how a specific invitee's
-      // identity is proven when they vote.
-      const voterTokens = await ensureVoterTokens(plan);
-      const voterLinks = (plan.inviteeNames || []).map((name) => {
-        const key = name.toLowerCase().trim();
-        return { name, token: voterTokens[key] };
-      });
       res.json({
         ...plan,
+        voterTokens: undefined,
         options: scored,
         bestRecommendation: computeBestRecommendation(scored, votes, plan.includePlusOne),
-        voterLinks,
       });
     } catch (err) {
       console.error("Error fetching hangout:", err);
@@ -1574,12 +1523,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.post("/api/hangouts", requireAuth, async (req, res) => {
     try {
-      const { title, description, inviteeNames, options, surveyMode, fixedActivity, deadline, includePlusOne } = req.body;
+      const { title, description, inviteeNames, options, surveyMode, fixedActivity, deadline, includePlusOne, voteLimit } = req.body;
       if (!title || typeof title !== "string" || !title.trim()) {
         return bad(res, "Title is required");
       }
-      if (!Array.isArray(inviteeNames) || inviteeNames.length === 0) {
-        return bad(res, "At least one invitee is required");
+      if (inviteeNames !== undefined && (!Array.isArray(inviteeNames) || inviteeNames.some((name: unknown) => typeof name !== "string"))) {
+        return bad(res, "Invitees must be an array of names");
+      }
+      if (voteLimit !== undefined && voteLimit !== null &&
+          (typeof voteLimit !== "number" || !Number.isSafeInteger(voteLimit) || voteLimit < 1 || voteLimit > 10000)) {
+        return bad(res, "Voting limit must be a whole number between 1 and 10000");
       }
       if (!Array.isArray(options) || !options.some((o) => o.questionType === "time")) {
         return bad(res, "At least one time option is required");
@@ -1605,7 +1558,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         status: "active",
         shareCode,
         inviteeNames: inviteeNames || [],
-        voterTokens: generateVoterTokens(inviteeNames || []),
+        voteLimit: voteLimit ?? null,
         surveyMode: surveyMode || "standard",
         fixedActivity: fixedActivity || null,
         deadline: deadline || null,
@@ -1627,7 +1580,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
       }
 
-      res.status(201).json({ ...plan, options: createdOptions });
+      res.status(201).json({ ...plan, voterTokens: undefined, options: createdOptions });
     } catch (err) {
       console.error("Error creating hangout:", err);
       res.status(500).json({ message: "Failed to create hangout" });
@@ -1641,7 +1594,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (!existing || existing.userId !== req.session.userId) {
         return res.status(404).json({ message: "Hangout not found" });
       }
-      const { title, description, status, finalizedOptionId, finalizedTimeOptionId, inviteeNames } = req.body;
+      const { title, description, status, finalizedOptionId, finalizedTimeOptionId, inviteeNames, voteLimit } = req.body;
       if (title !== undefined && (typeof title !== "string" || !title.trim())) {
         return bad(res, "Title must be a non-empty string");
       }
@@ -1651,6 +1604,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (inviteeNames !== undefined && !Array.isArray(inviteeNames)) {
         return bad(res, "inviteeNames must be an array");
       }
+      if (voteLimit !== undefined && voteLimit !== null &&
+          (typeof voteLimit !== "number" || !Number.isSafeInteger(voteLimit) || voteLimit < 1 || voteLimit > 10000)) {
+        return bad(res, "Voting limit must be a whole number between 1 and 10000");
+      }
       const updateData: any = {};
       if (title !== undefined) updateData.title = title.trim();
       if (description !== undefined) updateData.description = description;
@@ -1659,18 +1616,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (finalizedTimeOptionId !== undefined) updateData.finalizedTimeOptionId = finalizedTimeOptionId;
       if (inviteeNames !== undefined) {
         updateData.inviteeNames = inviteeNames;
-        // Preserve existing tokens for unchanged invitees and mint new tokens
-        // for newly added ones, so previously shared personalized links keep
-        // working after an edit.
-        const existingTokens = (existing.voterTokens as Record<string, string>) || {};
-        const merged: Record<string, string> = {};
-        for (const name of inviteeNames as string[]) {
-          const key = name.toLowerCase().trim();
-          if (!key) continue;
-          merged[key] = existingTokens[key] || crypto.randomBytes(24).toString("hex");
-        }
-        updateData.voterTokens = merged;
       }
+      if (voteLimit !== undefined) updateData.voteLimit = voteLimit;
 
       // Server-side guard: status=finalized requires required picks to be present
       if (updateData.status === "finalized") {
@@ -1692,6 +1639,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const scored = computeBordaScores(options, votes);
       res.json({
         ...plan,
+        voterTokens: undefined,
         options: scored,
         bestRecommendation: computeBestRecommendation(scored, votes, plan!.includePlusOne),
       });
@@ -1965,7 +1913,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Public voting endpoint - no auth required
   app.get("/api/vote/:shareCode", async (req, res) => {
     try {
-      const plan = await storage.getHangoutPlanByShareCode(req.params.shareCode);
+      const plan = await storage.getHangoutPlanByShareCode(String(req.params.shareCode));
       if (!plan) {
         return res.status(404).json({ message: "Hangout not found" });
       }
@@ -2010,22 +1958,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }));
       }
 
-      // If a personalized voting token is present in the query string, resolve
-      // it to the invitee's name so the client can prefill/lock the voter
-      // identity. Never expose the token map itself or other invitees' names.
-      const voterTokens = await ensureVoterTokens(plan);
-      const rawToken = req.query.token;
-      let resolvedVoterName: string | null = null;
-      if (typeof rawToken === "string" && rawToken) {
-        const match = Object.entries(voterTokens).find(([, t]) => t === rawToken);
-        if (match) {
-          const key = match[0];
-          resolvedVoterName = (plan.inviteeNames || []).find(
-            (n) => n.toLowerCase().trim() === key
-          ) || null;
-        }
-      }
-
       res.json({
         title: plan.title,
         description: plan.description,
@@ -2038,8 +1970,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         includePlusOne: plan.includePlusOne,
         options: publicOptions,
         bestRecommendation,
-        resolvedVoterName,
-        requiresToken: (plan.inviteeNames || []).length > 0,
+        voteLimit: plan.voteLimit,
       });
     } catch (err) {
       console.error("Error fetching vote page:", err);
@@ -2049,7 +1980,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.post("/api/vote/:shareCode", voteRateLimiter, async (req, res) => {
     try {
-      const plan = await storage.getHangoutPlanByShareCode(req.params.shareCode);
+      const plan = await storage.getHangoutPlanByShareCode(String(req.params.shareCode));
       if (!plan) {
         return res.status(404).json({ message: "Hangout not found" });
       }
@@ -2086,7 +2017,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return bad(res, "Voter name is required");
       }
       const voterName = rawVoterName.trim();
-      const rawVoterToken: unknown = req.body.voterToken;
       if (!votes || !Array.isArray(votes) || votes.length === 0) {
         return bad(res, "Votes must be a non-empty array");
       }
@@ -2110,49 +2040,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
       }
 
-      // ── Voter identity resolution ───────────────────────────────────────────
-      // The shareCode alone only proves the caller has the (generic) vote link;
-      // it does not prove *who* the caller is. To vote under a specific
-      // invitee's name, the caller must present that invitee's unguessable
-      // per-invitee token (see generateVoterTokens / GET /api/hangouts/:id
-      // voterLinks). This closes impersonation: a link holder without a valid
-      // token cannot submit a ballot attributed to a real invitee, and cannot
-      // overwrite a real invitee's existing ballot.
-      const inviteeNames = plan.inviteeNames ?? [];
-      const voterTokens = await ensureVoterTokens(plan);
-      const requestedKey = voterName.toLowerCase().trim();
-      const isKnownInviteeName = inviteeNames.some(
-        (n) => n.toLowerCase().trim() === requestedKey
-      );
-
-      let canonicalVoterName: string;
-      let isGuest = false;
-
-      if (isKnownInviteeName) {
-        const expectedToken = voterTokens[requestedKey];
-        const providedToken = typeof rawVoterToken === "string" ? rawVoterToken : "";
-        if (!expectedToken || !providedToken || providedToken !== expectedToken) {
-          return res.status(403).json({
-            message: "This name belongs to an invitee. Use your personalized voting link to vote as this person.",
-          });
-        }
-        // Use the canonical casing from the invite list so a single invitee can
-        // never appear as multiple "voters" via case variants (Alice/alice/ALICE).
-        canonicalVoterName = inviteeNames.find(
-          (n) => n.toLowerCase().trim() === requestedKey
-        )!;
-      } else if (inviteeNames.length === 0) {
-        // No invitee list was recorded for this plan (legacy/edge case) —
-        // fall back to open name entry, capped below.
-        canonicalVoterName = voterName;
-      } else {
-        // A name that isn't a tracked invitee (e.g. a plus-one/guest sharing
-        // the generic link) — allowed, but cannot collide with an invitee's
-        // identity, and is capped separately from the invitee slots.
-        canonicalVoterName = voterName;
-        isGuest = true;
-      }
-
       // Validate all submitted optionIds belong to this plan (before entering
       // the serialized transaction to keep the lock duration as short as possible).
       const planOptions = await storage.getOptionsByPlanId(plan.id);
@@ -2171,39 +2058,27 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return bad(res, ballotError);
       }
 
-      const GUEST_VOTER_BUFFER = 3;
       const newVotes = votes.map((v: any) => ({
         optionId: v.optionId,
         planId: plan.id,
-        voterName: canonicalVoterName,
-        rank: v.rank ?? null,
+        voterName,
+        rank: v.rank && v.rank > 0 ? v.rank : null,
         bringsGuests: bringsGuests ?? null,
         plusOneCount: plusOneCount ?? null,
       }));
 
-      // The guest-count check and the insert are performed inside a single
-      // database transaction that holds a row-level lock on the hangout plan
-      // row (SELECT FOR UPDATE). This serializes concurrent submissions for the
-      // same plan so the cap cannot be bypassed by racing requests that all
-      // read the same pre-write state and each conclude the cap has not been
-      // reached yet.
+      // Only an explicit limit caps distinct voter names. The plan row is
+      // locked while checking and replacing votes to prevent concurrent overshoot.
       const result = await storage.replaceVotesForVoterCapped(
         plan.id,
-        canonicalVoterName,
+        voterName,
         newVotes,
-        // Pass guest enforcement context so the storage layer can re-check the
-        // count inside the locked transaction. Pass null for verified invitees
-        // (they are not subject to the guest cap).
-        isGuest || inviteeNames.length === 0
-          ? { isGuest, inviteeNames, guestCap: GUEST_VOTER_BUFFER }
-          : null,
+        plan.voteLimit,
       );
 
       if (result.capped) {
         return res.status(400).json({
-          message: isGuest
-            ? "This survey has reached its guest voting limit"
-            : "This survey has reached its voting limit",
+          message: "This survey has reached its voting limit",
         });
       }
 

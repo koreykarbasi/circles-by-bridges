@@ -157,7 +157,6 @@ export default function HangoutDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const webTopInset = Platform.OS === "web" ? 67 : 0;
   const [linkCopied, setLinkCopied] = useState(false);
-  const [copiedInviteeName, setCopiedInviteeName] = useState<string | null>(null);
   const [msgCopied, setMsgCopied] = useState(false);
   const [guestsCopied, setGuestsCopied] = useState(false);
   const [showIndividualVotes, setShowIndividualVotes] = useState(false);
@@ -238,10 +237,6 @@ export default function HangoutDetailScreen() {
     return `${base}vote/${plan?.shareCode}`;
   }, [plan]);
 
-  const getVoteUrlForToken = useCallback((token: string) => {
-    return `${getVoteUrl()}?token=${encodeURIComponent(token)}`;
-  }, [getVoteUrl]);
-
   const copyToClipboard = useCallback(async (text: string): Promise<boolean> => {
     try {
       await Clipboard.setStringAsync(text);
@@ -273,16 +268,6 @@ export default function HangoutDetailScreen() {
       setTimeout(() => setMsgCopied(false), 2000);
     }
   }, [plan, getVoteUrl, copyToClipboard]);
-
-  const handleCopyInviteeLink = useCallback(async (name: string, token: string) => {
-    const url = getVoteUrlForToken(token);
-    const ok = await copyToClipboard(url);
-    if (ok) {
-      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-      setCopiedInviteeName(name);
-      setTimeout(() => setCopiedInviteeName((cur) => (cur === name ? null : cur)), 2000);
-    }
-  }, [getVoteUrlForToken, copyToClipboard]);
 
   const handleCalendarInvite = useCallback(() => {
     if (!plan) return;
@@ -465,17 +450,6 @@ export default function HangoutDetailScreen() {
           )}
         </View>
 
-        {/* Invitee chips */}
-        {plan.inviteeNames.length > 0 && (
-          <View style={styles.chips}>
-            {plan.inviteeNames.map((name, i) => (
-              <View key={i} style={styles.chip}>
-                <Text style={styles.chipText}>{name}</Text>
-              </View>
-            ))}
-          </View>
-        )}
-
         {/* Fixed activity badge */}
         {plan.surveyMode === "fixed-activity" && plan.fixedActivity && (
           <View style={styles.fixedActivityBadge}>
@@ -537,34 +511,6 @@ export default function HangoutDetailScreen() {
           </View>
         )}
 
-        {/* Personalized per-invitee voting links (prevents impersonation) */}
-        {!isFinalized && plan.voterLinks && plan.voterLinks.length > 0 && (
-          <View style={styles.inviteeLinksSection}>
-            <Text style={styles.inviteeLinksTitle}>Personal invite links</Text>
-            <Text style={styles.inviteeLinksSubtitle}>
-              Each invitee has their own link so votes can&apos;t be faked under their name.
-            </Text>
-            {plan.voterLinks.map((vl) => (
-              <View key={vl.name} style={styles.inviteeLinkRow}>
-                <Text style={styles.inviteeLinkName} numberOfLines={1}>{vl.name}</Text>
-                <Pressable
-                  onPress={() => handleCopyInviteeLink(vl.name, vl.token)}
-                  style={({ pressed }) => [styles.inviteeLinkBtn, pressed && { opacity: 0.7 }]}
-                >
-                  <Ionicons
-                    name={copiedInviteeName === vl.name ? "checkmark" : "copy-outline"}
-                    size={14}
-                    color={Colors.primaryLight}
-                  />
-                  <Text style={styles.inviteeLinkBtnText}>
-                    {copiedInviteeName === vl.name ? "Copied!" : "Copy"}
-                  </Text>
-                </Pressable>
-              </View>
-            ))}
-          </View>
-        )}
-
         {/* Progress hint: activity locked, time still needed */}
         {activityLocked && timeOptions.length > 0 && (
           <View style={styles.progressHint}>
@@ -575,18 +521,18 @@ export default function HangoutDetailScreen() {
 
         {/* Results by question type */}
         <SurveySection
-          title="Activity"
-          options={activityOptions}
-          lockedOptionId={plan.finalizedOptionId}
-          isFinalized={isFinalized}
-          onFinalize={handleFinalizeActivity}
-        />
-        <SurveySection
           title="When"
           options={timeOptions}
           lockedOptionId={plan.finalizedTimeOptionId}
           isFinalized={isFinalized}
           onFinalize={handleFinalizeTime}
+        />
+        <SurveySection
+          title="Activity"
+          options={activityOptions}
+          lockedOptionId={plan.finalizedOptionId}
+          isFinalized={isFinalized}
+          onFinalize={handleFinalizeActivity}
         />
         <SurveySection
           title="Where"
@@ -596,12 +542,25 @@ export default function HangoutDetailScreen() {
           onFinalize={undefined}
         />
 
+        {plan.inviteeNames.length > 0 && (
+          <View style={styles.inviteesSection}>
+            <Text style={styles.inviteesTitle}>Invited friends</Text>
+            <View style={styles.chips}>
+              {plan.inviteeNames.map((name, i) => (
+                <View key={i} style={styles.chip}>
+                  <Text style={styles.chipText}>{name}</Text>
+                </View>
+              ))}
+            </View>
+          </View>
+        )}
+
         {/* Individual votes — collapsible, creator-only view */}
         {(() => {
           const allOptions = plan.options || [];
           // Collect all votes across every option
           const allVotes = allOptions.flatMap((opt) =>
-            (opt.votes || []).map((v) => ({
+            (opt.votes || []).filter((v) => v.rank != null && v.rank > 0).map((v) => ({
               voterName: v.voterName,
               optionLabel: opt.label,
               questionType: opt.questionType,
@@ -609,8 +568,6 @@ export default function HangoutDetailScreen() {
               optionId: opt.id,
             }))
           );
-          if (allVotes.length === 0) return null;
-
           // Build per-voter summaries: { voterName -> sorted votes }
           const voterMap = new Map<string, typeof allVotes>();
           for (const v of allVotes) {
@@ -621,6 +578,7 @@ export default function HangoutDetailScreen() {
           const voters = Array.from(voterMap.entries()).sort(([a], [b]) =>
             a.localeCompare(b)
           );
+          if (voters.length === 0) return null;
 
           // Label each question type with a readable category name
           const categoryLabel = (qt: string) =>
@@ -657,14 +615,9 @@ export default function HangoutDetailScreen() {
                       if (!byType.has(v.questionType)) byType.set(v.questionType, []);
                       byType.get(v.questionType)!.push(v);
                     }
-                    // Sort each group by rank ascending (null ranks go last)
+                    // Only ranked options are shown. Rejected choices have no preference rank.
                     for (const arr of byType.values()) {
-                      arr.sort((a, b) => {
-                        if (a.rank === null && b.rank === null) return 0;
-                        if (a.rank === null) return 1;
-                        if (b.rank === null) return -1;
-                        return a.rank - b.rank;
-                      });
+                      arr.sort((a, b) => (a.rank ?? 0) - (b.rank ?? 0));
                     }
                     const typeOrder = ["activity", "time", "location"];
                     const types = typeOrder.filter((t) => byType.has(t));
@@ -683,15 +636,9 @@ export default function HangoutDetailScreen() {
                             <Text style={styles.indvTypeLabel}>{categoryLabel(qt)}</Text>
                             {byType.get(qt)!.map((v) => (
                               <View key={v.optionId} style={styles.indvPickRow}>
-                                {v.rank !== null ? (
-                                  <View style={styles.indvRankBadge}>
-                                    <Text style={styles.indvRankText}>{ordinal(v.rank)}</Text>
-                                  </View>
-                                ) : (
-                                  <View style={[styles.indvRankBadge, styles.indvRankBadgeSkipped]}>
-                                    <Text style={[styles.indvRankText, { color: Colors.textTertiary }]}>—</Text>
-                                  </View>
-                                )}
+                                <View style={styles.indvRankBadge}>
+                                  <Text style={styles.indvRankText}>{ordinal(v.rank!)}</Text>
+                                </View>
                                 <Text style={styles.indvPickLabel} numberOfLines={1}>
                                   {v.optionLabel}
                                 </Text>
@@ -851,24 +798,11 @@ const createStyles = (Colors: ThemeColors) => StyleSheet.create({
     borderWidth: 1, borderColor: Colors.primary + "40",
   },
   shareBtnText: { fontSize: 14, fontFamily: "Nunito_700Bold", color: Colors.onPrimary },
-  inviteeLinksSection: {
+  inviteesSection: {
     backgroundColor: Colors.primary + "0D",
     borderWidth: 1, borderColor: Colors.primary + "25",
     borderRadius: 14, padding: 14, marginBottom: 20,
   },
-  inviteeLinksTitle: { fontSize: 14, fontFamily: "Nunito_700Bold", color: Colors.text, marginBottom: 4 },
-  inviteeLinksSubtitle: { fontSize: 12, fontFamily: "Nunito_400Regular", color: Colors.textSecondary, marginBottom: 12 },
-  inviteeLinkRow: {
-    flexDirection: "row", alignItems: "center", justifyContent: "space-between",
-    paddingVertical: 8, borderTopWidth: 1, borderTopColor: Colors.primary + "15",
-  },
-  inviteeLinkName: { flex: 1, fontSize: 14, fontFamily: "Nunito_600SemiBold", color: Colors.text, marginRight: 10 },
-  inviteeLinkBtn: {
-    flexDirection: "row", alignItems: "center", gap: 5,
-    paddingHorizontal: 10, paddingVertical: 6, borderRadius: 8,
-    backgroundColor: Colors.primary + "15",
-  },
-  inviteeLinkBtnText: { fontSize: 12, fontFamily: "Nunito_700Bold", color: Colors.primaryLight },
   progressHint: {
     flexDirection: "row", alignItems: "center", gap: 7,
     backgroundColor: Colors.success + "10", borderRadius: 10,
@@ -911,7 +845,6 @@ const createStyles = (Colors: ThemeColors) => StyleSheet.create({
     backgroundColor: Colors.primary + "20",
     alignItems: "center", justifyContent: "center",
   },
-  indvRankBadgeSkipped: { backgroundColor: Colors.border },
   indvRankText: {
     fontSize: 11, fontFamily: "Nunito_700Bold", color: Colors.primary,
   },

@@ -47,6 +47,8 @@ export default function CreateHangoutScreen() {
 
   // Step 2
   const [selectedContacts, setSelectedContacts] = useState<Set<string>>(new Set());
+  const [limitVoting, setLimitVoting] = useState(false);
+  const [voteLimitInput, setVoteLimitInput] = useState("");
 
   useEffect(() => {
     const nameParam = Array.isArray(contactName) ? contactName[0] : contactName;
@@ -117,7 +119,9 @@ export default function CreateHangoutScreen() {
   };
 
   const canProceedStep1 = title.trim().length > 0;
-  const canProceedStep2 = selectedContacts.size > 0;
+  const parsedVoteLimit = Number(voteLimitInput);
+  const canProceedStep2 = !limitVoting ||
+    (/^[1-9]\d*$/.test(voteLimitInput) && Number.isSafeInteger(parsedVoteLimit) && parsedVoteLimit <= 10000);
   const canSubmit = (() => {
     const hasTime = timeOptions.length > 0;
     if (surveyMode === "standard") {
@@ -163,6 +167,7 @@ export default function CreateHangoutScreen() {
         title: title.trim(),
         description: description.trim() || null,
         inviteeNames,
+        voteLimit: limitVoting ? parsedVoteLimit : null,
         options,
         surveyMode,
         fixedActivity: surveyMode === "fixed-activity" ? fixedActivity.trim() : null,
@@ -285,11 +290,44 @@ export default function CreateHangoutScreen() {
     <>
       <Text style={styles.stepLabel}>Step 2 of 3</Text>
       <Text style={styles.stepTitle}>Who's invited?</Text>
-      <Text style={styles.stepDescription}>Select friends from your circles.</Text>
+      <Text style={styles.stepDescription}>Optionally select friends from your circles. Anyone with the shared link can vote.</Text>
+
+      <View style={styles.sectionCard}>
+        <View style={styles.toggleRow}>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.sectionCardTitle}>Limit the number of voters</Text>
+            <Text style={styles.fieldHint}>Off means anyone with the link can vote. Selected friends don't affect this limit.</Text>
+          </View>
+          <Switch
+            value={limitVoting}
+            onValueChange={(value) => { Haptics.selectionAsync(); setLimitVoting(value); }}
+            trackColor={{ false: Colors.border, true: Colors.primary + "60" }}
+            thumbColor={limitVoting ? Colors.primary : Colors.textTertiary}
+            accessibilityLabel="Limit the number of voters"
+          />
+        </View>
+        {limitVoting && (
+          <View style={styles.inputGroup}>
+            <Text style={styles.inputLabel}>Maximum voters (1–10,000)</Text>
+            <TextInput
+              style={styles.textInput}
+              value={voteLimitInput}
+              onChangeText={setVoteLimitInput}
+              keyboardType="number-pad"
+              placeholder="Enter a number"
+              placeholderTextColor={Colors.textTertiary}
+              accessibilityLabel="Maximum number of voters"
+            />
+            {!canProceedStep2 && voteLimitInput.length > 0 &&
+              <Text style={styles.limitError}>Enter a whole number from 1 to 10,000.</Text>}
+          </View>
+        )}
+      </View>
+      <Text style={styles.inputLabel}>Friends from your circles (optional)</Text>
 
       <View style={styles.contactsList}>
         {sortedContacts.length === 0 ? (
-          <Text style={styles.emptyText}>No contacts yet. Add people to your circles first.</Text>
+          <Text style={styles.emptyText}>No contacts yet. You can still create and share this survey.</Text>
         ) : (
           sortedContacts.map((c) => {
             const selected = selectedContacts.has(c.id);
@@ -633,6 +671,7 @@ const createStyles = (Colors: ThemeColors) => StyleSheet.create({
     fontSize: 12, fontFamily: "Nunito_400Regular", color: Colors.textTertiary,
     marginBottom: 12, lineHeight: 16,
   },
+  limitError: { fontSize: 12, color: Colors.danger, marginTop: 6 },
   modeToggleRow: {
     flexDirection: "row", gap: 8, marginBottom: 14,
   },

@@ -36,7 +36,7 @@ h1.title{font-size:24px;font-weight:800;text-align:center;margin-bottom:4px;line
   background:#151028;
   cursor:grab;
   user-select:none;
-  touch-action:none;
+  touch-action:auto;
   transition:transform .15s, box-shadow .15s, opacity .15s;
   position:relative;
 }
@@ -53,11 +53,12 @@ h1.title{font-size:24px;font-weight:800;text-align:center;margin-bottom:4px;line
 .rank-card-label{font-size:14px;font-weight:700;color:#F0ECF8;margin-bottom:0}
 .rank-card-meta{font-size:12px;color:#5E5580;margin-top:2px}
 .reject-btn{
-  width:28px;height:28px;border-radius:8px;
+  width:36px;height:36px;border-radius:8px;padding:0;
   background:#2A1A38;border:1px solid #3A2A48;
   display:flex;align-items:center;justify-content:center;
   cursor:pointer;flex-shrink:0;font-size:14px;color:#7A6A98;
   transition:background .15s,color .15s;
+  touch-action:manipulation;position:relative;z-index:2;
 }
 .reject-btn:hover{background:#FF475720;color:#FF4757}
 .reject-btn.active{background:#FF475720;color:#FF4757;border-color:#FF475740}
@@ -131,11 +132,8 @@ h1.title{font-size:24px;font-weight:800;text-align:center;margin-bottom:4px;line
 
 <script>
 const shareCode = window.location.pathname.split('/vote/')[1];
-const urlParams = new URLSearchParams(window.location.search);
-const voterToken = urlParams.get('token') || '';
 let planData = null;
 let voterName = '';
-let voterNameLocked = false;
 let submitted = false;
 
 // Per question-type: array of option ids in ranked order (index 0 = rank 1)
@@ -177,26 +175,16 @@ function addDayOfWeek(label) {
 
 async function load() {
   try {
-    const qs = voterToken ? ('?token=' + encodeURIComponent(voterToken)) : '';
-    const res = await fetch('/api/vote/' + shareCode + qs);
+    const res = await fetch('/api/vote/' + shareCode);
     if (!res.ok) throw new Error('Not found');
     planData = await res.json();
-
-    // If the link carried a valid personalized token, lock the voter identity
-    // to the resolved invitee name — this is what proves who is voting.
-    if (planData.resolvedVoterName) {
-      voterName = planData.resolvedVoterName;
-      voterNameLocked = true;
-    }
 
     // If this browser already submitted a vote, show results with change-vote option
     try {
       const storedName = localStorage.getItem('voter_name_' + shareCode);
-      if (storedName && !voterNameLocked) {
+      if (storedName) {
         submitted = true;
         voterName = storedName;
-      } else if (storedName && voterNameLocked && storedName.toLowerCase().trim() === voterName.toLowerCase().trim()) {
-        submitted = true;
       } else if (localStorage.getItem('voted_' + shareCode) === 'true') {
         submitted = true;
       }
@@ -261,6 +249,7 @@ function render() {
 
   if (!isFinalized && !isDeadlinePassed && !submitted) {
     attachDragHandlers();
+    attachTouchHandlers();
     attachFormHandlers();
     updateSubmitBtn();
   }
@@ -270,22 +259,12 @@ function renderVoteForm() {
   let html = '';
 
   // Name
-  if (voterNameLocked) {
-    html += `
-      <div class="name-group">
-        <label class="label" for="voterName">Voting as</label>
-        <input class="name-input" id="voterName" value="${esc(voterName)}" readonly disabled />
-      </div>
-    `;
-  } else {
-    html += `
-      <div class="name-group">
-        <label class="label" for="voterName">Your name</label>
-        <input class="name-input" id="voterName" placeholder="Enter your name" autocomplete="given-name" value="${esc(voterName)}" />
-        ${planData.requiresToken ? `<p style="margin:6px 0 0;font-size:12px;color:#5E5580">If you were personally invited, use your own invite link so your vote is counted under your name.</p>` : ''}
-      </div>
-    `;
-  }
+  html += `
+    <div class="name-group">
+      <label class="label" for="voterName">Your name</label>
+      <input class="name-input" id="voterName" placeholder="Enter your name" autocomplete="given-name" value="${esc(voterName)}" />
+    </div>
+  `;
 
   // Fixed activity badge
   if (planData.surveyMode === 'fixed-activity' && planData.fixedActivity) {
@@ -371,7 +350,7 @@ function renderRankSection(type, title, subtitle) {
     if (!opt) return;
     const isRejected = !!rejected[optId];
     const { numBg, numColor, borderColor } = cardGradient(idx, order.length, isRejected);
-    const rank = idx + 1;
+    const rank = order.slice(0, idx).filter(id => !rejected[id]).length + 1;
 
     html += `
       <div class="rank-card${isRejected ? ' rejected' : ''}"
@@ -387,11 +366,11 @@ function renderRankSection(type, title, subtitle) {
           <div class="rank-card-label">${esc(type === 'time' ? addDayOfWeek(opt.label) : opt.label)}</div>
           ${opt.dateTime ? `<div class="rank-card-meta">${esc(opt.dateTime)}</div>` : ''}
         </div>
-        <div class="reject-btn${isRejected ? ' active' : ''}" onclick="toggleReject('${optId}', '${type}')" title="${isRejected ? 'Undo rejection' : 'Not interested'}">
+        <button type="button" class="reject-btn${isRejected ? ' active' : ''}" onclick="toggleReject('${optId}', '${type}')" aria-label="${isRejected ? 'Restore' : 'Deselect'} ${esc(opt.label)}" title="${isRejected ? 'Undo rejection' : 'Not interested'}">
           ${isRejected
             ? '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"><polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>'
             : '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>'}
-        </div>
+        </button>
       </div>
     `;
   });
@@ -408,6 +387,11 @@ function renderRankSection(type, title, subtitle) {
 }
 
 function renderResults(showFinalized) {
+  // The public API intentionally withholds tallies while voting is open.
+  // Do not turn its missing scores into a misleading "0 pts" display.
+  if (!showFinalized && !planData.bestRecommendation) {
+    return '<p class="section-subtitle" style="text-align:center;margin:20px 0">Results will be available when voting closes.</p>';
+  }
   const rec = planData.bestRecommendation;
   let html = '';
 
@@ -465,8 +449,11 @@ function renderResults(showFinalized) {
 function attachDragHandlers() {
   document.querySelectorAll('.rank-list').forEach(list => {
     const type = list.dataset.type;
+    if (list.dataset.dragBound) return;
+    list.dataset.dragBound = 'true';
 
     list.addEventListener('dragstart', e => {
+      if (e.target.closest('.reject-btn')) { e.preventDefault(); return; }
       const card = e.target.closest('.rank-card');
       if (!card || card.classList.contains('rejected')) { e.preventDefault(); return; }
       dragSrc = card.dataset.id;
@@ -508,8 +495,6 @@ function attachDragHandlers() {
     });
   });
 
-  // Touch drag
-  attachTouchHandlers();
 }
 
 function attachTouchHandlers() {
@@ -602,6 +587,7 @@ function renderSection(type, animate = false) {
     if (!opt) return;
     const isRejected = !!rejected[optId];
     const { numBg, numColor, borderColor } = cardGradient(idx, order.length, isRejected);
+    const rank = order.slice(0, idx).filter(id => !rejected[id]).length + 1;
 
     const cardEl = document.createElement('div');
     cardEl.className = 'rank-card' + (isRejected ? ' rejected' : '');
@@ -612,19 +598,19 @@ function renderSection(type, animate = false) {
     cardEl.style.borderColor = borderColor;
     cardEl.innerHTML = `
       <div class="rank-num" style="background:${numBg};color:${numColor};border-color:${borderColor}">
-        ${isRejected ? '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>' : (idx + 1)}
+        ${isRejected ? '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>' : rank}
       </div>
       <div class="rank-card-content">
         <div class="rank-card-label">${esc(type === 'time' ? addDayOfWeek(opt.label) : opt.label)}</div>
         ${opt.dateTime ? `<div class="rank-card-meta">${esc(opt.dateTime)}</div>` : ''}
       </div>
-      <div class="reject-btn${isRejected ? ' active' : ''}" title="${isRejected ? 'Undo rejection' : 'Not interested'}">
+      <button type="button" class="reject-btn${isRejected ? ' active' : ''}" aria-label="${isRejected ? 'Restore' : 'Deselect'} ${esc(opt.label)}" title="${isRejected ? 'Undo rejection' : 'Not interested'}">
         ${isRejected
           ? '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"><polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>'
           : '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>'}
-      </div>
+      </button>
     `;
-    cardEl.querySelector('.reject-btn').addEventListener('click', () => toggleReject(optId, type));
+    cardEl.querySelector('.reject-btn').addEventListener('click', e => { e.stopPropagation(); toggleReject(optId, type); });
     list.appendChild(cardEl);
   });
 
@@ -688,14 +674,14 @@ function updateSubmitBtn() {
   const btn = document.getElementById('submitBtn');
   if (!btn) return;
   const name = document.getElementById('voterName');
-  const hasName = voterNameLocked ? voterName.trim().length > 0 : (name && name.value.trim().length > 0);
+  const hasName = name && name.value.trim().length > 0;
   const plusOneDone = !planData.includePlusOne || bringsGuests !== null;
   btn.disabled = !hasName || !plusOneDone;
 }
 
 async function submitVotes() {
   const nameEl = document.getElementById('voterName');
-  const name = voterNameLocked ? voterName.trim() : (nameEl ? nameEl.value.trim() : voterName.trim());
+  const name = nameEl ? nameEl.value.trim() : voterName.trim();
   if (!name) return;
 
   const btn = document.getElementById('submitBtn');
@@ -706,9 +692,8 @@ async function submitVotes() {
   planData.options.forEach(opt => {
     const type = opt.questionType;
     const order = rankings[type] || [];
-    const idx = order.indexOf(opt.id);
     const isRejected = !!rejected[opt.id];
-    const rank = isRejected ? 0 : (idx >= 0 ? idx + 1 : 0);
+    const rank = isRejected ? null : order.filter(id => !rejected[id]).indexOf(opt.id) + 1;
     votes.push({ optionId: opt.id, rank });
   });
 
@@ -718,7 +703,6 @@ async function submitVotes() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         voterName: name,
-        voterToken: voterToken || undefined,
         votes,
         bringsGuests: planData.includePlusOne ? bringsGuests : null,
         plusOneCount: planData.includePlusOne && bringsGuests ? plusOneCount : null,

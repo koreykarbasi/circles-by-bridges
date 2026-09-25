@@ -1,5 +1,5 @@
 import { test, expect } from "@playwright/test";
-import { query, getDemoUserId } from "./helpers/db";
+import { query, getDemoUserId, createTestSessionCookie, deleteTestSession } from "./helpers/db";
 
 let planId: string;
 let shareCode: string;
@@ -50,7 +50,7 @@ test.afterEach(async () => {
 test("vote page renders plan details and options", async ({ page }) => {
   await page.goto(`/vote/${shareCode}`);
 
-  await expect(page.getByText("Bridges")).toBeVisible();
+  await expect(page.locator("#app .logo-text")).toHaveText("Bridges");
   await expect(page.getByText("E2E Vote Test Plan")).toBeVisible();
   await expect(page.getByText(/survey by/i)).toBeVisible();
   await expect(page.getByText("Bowling")).toBeVisible();
@@ -73,9 +73,10 @@ test("submit button enables when voter name is entered", async ({ page }) => {
 });
 
 test("cast votes and verify Borda scores update", async ({ page, request }) => {
-  // Pre-seed one voter so the results page shows known scores after UI submission.
-  // MAX_RANK=5: Bowling rank-1 = 5pts, Laser Tag rank-2 = 4pts (one voter each)
+  // Pre-seed one voter and verify public results stay hidden while voting is open.
+  // Each group has two choices: rank-1 = 2pts, rank-2 = 1pt.
   await request.post(`http://localhost:5000/api/vote/${shareCode}`, {
+    headers: { "X-Forwarded-For": "198.51.100.54" },
     data: {
       voterName: "SeedVoter",
       votes: [
@@ -87,18 +88,17 @@ test("cast votes and verify Borda scores update", async ({ page, request }) => {
     },
   });
 
+  await page.route(`**/api/vote/${shareCode}`, (route) => route.continue({
+    headers: { ...route.request().headers(), "x-forwarded-for": "198.51.100.55" },
+  }));
   await page.goto(`/vote/${shareCode}`);
   await page.fill("#voterName", "BordaVoter");
   await page.click("#submitBtn");
 
   await expect(page.getByText("Thanks for voting!")).toBeVisible({ timeout: 8000 });
 
-  // Results show cumulative scores from 2 voters, each submitting default ranks (rank 1 = 5pts, rank 2 = 4pts)
-  // SeedVoter (API) + BordaVoter (UI, default position order): Bowling = 5+5 = 10pts, LaserTag = 4+4 = 8pts
-  await expect(page.getByText(/pts/).first()).toBeVisible({ timeout: 5000 });
   const pageText = await page.evaluate(() => document.body.innerText);
-  expect(pageText).toContain("10 pts");
-  expect(pageText).toContain("8 pts");
+  expect(pageText).not.toContain(" pts");
 
   // Verify the UI submission was persisted
   const [row] = await query(
@@ -112,6 +112,7 @@ test("public API returns Borda scores after vote is cast", async ({
   request,
 }) => {
   await request.post(`/api/vote/${shareCode}`, {
+    headers: { "X-Forwarded-For": "198.51.100.53" },
     data: {
       voterName: "APIVoter",
       votes: [
@@ -122,6 +123,8 @@ test("public API returns Borda scores after vote is cast", async ({
       ],
     },
   });
+  // Live tallies are intentionally private until voting closes.
+  await query("UPDATE hangout_plans SET status = 'finalized' WHERE id = $1", [planId]);
 
   const res = await request.get(`/api/vote/${shareCode}`);
   expect(res.ok()).toBe(true);
@@ -129,23 +132,127 @@ test("public API returns Borda scores after vote is cast", async ({
   const data = await res.json();
   expect(data.title).toBe("E2E Vote Test Plan");
 
-  // With 1 voter and MAX_RANK=5: rank 1 = (5+1-1)=5pts, rank 2 = (5+1-2)=4pts
+  // With 1 voter and two choices per group: rank 1 = 2pts, rank 2 = 1pt.
   const options = data.options as { id: string; label: string; bordaScore: number }[];
   const bowling = options.find((o) => o.id === actOpt1Id);
   const laserTag = options.find((o) => o.id === actOpt2Id);
   const sat2pm = options.find((o) => o.id === timeOpt1Id);
   const sun4pm = options.find((o) => o.id === timeOpt2Id);
-  expect(bowling?.bordaScore).toBe(5);
-  expect(laserTag?.bordaScore).toBe(4);
-  expect(sat2pm?.bordaScore).toBe(5);
-  expect(sun4pm?.bordaScore).toBe(4);
+  expect(bowling?.bordaScore).toBe(2);
+  expect(laserTag?.bordaScore).toBe(1);
+  expect(sat2pm?.bordaScore).toBe(2);
+  expect(sun4pm?.bordaScore).toBe(1);
 
   const rec = data.bestRecommendation;
   expect(rec.bestActivity.label).toBe("Bowling");
-  expect(rec.bestActivity.score).toBe(5);
+  expect(rec.bestActivity.score).toBe(2);
   expect(rec.bestTime.label).toBe("Saturday 2pm");
-  expect(rec.bestTime.score).toBe(5);
+  expect(rec.bestTime.score).toBe(2);
   expect(rec.totalVoters).toBe(1);
+});
+
+test("one shared link accepts invitees and more than three other names with no implicit cap", async ({ request }) => {
+  const headers = { "X-Forwarded-For": "198.51.100.51" };
+  const votes = [
+    { optionId: actOpt1Id, rank: 1 },
+    { optionId: actOpt2Id, rank: 2 },
+    { optionId: timeOpt1Id, rank: 1 },
+    { optionId: timeOpt2Id, rank: 2 },
+  ];
+  for (const name of ["Alice", "Bob", "Carol", "Dave", "Eve", "Frank"]) {
+    const response = await request.post(`/api/vote/${shareCode}`, { headers, data: { voterName: name, votes } });
+    expect(response.status(), `${name}: ${await response.text()}`).toBe(201);
+  }
+  const result = await (await request.get(`/api/vote/${shareCode}`)).json();
+  expect(result.bestRecommendation).toBeNull();
+  expect(result.voteLimit).toBeNull();
+  expect(result).not.toHaveProperty("resolvedVoterName");
+  expect(result).not.toHaveProperty("requiresToken");
+  const [count] = await query(
+    "SELECT COUNT(DISTINCT lower(voter_name)) AS count FROM hangout_votes WHERE plan_id = $1",
+    [planId],
+  );
+  expect(Number(count.count)).toBe(6);
+});
+
+test("optional cap counts distinct names, not invited contacts, and still permits a ballot update", async ({ request }) => {
+  await query("UPDATE hangout_plans SET vote_limit = 2 WHERE id = $1", [planId]);
+  const votes = [
+    { optionId: actOpt1Id, rank: 1 },
+    { optionId: actOpt2Id, rank: 2 },
+    { optionId: timeOpt1Id, rank: 1 },
+    { optionId: timeOpt2Id, rank: 2 },
+  ];
+  const submit = (voterName: string) => request.post(`/api/vote/${shareCode}`, {
+    headers: { "X-Forwarded-For": "198.51.100.52" },
+    data: { voterName, votes },
+  });
+  expect((await submit("Someone not invited")).status()).toBe(201);
+  expect((await submit("Another person")).status()).toBe(201);
+  expect((await submit("Alice")).status()).toBe(400);
+  expect((await submit("someone not invited")).status()).toBe(201);
+  const [count] = await query(
+    "SELECT COUNT(DISTINCT lower(voter_name)) AS count FROM hangout_votes WHERE plan_id = $1",
+    [planId],
+  );
+  expect(Number(count.count)).toBe(2);
+});
+
+test("creator can make a survey without selecting friends or setting a limit", async ({ request }) => {
+  const cookie = await createTestSessionCookie(await getDemoUserId());
+  let createdId: string | undefined;
+  try {
+    const response = await request.post("/api/hangouts", {
+      headers: { Cookie: `connect.sid=${encodeURIComponent(cookie)}` },
+      data: {
+        title: "Unlisted test survey",
+        inviteeNames: [],
+        voteLimit: null,
+        surveyMode: "standard",
+        options: [
+          { label: "Walk", questionType: "activity" },
+          { label: "Tomorrow", questionType: "time" },
+        ],
+      },
+    });
+    expect(response.status(), await response.text()).toBe(201);
+    const plan = await response.json();
+    createdId = plan.id;
+    expect(plan.inviteeNames).toEqual([]);
+    expect(plan.voteLimit).toBeNull();
+    expect(plan).not.toHaveProperty("voterTokens");
+  } finally {
+    if (createdId) {
+      await query("DELETE FROM hangout_options WHERE plan_id = $1", [createdId]);
+      await query("DELETE FROM hangout_plans WHERE id = $1", [createdId]);
+    }
+    await deleteTestSession(cookie);
+  }
+});
+
+test("X rejects activity and date, submits null ranks and compacts the remaining ranks", async ({ page }) => {
+  await page.route(`**/api/vote/${shareCode}`, (route) => route.continue({
+    headers: { ...route.request().headers(), "x-forwarded-for": "198.51.100.56" },
+  }));
+  await page.goto(`/vote/${shareCode}`);
+  await page.fill("#voterName", "RejectTester");
+  await page.locator(`#card-${actOpt1Id} .reject-btn`).click();
+  await page.locator(`#card-${timeOpt1Id} .reject-btn`).click();
+  await expect(page.locator(`#card-${actOpt1Id}`)).toHaveClass(/rejected/);
+  await expect(page.locator(`#card-${timeOpt1Id}`)).toHaveClass(/rejected/);
+  await expect(page.locator(`#card-${actOpt2Id} .rank-num`)).toHaveText("1");
+  await expect(page.locator(`#card-${timeOpt2Id} .rank-num`)).toHaveText("1");
+  await page.click("#submitBtn");
+  await expect(page.getByText("Thanks for voting!")).toBeVisible();
+  const rows = await query(
+    "SELECT option_id, rank FROM hangout_votes WHERE plan_id = $1 AND voter_name = 'RejectTester'",
+    [planId],
+  );
+  const ranks = Object.fromEntries(rows.map((row) => [row.option_id, row.rank]));
+  expect(ranks[actOpt1Id]).toBeNull();
+  expect(ranks[timeOpt1Id]).toBeNull();
+  expect(ranks[actOpt2Id]).toBe(1);
+  expect(ranks[timeOpt2Id]).toBe(1);
 });
 
 test("finalized plan shows finalized banner on vote page", async ({ page }) => {

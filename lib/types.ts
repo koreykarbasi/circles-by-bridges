@@ -46,6 +46,7 @@ export interface HangoutPlan {
   finalizedOptionId?: string | null;
   finalizedTimeOptionId?: string | null;
   inviteeNames: string[];
+  voteLimit?: number | null;
   surveyMode: string;
   fixedActivity?: string | null;
   deadline?: string | null;
@@ -54,7 +55,6 @@ export interface HangoutPlan {
   updatedAt?: string | null;
   options?: HangoutOption[];
   bestRecommendation?: BestRecommendation;
-  voterLinks?: { name: string; token: string }[];
 }
 
 export interface HangoutOption {

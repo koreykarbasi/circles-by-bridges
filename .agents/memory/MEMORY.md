@@ -1,6 +1,6 @@
 - [Supabase DB vs local PG](supabase-db-routing.md) — server/db.ts uses SUPABASE_URL first; migrations must target SUPABASE_URL, not just DATABASE_URL.
 - [Suggestion push priority](suggestion-scoring-overhaul.md) — Home owns its cards and publishes their order; pushes rotate only within that durable snapshot.
-- [Public voting token identity](public-voting-token-identity.md) — name-only invitee matching is forgeable; use unforgeable per-invitee tokens to prove voter identity on public links.
+- [Open hangout voting](public-voting-token-identity.md) — the shared link accepts any name; invitees are cosmetic, and only a creator-selected voter cap limits names.
 - [Direct APNs push](apns-direct-push.md) — bypass Expo push service; standalone iOS uses getDevicePushTokenAsync → "apns:" prefix; server sends via APNs HTTP/2 + JWT.
 - [Daily push delivery invariants](daily-push-delivery.md) — quick-pick and suggestion co-deliver independently; eligibility and thresholds follow the recipient’s local calendar.
 - [Native reminder-list animation](native-reminder-list-animation.md) — remove Home reminder cards with one parent layout transition; nested animated heights leave a transient blank gap in Expo Go.

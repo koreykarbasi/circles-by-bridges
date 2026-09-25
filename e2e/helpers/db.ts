@@ -1,7 +1,18 @@
 import { Pool } from "pg";
 import { createHmac, randomBytes } from "crypto";
 
-const pool = new Pool({ connectionString: process.env.DATABASE_URL });
+// The test fixtures must be written to the same database the running API reads.
+const connectionString = process.env.SUPABASE_URL || process.env.DATABASE_URL;
+const isExternalDb = !!connectionString && (
+  connectionString.includes("supabase.com") ||
+  connectionString.includes("neon.tech") ||
+  connectionString.includes("sslmode=require")
+);
+const pool = new Pool({
+  connectionString,
+  ...(isExternalDb ? { ssl: { rejectUnauthorized: false } } : {}),
+  max: isExternalDb ? 2 : 10,
+});
 
 export async function query(sql: string, params: unknown[] = []) {
   const client = await pool.connect();
