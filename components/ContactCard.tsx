@@ -121,8 +121,12 @@ export function ContactCard({ contact, onPress, onMarkContacted, onPlanHangout, 
           </Text>
         )}
         {enrichmentMissing && (
-          <Text style={[styles.incompleteHint, { color: Colors.yellow }]}>
-            Add labels for curated suggestions
+          <Text style={[styles.incompleteHint, { color: Colors.yellow }]} numberOfLines={contact.circleLevel === 2 ? 1 : undefined}>
+            {contact.circleLevel === 3
+              ? "Add Birthday, Labels, and Interests"
+              : contact.circleLevel === 2
+                ? "Add interests and labels"
+                : "Add labels for curated suggestions"}
           </Text>
         )}
       </View>
