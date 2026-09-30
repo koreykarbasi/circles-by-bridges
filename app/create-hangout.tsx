@@ -271,6 +271,17 @@ export default function CreateHangoutScreen() {
         />
       </View>
 
+      <View style={styles.bottomActions}>
+        <Pressable
+          onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); setStep(2); }}
+          disabled={!canProceedStep1}
+          style={({ pressed }) => [styles.nextButton, !canProceedStep1 && styles.nextButtonDisabled, pressed && { opacity: 0.8 }]}
+        >
+          <Text style={styles.nextButtonText}>Next</Text>
+          <Ionicons name="arrow-forward" size={18} color={Colors.onPrimary} />
+        </Pressable>
+      </View>
+
       <View style={styles.presetsSection}>
         <Text style={styles.presetsTitle}>Need an idea?</Text>
         <Text style={styles.presetsHint}>Pick a hangout to fill in the title and description. You can edit both afterwards.</Text>
@@ -294,17 +305,6 @@ export default function CreateHangoutScreen() {
             );
           })}
         </View>
-      </View>
-
-      <View style={styles.bottomActions}>
-        <Pressable
-          onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); setStep(2); }}
-          disabled={!canProceedStep1}
-          style={({ pressed }) => [styles.nextButton, !canProceedStep1 && styles.nextButtonDisabled, pressed && { opacity: 0.8 }]}
-        >
-          <Text style={styles.nextButtonText}>Next</Text>
-          <Ionicons name="arrow-forward" size={18} color={Colors.onPrimary} />
-        </Pressable>
       </View>
     </>
   );
@@ -617,6 +617,7 @@ export default function CreateHangoutScreen() {
       </View>
 
       <ScrollView
+        key={step}
         style={styles.scrollContainer}
         contentContainerStyle={[
           styles.scrollContent,
