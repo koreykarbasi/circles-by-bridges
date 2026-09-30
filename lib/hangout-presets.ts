@@ -18,7 +18,7 @@ export const HANGOUT_PRESETS: HangoutPreset[] = [
   },
   {
     title: "🎤 Prezzy Hangout",
-    description: "Everyone brings a 10–15-minute presentation about something they're passionate about — no work talk or PowerPoint required. Just show up ready to share what you love.",
+    description: "Everyone does a 10-15 minute presentation about something they're passionate about — no work talk or PowerPoint required. Just show up ready to share what you love.",
   },
   {
     title: "🍸 Cocktail Night",
