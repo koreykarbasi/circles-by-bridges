@@ -272,7 +272,7 @@ export default function CreateHangoutScreen() {
         />
       </View>
 
-      <View style={styles.bottomActions}>
+      <View style={[styles.bottomActions, styles.step1BottomActions]}>
         <Pressable
           onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); setStep(2); }}
           disabled={!canProceedStep1}
@@ -696,7 +696,7 @@ const createStyles = (Colors: ThemeColors) => StyleSheet.create({
     fontSize: 15, fontFamily: "Nunito_400Regular", color: Colors.text,
   },
   textArea: { minHeight: 80, textAlignVertical: "top" },
-  presetsSection: { marginTop: 4, marginBottom: 18 },
+  presetsSection: { marginTop: 17, marginBottom: 18 },
   presetsTitle: { fontSize: 16, fontFamily: "Nunito_700Bold", color: Colors.text, marginBottom: 4 },
   presetsHint: {
     fontSize: 13, fontFamily: "Nunito_400Regular", color: Colors.textSecondary,
@@ -790,6 +790,7 @@ const createStyles = (Colors: ThemeColors) => StyleSheet.create({
   },
   checkboxSelected: { backgroundColor: Colors.primary, borderColor: Colors.primary },
   bottomActions: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginTop: 8 },
+  step1BottomActions: { marginTop: 1.5 },
   stickyFooter: {
     flexDirection: "row", justifyContent: "space-between", alignItems: "center",
     paddingHorizontal: 20, paddingTop: 12,
