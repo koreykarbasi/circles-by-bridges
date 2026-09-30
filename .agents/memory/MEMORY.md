@@ -12,3 +12,4 @@
 - [Appearance preference scope](appearance-preference.md) — Light/Dark is manual and device-local; keep dark launch branding until the saved palette has loaded.
 - [Suggestion action selection](suggestion-action-selection.md) — label/interest prompts can allow multiple actions; choose one stably with circle-specific weighting.
 - [Expo preview port conflict](expo-preview-port-conflict.md) — a leftover Expo process may own 8081 while the frontend workflow reports failed; check the listener before retrying.
+- [Expo CI preview refresh](expo-ci-preview-refresh.md) — after restarting Metro in CI mode, an existing browser tab can keep running its old bundle; verify in a fresh context.

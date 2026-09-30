@@ -256,13 +256,6 @@ export default function AuthScreen() {
             </TouchableOpacity>
           </View>
 
-          {isLogin && (
-            <View style={styles.demoHint}>
-              <Text style={styles.demoText}>
-                Try demo: demo@bridges.app / demo123
-              </Text>
-            </View>
-          )}
         </View>
       </KeyboardAwareScrollView>
 
@@ -496,21 +489,6 @@ const createStyles = (Colors: ThemeColors) => StyleSheet.create({
     fontFamily: "Nunito_400Regular",
     fontSize: 14,
     flex: 1,
-  },
-  demoHint: {
-    alignItems: "center",
-    marginTop: 4,
-    paddingVertical: 10,
-    paddingHorizontal: 16,
-    backgroundColor: Colors.surfaceElevated,
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: Colors.border,
-  },
-  demoText: {
-    fontSize: 13,
-    fontFamily: "Nunito_400Regular",
-    color: Colors.textTertiary,
   },
   modalOverlay: {
     flex: 1,

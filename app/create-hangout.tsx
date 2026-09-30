@@ -208,6 +208,7 @@ export default function CreateHangoutScreen() {
     prefix: string,
     placeholder: string,
     maxOptions: number = 5,
+    secondPlaceholder?: string,
   ) => (
     <>
       {opts.map((opt, idx) => (
@@ -219,7 +220,7 @@ export default function CreateHangoutScreen() {
             style={styles.optionInput}
             value={opt.label}
             onChangeText={(v) => updateOption(setter, opt.key, v)}
-            placeholder={placeholder}
+            placeholder={idx === 1 && secondPlaceholder ? secondPlaceholder : placeholder}
             placeholderTextColor={Colors.textTertiary}
           />
           {opts.length > 1 && (
@@ -397,47 +398,6 @@ export default function CreateHangoutScreen() {
       <Text style={styles.stepTitle}>Build the survey</Text>
       <Text style={styles.stepDescription}>Set up what your friends will rank and vote on.</Text>
 
-      {/* Activity mode toggle */}
-      <View style={styles.sectionCard}>
-        <Text style={styles.sectionCardTitle}>Activity</Text>
-        <View style={styles.modeToggleRow}>
-          <Pressable
-            onPress={() => { Haptics.selectionAsync(); setSurveyMode("standard"); }}
-            style={[styles.modeToggleBtn, surveyMode === "standard" && styles.modeToggleBtnActive]}
-          >
-            <Text style={[styles.modeToggleBtnText, surveyMode === "standard" && styles.modeToggleBtnTextActive]}>
-              Multiple options
-            </Text>
-          </Pressable>
-          <Pressable
-            onPress={() => { Haptics.selectionAsync(); setSurveyMode("fixed-activity"); }}
-            style={[styles.modeToggleBtn, surveyMode === "fixed-activity" && styles.modeToggleBtnActive]}
-          >
-            <Text style={[styles.modeToggleBtnText, surveyMode === "fixed-activity" && styles.modeToggleBtnTextActive]}>
-              Fixed activity
-            </Text>
-          </Pressable>
-        </View>
-
-        {surveyMode === "standard" ? (
-          <>
-            <Text style={styles.fieldHint}>Friends will rank these options (3–5 max)</Text>
-            {renderOptionList(activityOptions, setActivityOptions, "a", "e.g. Bowling, dinner, park...", 5)}
-          </>
-        ) : (
-          <>
-            <Text style={styles.fieldHint}>Activity is already decided</Text>
-            <TextInput
-              style={styles.textInput}
-              value={fixedActivity}
-              onChangeText={setFixedActivity}
-              placeholder="e.g. My birthday, Canada Day BBQ..."
-              placeholderTextColor={Colors.textTertiary}
-            />
-          </>
-        )}
-      </View>
-
       {/* Time options — datetime picker accordion */}
       <View style={styles.sectionCard}>
         <Text style={styles.sectionCardTitle}>When</Text>
@@ -506,6 +466,47 @@ export default function CreateHangoutScreen() {
             <Ionicons name="add-circle-outline" size={18} color={Colors.primaryLight} />
             <Text style={styles.addOptionText}>Add time option</Text>
           </Pressable>
+        )}
+      </View>
+
+      {/* Activity mode toggle */}
+      <View style={styles.sectionCard}>
+        <Text style={styles.sectionCardTitle}>Activity or Location</Text>
+        <View style={styles.modeToggleRow}>
+          <Pressable
+            onPress={() => { Haptics.selectionAsync(); setSurveyMode("standard"); }}
+            style={[styles.modeToggleBtn, surveyMode === "standard" && styles.modeToggleBtnActive]}
+          >
+            <Text style={[styles.modeToggleBtnText, surveyMode === "standard" && styles.modeToggleBtnTextActive]}>
+              Multiple options
+            </Text>
+          </Pressable>
+          <Pressable
+            onPress={() => { Haptics.selectionAsync(); setSurveyMode("fixed-activity"); }}
+            style={[styles.modeToggleBtn, surveyMode === "fixed-activity" && styles.modeToggleBtnActive]}
+          >
+            <Text style={[styles.modeToggleBtnText, surveyMode === "fixed-activity" && styles.modeToggleBtnTextActive]}>
+              Fixed activity
+            </Text>
+          </Pressable>
+        </View>
+
+        {surveyMode === "standard" ? (
+          <>
+            <Text style={styles.fieldHint}>Friends will rank these options (3–5 max)</Text>
+            {renderOptionList(activityOptions, setActivityOptions, "a", "e.g. Bowling, dinner, park...", 5, "e.g. John's house...")}
+          </>
+        ) : (
+          <>
+            <Text style={styles.fieldHint}>Activity is already decided</Text>
+            <TextInput
+              style={styles.textInput}
+              value={fixedActivity}
+              onChangeText={setFixedActivity}
+              placeholder="e.g. My birthday, Canada Day BBQ..."
+              placeholderTextColor={Colors.textTertiary}
+            />
+          </>
         )}
       </View>
 

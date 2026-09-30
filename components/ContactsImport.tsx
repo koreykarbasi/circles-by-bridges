@@ -144,9 +144,25 @@ export function ContactsImport({
 
   const isSelected = (name: string) => selectedContacts.some((s) => s.name === name);
 
-  const filteredContacts = deviceContacts.filter((c) =>
-    c.name.toLowerCase().includes(search.toLowerCase()),
-  );
+  const query = search.trim().toLowerCase();
+  const filteredContacts = !query
+    ? deviceContacts
+    : deviceContacts
+        .filter((c) => c.name.toLowerCase().includes(query))
+        .sort((a, b) => {
+          const matchRank = (name: string) => {
+            const normalized = name.trim().toLowerCase();
+            const [firstName, ...otherNames] = normalized.split(/\s+/);
+            if (normalized === query) return 0;
+            if (firstName === query) return 1;
+            if (normalized.startsWith(query) || firstName.startsWith(query)) return 2;
+            if (otherNames.some((part) => part.startsWith(query))) return 3;
+            return 4;
+          };
+          const rankDifference = matchRank(a.name) - matchRank(b.name);
+          if (rankDifference !== 0) return rankDifference;
+          return Number(isSelected(b.name)) - Number(isSelected(a.name));
+        });
 
   const SelectedChips = () =>
     selectedContacts.length > 0 ? (
