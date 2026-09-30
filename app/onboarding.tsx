@@ -9,11 +9,11 @@ import {
   ScrollView,
   Platform,
   Image,
-  KeyboardAvoidingView,
   TextInput,
   TouchableOpacity,
   ActivityIndicator,
 } from "react-native";
+import { KeyboardAwareScrollView } from "react-native-keyboard-controller";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import Animated, { FadeIn } from "react-native-reanimated";
@@ -369,18 +369,16 @@ function AuthPage({ onSuccess, isActive }: { onSuccess: () => void; isActive: bo
 
   return (
     <View style={pageStyles.page}>
-      <KeyboardAvoidingView
-        style={{ flex: 1 }}
-        behavior={Platform.OS === "ios" ? "padding" : "height"}
-        keyboardVerticalOffset={0}
-      >
-        <ScrollView
+      <View style={{ flex: 1 }}>
+        <KeyboardAwareScrollView
+          style={{ flex: 1 }}
           contentContainerStyle={[
             authStyles.scrollContent,
             { paddingBottom: insets.bottom + 24 + webBottomInset },
           ]}
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
+          bottomOffset={24}
         >
           <Animated.View entering={FadeIn.duration(400)}>
             <Text style={pageStyles.title}>
@@ -559,8 +557,8 @@ function AuthPage({ onSuccess, isActive }: { onSuccess: () => void; isActive: bo
               </Text>
             )}
           </Pressable>
-        </ScrollView>
-      </KeyboardAvoidingView>
+        </KeyboardAwareScrollView>
+      </View>
     </View>
   );
 }
