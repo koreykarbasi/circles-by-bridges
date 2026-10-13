@@ -178,13 +178,14 @@ describe("iOS isolation", () => {
   test.each(["android", "ios", "web"])("Expo Router selects only the intended %s route files", (platform) => {
     const { getRoutes } = require("expo-router/build/getRoutesCore");
     const context = Object.assign(() => ({ default: () => null }), {
-      keys: () => ["./_layout.tsx", "./auth.tsx", "./auth.android.tsx", "./onboarding.tsx", "./onboarding.android.tsx"],
+      keys: () => ["./_layout.tsx", "./auth.tsx", "./auth.android.tsx", "./onboarding.tsx", "./onboarding.android.tsx", "./profile.tsx", "./profile.android.tsx"],
     });
     const tree = getRoutes(context, { platform, skipGenerated: true, importMode: "lazy" });
     const keys = tree.children.map((route: { contextKey: string }) => route.contextKey);
     expect(keys).toContain(platform === "android" ? "./auth.android.tsx" : "./auth.tsx");
     expect(keys).toContain(platform === "android" ? "./onboarding.android.tsx" : "./onboarding.tsx");
-    expect(keys).toHaveLength(2);
+    expect(keys).toContain(platform === "android" ? "./profile.android.tsx" : "./profile.tsx");
+    expect(keys).toHaveLength(3);
   });
   test("only Android UI entry points import Android-only auth helpers", () => {
     for (const file of ["app/onboarding.tsx", "app/auth.tsx"]) {

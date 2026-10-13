@@ -16,3 +16,17 @@ Expo Router's route context can package Android route siblings in iOS exports ev
 **Why:** Export source maps showed complete Android-only authentication implementations inside an iOS bundle despite correct route selection.
 
 **How to apply:** Check native export source maps as well as route selection when strict platform isolation is requested. The iOS graph should contain only the route wrappers and original-screen fallbacks, not the Android implementation or its helpers.
+
+## Android logout during server failures
+
+Keep device sign-out separate from server-session revocation: a failed or stalled API request must not trap Android users in their account, but local sign-out must not be described as successful server cleanup.
+
+**Why:** The Profile confirmation previously awaited the server before clearing auth, leaving users signed in without an error when that request failed. Clearing only React state would also allow a surviving cookie or cached account to restore the session on restart.
+
+**How to apply:** Preserve the durable local sign-out guard, invalidate pending auth hydration/updates, report remote cleanup failures, and retry cleanup before a deliberate new sign-in replaces the previous cookie. Keep these policies Android-only.
+
+Android bodyless JSON requests should send an explicit empty JSON object rather than relying on native transport to represent an absent body correctly.
+
+**Why:** While investigating Android sign-out, server logs showed JSON parsing failures for a single NUL byte. A JSON header combined with an absent request body risks that transport failure before the endpoint runs.
+
+**How to apply:** Keep empty-body fixes scoped to Android request callers; do not change the shared API client or iOS transport to address this Android failure.
