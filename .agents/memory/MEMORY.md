@@ -13,3 +13,4 @@
 - [Suggestion action selection](suggestion-action-selection.md) — label/interest prompts can allow multiple actions; choose one stably with circle-specific weighting.
 - [Expo preview port conflict](expo-preview-port-conflict.md) — a leftover Expo process may own 8081 while the frontend workflow reports failed; check the listener before retrying.
 - [Expo CI preview refresh](expo-ci-preview-refresh.md) — after restarting Metro in CI mode, an existing browser tab can keep running its old bundle; verify in a fresh context.
+- [Android fix isolation](android-fix-isolation.md) — Android testing fixes must not modify main/shared code or change the iOS app; use Android-specific files.
