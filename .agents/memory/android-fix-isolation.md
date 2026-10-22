@@ -30,3 +30,11 @@ Android bodyless JSON requests should send an explicit empty JSON object rather 
 **Why:** While investigating Android sign-out, server logs showed JSON parsing failures for a single NUL byte. A JSON header combined with an absent request body risks that transport failure before the endpoint runs.
 
 **How to apply:** Keep empty-body fixes scoped to Android request callers; do not change the shared API client or iOS transport to address this Android failure.
+
+## Android component render checks
+
+The default unit-test transform inherits React Native's JSX-preserving compiler mode. Direct component imports can therefore fail with an unexpected JSX token even when native Expo exports compile correctly.
+
+**Why:** Metro normally handles that JSX, but the Node-based unit runner does not. Changing app or shared compiler settings merely to enable an Android render test would violate the isolation requirement.
+
+**How to apply:** Keep JSX-emitting Android render checks in an isolated test configuration. Treat mocked/native-component render checks as evidence of slot population and fallback logic, not proof of physical Android image painting or gestures; web preview also selects the shared, non-Android implementation.

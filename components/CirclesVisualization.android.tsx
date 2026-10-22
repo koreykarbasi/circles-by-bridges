@@ -14,7 +14,7 @@ import Animated, {
 import { Ionicons } from "@expo/vector-icons";
 import { useThemeColors } from "@/lib/theme-context";
 import type { ThemeColors } from "@/constants/colors";
-import { Avatar } from "./Avatar";
+import { AndroidOrbitAvatar } from "./android-only/OrbitAvatar";
 import type { Contact } from "@/lib/types";
 import type { AuthUser } from "@/lib/types";
 import { androidOrbitGeometry } from "@/lib/android-only/orbit-geometry";
@@ -57,6 +57,8 @@ function OrbitingAvatar({
   const baseAngleRadians = (baseAngle * Math.PI) / 180;
   const initialPosition = {
     position: "absolute" as const,
+    width: avatarSize,
+    height: avatarSize,
     left: center + Math.cos(baseAngleRadians) * radius - avatarSize / 2,
     top: center + Math.sin(baseAngleRadians) * radius - avatarSize / 2,
   };
@@ -73,13 +75,15 @@ function OrbitingAvatar({
   }, [baseAngle, radius, center, avatarSize]);
 
   return (
-    <Animated.View style={[initialPosition, animatedStyle]}>
+    <Animated.View collapsable={false} style={[initialPosition, animatedStyle]}>
       <Pressable
+        accessibilityRole="button"
+        accessibilityLabel={`Open ${contact.name}`}
         onPress={() => router.push({ pathname: "/edit-contact", params: { id: contact.id } })}
         style={({ pressed }) => [pressed && { opacity: 0.7 }]}
         hitSlop={6}
       >
-        <Avatar
+        <AndroidOrbitAvatar
           name={contact.name}
           color={contact.avatarColor}
           size={avatarSize}
