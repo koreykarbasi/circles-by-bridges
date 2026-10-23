@@ -4,12 +4,12 @@ import { ScrollView } from "react-native-gesture-handler";
 import { useThemeColors } from "@/lib/theme-context";
 import { createWheelSelection } from "@/lib/android-only/wheel-selection";
 import { BIRTHDAY_YEARS as YEARS, birthdayMonthDays, birthdaySelection, parseBirthdaySelection } from "@/lib/android-only/birthday-date";
+import {
+  SCHEDULE_MONTHS, scheduleYears, scheduleMonthDays, scheduleSelection,
+  parseScheduleSelection, formatScheduleSelection,
+} from "@/lib/android-only/scheduled-date";
+import type { ScheduleMode, ScheduleSelection } from "@/lib/android-only/scheduled-date";
 import type { DateWheelPickerProps } from "./DateWheelPicker";
-
-// Explicit extension bypasses Android resolution; all non-birthday modes use
-// the untouched original implementation, without importing ourselves.
-const { DateWheelPicker: OriginalPicker } =
-  require("./DateWheelPicker.tsx") as typeof import("./DateWheelPicker");
 
 const ITEM_HEIGHT = 34;
 const MONTHS = [
@@ -17,12 +17,13 @@ const MONTHS = [
   "July", "August", "September", "October", "November", "December",
 ];
 
-function Wheel({ items, selected, onSelect, flex, label }: {
+function Wheel({ items, selected, onSelect, flex, label, mode = "birthday" }: {
   items: string[];
   selected: number;
   onSelect: (index: number) => void;
   flex: number;
   label: string;
+  mode?: DateWheelPickerProps["mode"];
 }) {
   const colors = useThemeColors();
   const scroll = useRef<ScrollView>(null);
@@ -60,7 +61,7 @@ function Wheel({ items, selected, onSelect, flex, label }: {
       <ScrollView
         ref={scroll}
         accessibilityLabel={label}
-        testID={`android-birthday-${label.toLowerCase()}`}
+        testID={`android-${mode}-${label.toLowerCase()}`}
         contentOffset={{ x: 0, y: selected * ITEM_HEIGHT }}
         nestedScrollEnabled
         disallowInterruption
@@ -139,10 +140,64 @@ function BirthdayPicker({ value, onChange }: DateWheelPickerProps) {
   );
 }
 
+function ScheduledPicker({ value, onChange, mode }: DateWheelPickerProps & { mode: ScheduleMode }) {
+  const colors = useThemeColors();
+  const years = useMemo(() => scheduleYears(mode), [mode]);
+  const [selected, setSelected] = useState(() => parseScheduleSelection(value, mode, years));
+  // Refs let consecutive wheel events compose before React's next render.
+  const current = useRef(selected);
+  const previousValue = useRef(value);
+  useEffect(() => {
+    if (previousValue.current === value) return;
+    previousValue.current = value;
+    const next = parseScheduleSelection(value, mode, years);
+    current.current = next;
+    setSelected(next);
+  }, [value, mode, years]);
+  const change = (field: keyof ScheduleSelection, index: number) => {
+    const next = scheduleSelection({ ...current.current, [field]: index }, years);
+    current.current = next;
+    setSelected(next);
+    const formatted = formatScheduleSelection(next, mode, years);
+    previousValue.current = formatted;
+    onChange(formatted);
+  };
+  const days = Array.from({ length: scheduleMonthDays(selected.month, selected.yearIndex, years) },
+    (_, i) => String(i + 1).padStart(2, "0"));
+  const separator = () => (
+    <View style={{ width: 1, height: ITEM_HEIGHT * 3, backgroundColor: colors.borderLight }} />
+  );
+  const weekday = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"][
+    new Date(Number(years[selected.yearIndex]), selected.month, selected.day + 1).getDay()
+  ];
+  return (
+    <View style={[styles.container, { backgroundColor: colors.surface, borderColor: colors.borderLight }]}>
+      <Wheel mode={mode} items={mode === "datetime" ? SCHEDULE_MONTHS.map(m => m.slice(0, 3)) : SCHEDULE_MONTHS}
+        selected={selected.month} onSelect={i => change("month", i)} flex={mode === "datetime" ? 1.4 : 2} label="Month" />
+      {separator()}
+      <Wheel mode={mode} items={days} selected={selected.day} onSelect={i => change("day", i)} flex={1} label="Day" />
+      {separator()}
+      <Wheel mode={mode} items={years} selected={selected.yearIndex} onSelect={i => change("yearIndex", i)} flex={1.4} label="Year" />
+      {mode === "datetime" && <>
+        {separator()}
+        <Wheel mode={mode} items={Array.from({ length: 12 }, (_, i) => String(i + 1))}
+          selected={selected.hour} onSelect={i => change("hour", i)} flex={1} label="Hour" />
+        {separator()}
+        <Wheel mode={mode} items={["AM", "PM"]} selected={selected.ampm}
+          onSelect={i => change("ampm", i)} flex={1} label="AMPM" />
+      </>}
+      {separator()}
+      <View style={{ flex: 1.1, alignItems: "center" }}>
+        <Text numberOfLines={1} style={{ fontFamily: "Nunito_800ExtraBold", fontSize: 14, color: colors.primary }}>{weekday}</Text>
+      </View>
+    </View>
+  );
+}
+
 export function DateWheelPicker(props: DateWheelPickerProps) {
   return (props.mode ?? "birthday") === "birthday"
     ? <BirthdayPicker {...props} />
-    : <OriginalPicker {...props} />;
+    : <ScheduledPicker key={props.mode} {...props} mode={props.mode as ScheduleMode} />;
 }
 
 const styles = StyleSheet.create({
