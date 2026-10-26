@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   View,
   Text,
@@ -8,7 +8,6 @@ import {
   KeyboardAvoidingView,
   Platform,
   ActivityIndicator,
-  Alert,
   Image,
   Modal,
 } from "react-native";
@@ -16,15 +15,18 @@ import { KeyboardAwareScrollView } from "react-native-keyboard-controller";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import type { ThemeColors } from "@/constants/colors";
-import { useThemeColors } from "@/lib/theme-context";
+import { useTheme, useThemeColors } from "@/lib/theme-context";
 import { useAuth } from "@/lib/auth-context";
 import { apiRequest } from "@/lib/query-client";
+import * as AppleAuthentication from "expo-apple-authentication";
+import * as Google from "expo-auth-session/providers/google";
 
 export default function AuthScreen() {
   const Colors = useThemeColors();
+  const { mode: themeMode } = useTheme();
   const styles = useMemo(() => createStyles(Colors), [Colors]);
   const insets = useSafeAreaInsets();
-  const { login, register } = useAuth();
+  const { login, register, loginWithApple, loginWithGoogle } = useAuth();
   const [isLogin, setIsLogin] = useState(true);
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
@@ -32,8 +34,58 @@ export default function AuthScreen() {
   const [confirmPassword, setConfirmPassword] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState("");
-  const [successMessage, setSuccessMessage] = useState("");
   const [showPassword, setShowPassword] = useState(false);
+  const authInFlight = useRef(false);
+  const showGoogleButton = !!(
+    process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID ||
+    process.env.EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID ||
+    process.env.EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID
+  );
+
+  const handleAppleSignIn = async () => {
+    if (authInFlight.current) return;
+    authInFlight.current = true;
+    setIsSubmitting(true);
+    setError("");
+    try {
+      const credential = await AppleAuthentication.signInAsync({
+        requestedScopes: [
+          AppleAuthentication.AppleAuthenticationScope.FULL_NAME,
+          AppleAuthentication.AppleAuthenticationScope.EMAIL,
+        ],
+      });
+      if (!credential.identityToken) {
+        throw new Error("Apple sign in failed. Please try again.");
+      }
+      await loginWithApple(credential.identityToken, {
+        givenName: credential.fullName?.givenName,
+        familyName: credential.fullName?.familyName,
+      });
+      // AuthProvider updates the session; the existing root guard opens the app.
+    } catch (err: unknown) {
+      if ((err as { code?: string })?.code !== "ERR_REQUEST_CANCELED") {
+        setError(err instanceof Error ? err.message : "Apple sign in failed. Please try again.");
+      }
+    } finally {
+      authInFlight.current = false;
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleGoogleToken = async (token: string) => {
+    if (authInFlight.current) return;
+    authInFlight.current = true;
+    setIsSubmitting(true);
+    setError("");
+    try {
+      await loginWithGoogle(token);
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "Google sign in failed. Please try again.");
+    } finally {
+      authInFlight.current = false;
+      setIsSubmitting(false);
+    }
+  };
 
   const [showForgotModal, setShowForgotModal] = useState(false);
   const [forgotEmail, setForgotEmail] = useState("");
@@ -42,13 +94,10 @@ export default function AuthScreen() {
   const [forgotError, setForgotError] = useState("");
 
   const handleSubmit = async () => {
+    if (authInFlight.current) return;
     setError("");
     if (!email.trim() || !password) {
       setError("Please fill in all fields");
-      return;
-    }
-    if (!isLogin && !name.trim()) {
-      setError("Please enter your name");
       return;
     }
     if (!isLogin && password !== confirmPassword) {
@@ -60,16 +109,14 @@ export default function AuthScreen() {
       return;
     }
 
+    authInFlight.current = true;
     setIsSubmitting(true);
     try {
       if (isLogin) {
         await login(email.trim(), password);
       } else {
-        await register(email.trim(), password, name.trim());
-        setSuccessMessage("Account created. Please sign in to continue.");
-        setIsLogin(true);
-        setPassword("");
-        setConfirmPassword("");
+        await register(email.trim(), password, name.trim() || undefined);
+        await login(email.trim(), password);
       }
     } catch (err: any) {
       const msg = err?.message || "Something went wrong";
@@ -81,6 +128,7 @@ export default function AuthScreen() {
         setError(cleaned);
       }
     } finally {
+      authInFlight.current = false;
       setIsSubmitting(false);
     }
   };
@@ -132,6 +180,42 @@ export default function AuthScreen() {
         </View>
 
         <View style={styles.form}>
+          {Platform.OS === "ios" && (
+            <View
+              pointerEvents={isSubmitting ? "none" : "auto"}
+              accessibilityState={{ disabled: isSubmitting, busy: isSubmitting }}
+            >
+              <AppleAuthentication.AppleAuthenticationButton
+                buttonType={AppleAuthentication.AppleAuthenticationButtonType.SIGN_IN}
+                buttonStyle={
+                  themeMode === "dark"
+                    ? AppleAuthentication.AppleAuthenticationButtonStyle.WHITE
+                    : AppleAuthentication.AppleAuthenticationButtonStyle.BLACK
+                }
+                cornerRadius={14}
+                style={styles.appleButton}
+                onPress={handleAppleSignIn}
+                testID="auth-apple"
+              />
+            </View>
+          )}
+
+          {showGoogleButton && (
+            <GoogleAuthButton
+              onToken={handleGoogleToken}
+              onError={setError}
+              disabled={isSubmitting}
+            />
+          )}
+
+          {(Platform.OS === "ios" || showGoogleButton) && (
+            <View style={styles.divider}>
+              <View style={styles.dividerLine} />
+              <Text style={styles.dividerText}>or</Text>
+              <View style={styles.dividerLine} />
+            </View>
+          )}
+
           {error ? (
             <View style={styles.errorBox}>
               <Ionicons name="alert-circle" size={16} color={Colors.danger} />
@@ -139,16 +223,9 @@ export default function AuthScreen() {
             </View>
           ) : null}
 
-          {successMessage ? (
-            <View style={styles.successBox}>
-              <Ionicons name="checkmark-circle" size={16} color={Colors.success} />
-              <Text style={styles.successText}>{successMessage}</Text>
-            </View>
-          ) : null}
-
           {!isLogin && (
             <View style={styles.inputGroup}>
-              <Text style={styles.label}>Name</Text>
+              <Text style={styles.label}>Name (optional)</Text>
               <View style={styles.inputWrapper}>
                 <Ionicons name="person-outline" size={18} color={Colors.textSecondary} style={styles.inputIcon} />
                 <TextInput
@@ -159,6 +236,8 @@ export default function AuthScreen() {
                   onChangeText={setName}
                   autoCapitalize="words"
                   autoCorrect={false}
+                  autoComplete="name"
+                  textContentType="name"
                   testID="auth-name"
                 />
               </View>
@@ -178,6 +257,8 @@ export default function AuthScreen() {
                 keyboardType="email-address"
                 autoCapitalize="none"
                 autoCorrect={false}
+                autoComplete="email"
+                textContentType="emailAddress"
                 testID="auth-email"
               />
             </View>
@@ -194,6 +275,10 @@ export default function AuthScreen() {
                 value={password}
                 onChangeText={setPassword}
                 secureTextEntry={!showPassword}
+                autoCapitalize="none"
+                autoCorrect={false}
+                autoComplete={isLogin ? "current-password" : "new-password"}
+                textContentType={isLogin ? "password" : "newPassword"}
                 testID="auth-password"
               />
               <TouchableOpacity onPress={() => setShowPassword(!showPassword)} style={styles.eyeButton}>
@@ -214,6 +299,10 @@ export default function AuthScreen() {
                   value={confirmPassword}
                   onChangeText={setConfirmPassword}
                   secureTextEntry={!showPassword}
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  autoComplete="new-password"
+                  textContentType="newPassword"
                   testID="auth-confirm-password"
                 />
               </View>
@@ -249,7 +338,7 @@ export default function AuthScreen() {
             <Text style={styles.switchText}>
               {isLogin ? "Don't have an account?" : "Already have an account?"}
             </Text>
-            <TouchableOpacity onPress={() => { setIsLogin(!isLogin); setError(""); setSuccessMessage(""); }} testID="auth-switch">
+            <TouchableOpacity disabled={isSubmitting} onPress={() => { setIsLogin(!isLogin); setError(""); setPassword(""); setConfirmPassword(""); }} testID="auth-switch">
               <Text style={styles.switchLink}>
                 {isLogin ? "Sign Up" : "Sign In"}
               </Text>
@@ -342,7 +431,94 @@ export default function AuthScreen() {
   );
 }
 
+// Mount only when client IDs are configured, just as in onboarding.
+function GoogleAuthButton({
+  onToken,
+  onError,
+  disabled,
+}: {
+  onToken: (token: string) => Promise<void>;
+  onError: (message: string) => void;
+  disabled: boolean;
+}) {
+  const Colors = useThemeColors();
+  const styles = useMemo(() => createStyles(Colors), [Colors]);
+  const [isPrompting, setIsPrompting] = useState(false);
+  const [request, response, promptAsync] = Google.useAuthRequest({
+    webClientId: process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID,
+    iosClientId: process.env.EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID,
+    androidClientId: process.env.EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID,
+  });
+  const callbacks = useRef({ onToken, onError });
+  callbacks.current = { onToken, onError };
+
+  useEffect(() => {
+    if (response?.type === "success") {
+      const token = response.authentication?.idToken;
+      if (token) void callbacks.current.onToken(token);
+      else callbacks.current.onError("Google sign in did not return an ID token. Please try again.");
+    } else if (response?.type === "error") {
+      callbacks.current.onError("Google sign in failed. Please try again.");
+    }
+  }, [response]);
+
+  return (
+    <TouchableOpacity
+      style={styles.socialButton}
+      disabled={disabled || isPrompting || !request}
+      onPress={async () => {
+        setIsPrompting(true);
+        try {
+          await promptAsync();
+        } catch {
+          callbacks.current.onError("Google sign in failed. Please try again.");
+        } finally {
+          setIsPrompting(false);
+        }
+      }}
+      testID="auth-google"
+    >
+      <Ionicons name="logo-google" size={20} color={Colors.text} />
+      <Text style={styles.socialButtonText}>Continue with Google</Text>
+    </TouchableOpacity>
+  );
+}
+
 const createStyles = (Colors: ThemeColors) => StyleSheet.create({
+  appleButton: {
+    width: "100%",
+    height: 52,
+  },
+  socialButton: {
+    height: 52,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    backgroundColor: Colors.surface,
+    flexDirection: "row",
+    justifyContent: "center",
+    alignItems: "center",
+    gap: 10,
+  },
+  socialButtonText: {
+    fontSize: 16,
+    fontFamily: "Nunito_600SemiBold",
+    color: Colors.text,
+  },
+  divider: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+  },
+  dividerLine: {
+    flex: 1,
+    height: 1,
+    backgroundColor: Colors.border,
+  },
+  dividerText: {
+    color: Colors.textTertiary,
+    fontSize: 14,
+  },
   container: {
     flex: 1,
     backgroundColor: Colors.background,
