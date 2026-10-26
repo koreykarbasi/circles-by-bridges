@@ -18,7 +18,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import Animated, { FadeIn } from "react-native-reanimated";
 import type { ThemeColors } from "@/constants/colors";
-import { useThemeColors } from "@/lib/theme-context";
+import { useTheme, useThemeColors } from "@/lib/theme-context";
 import { CIRCLE_CONFIG } from "@/lib/types";
 import { ContactsImport, ImportedContact } from "@/components/ContactsImport";
 import { useOnboarding } from "@/lib/onboarding-context";
@@ -260,6 +260,7 @@ export default function OnboardingScreen() {
 
 function AuthPage({ onSuccess, isActive }: { onSuccess: () => void; isActive: boolean }) {
   const Colors = useThemeColors();
+  const { mode: themeMode } = useTheme();
   const pageStyles = useMemo(() => createPageStyles(Colors), [Colors]);
   const authStyles = useMemo(() => createAuthStyles(Colors), [Colors]);
   const { user, login, register, loginWithApple, loginWithGoogle } = useAuth();
@@ -395,7 +396,11 @@ function AuthPage({ onSuccess, isActive }: { onSuccess: () => void; isActive: bo
           {Platform.OS === "ios" && (
             <AppleAuthentication.AppleAuthenticationButton
               buttonType={AppleAuthentication.AppleAuthenticationButtonType.SIGN_IN}
-              buttonStyle={AppleAuthentication.AppleAuthenticationButtonStyle.BLACK}
+              buttonStyle={
+                themeMode === "dark"
+                  ? AppleAuthentication.AppleAuthenticationButtonStyle.WHITE
+                  : AppleAuthentication.AppleAuthenticationButtonStyle.BLACK
+              }
               cornerRadius={14}
               style={authStyles.appleButton}
               onPress={handleAppleSignIn}
