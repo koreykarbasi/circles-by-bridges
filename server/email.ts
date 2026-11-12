@@ -117,7 +117,7 @@ export async function sendHangoutCalendarInvite(
     : "";
 
   const { error } = await resend.emails.send({
-    from: "Bridges <onboarding@resend.dev>",
+    from: "Bridges <noreply@buildmybridges.com>",
     to,
     subject: `You're invited: ${cleanHangoutTitle}`,
     html: `<!DOCTYPE html>
