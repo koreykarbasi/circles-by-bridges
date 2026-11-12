@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useEffect, useRef, useCallback } from "react";
-import { View, Text, StyleSheet, Pressable, TextInput, Platform, Modal, ActivityIndicator } from "react-native";
+import { View, Text, StyleSheet, Pressable, TextInput, Platform, Modal, ActivityIndicator, ScrollView } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import type { ThemeColors } from "@/constants/colors";
@@ -16,6 +16,7 @@ import { BellSheet, computeBellDotColor } from "@/components/BellSheet";
 import { useSequentialHints, HINT_TEXT } from "@/lib/hints-store";
 import { HintTooltip } from "@/components/HintTooltip";
 import DraggableFlatList, { RenderItemParams, ScaleDecorator } from "react-native-draggable-flatlist";
+import { CIRCLE_DESCRIPTIONS } from "@/shared/circle-descriptions";
 
 function isMissingEnrichment(c: Contact): boolean {
   return (c.interests ?? []).length === 0;
@@ -32,6 +33,7 @@ export default function CirclesScreen() {
   const [activeFilter, setActiveFilter] = useState<string | null>(null);
   const [bellSheetOpen, setBellSheetOpen] = useState(false);
   const [addSheetOpen, setAddSheetOpen] = useState(false);
+  const [circleInfoOpen, setCircleInfoOpen] = useState(false);
   const searchRef = useRef<TextInput>(null);
   const [activeHint, dismissHint] = useSequentialHints(["circles_viz", "circles_calendar"]);
 
@@ -146,7 +148,18 @@ export default function CirclesScreen() {
   const listHeader = useMemo(() => (
     <View style={[styles.headerWrapper, { paddingTop: insets.top + 16 + webTopInset }]}>
       <View style={styles.header}>
-        <Text style={styles.title}>Circles</Text>
+        <View style={styles.titleGroup}>
+          <Text style={styles.title}>Circles</Text>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={`About ${config.label}`}
+            onPress={() => setCircleInfoOpen(true)}
+            hitSlop={8}
+            style={({ pressed }) => [styles.infoButton, pressed && { opacity: 0.65 }]}
+          >
+            <Ionicons name="information-outline" size={17} color={Colors.textSecondary} />
+          </Pressable>
+        </View>
         <View style={styles.headerActions}>
           <Pressable
             onPress={() => {
@@ -318,6 +331,49 @@ export default function CirclesScreen() {
       />
 
       <Modal
+        visible={circleInfoOpen}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setCircleInfoOpen(false)}
+      >
+        <View style={styles.infoBackdrop}>
+          <Pressable
+            style={StyleSheet.absoluteFill}
+            onPress={() => setCircleInfoOpen(false)}
+            accessibilityRole="button"
+            accessibilityLabel="Close circle information"
+          />
+          <View
+            accessibilityViewIsModal
+            style={[
+              styles.infoModal,
+              { marginTop: Math.max(insets.top, 20), marginBottom: Math.max(insets.bottom, 20) },
+            ]}
+          >
+            <View style={styles.infoModalHeader}>
+              <Text style={styles.infoModalTitle}>{CIRCLE_DESCRIPTIONS[activeCircle].name}</Text>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Close"
+                onPress={() => setCircleInfoOpen(false)}
+                hitSlop={10}
+                style={({ pressed }) => [styles.infoCloseButton, pressed && { opacity: 0.65 }]}
+              >
+                <Ionicons name="close" size={20} color={Colors.textSecondary} />
+              </Pressable>
+            </View>
+            <ScrollView
+              style={styles.infoScroll}
+              contentContainerStyle={styles.infoScrollContent}
+              showsVerticalScrollIndicator
+            >
+              <Text style={styles.infoExplanation}>{CIRCLE_DESCRIPTIONS[activeCircle].explanation}</Text>
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
+
+      <Modal
         visible={addSheetOpen}
         transparent
         animationType="slide"
@@ -392,10 +448,25 @@ const createStyles = (Colors: ThemeColors) => StyleSheet.create({
     justifyContent: "space-between",
     marginBottom: 20,
   },
+  titleGroup: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
   title: {
     fontSize: 28,
     fontFamily: "Nunito_800ExtraBold",
     color: Colors.text,
+  },
+  infoButton: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    backgroundColor: Colors.surface,
+    alignItems: "center",
+    justifyContent: "center",
   },
   headerActions: {
     flexDirection: "row",
@@ -598,6 +669,58 @@ const createStyles = (Colors: ThemeColors) => StyleSheet.create({
     borderTopRightRadius: 20,
     paddingTop: 12,
     paddingHorizontal: 20,
+  },
+  infoBackdrop: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.48)",
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 24,
+  },
+  infoModal: {
+    width: "100%",
+    maxWidth: 420,
+    maxHeight: "78%",
+    backgroundColor: Colors.surface,
+    borderRadius: 20,
+    paddingTop: 20,
+    paddingHorizontal: 22,
+    paddingBottom: 18,
+    borderWidth: 1,
+    borderColor: Colors.border,
+  },
+  infoModalHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 12,
+    marginBottom: 12,
+  },
+  infoModalTitle: {
+    flex: 1,
+    fontSize: 20,
+    fontFamily: "Nunito_800ExtraBold",
+    color: Colors.text,
+  },
+  infoCloseButton: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    backgroundColor: Colors.background,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  infoScroll: {
+    flexShrink: 1,
+  },
+  infoScrollContent: {
+    paddingBottom: 4,
+  },
+  infoExplanation: {
+    fontSize: 15,
+    lineHeight: 23,
+    fontFamily: "Nunito_400Regular",
+    color: Colors.textSecondary,
   },
   sheetHandle: {
     width: 36,
