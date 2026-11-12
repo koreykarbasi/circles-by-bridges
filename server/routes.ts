@@ -1343,8 +1343,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         circleLevel: level,
         userId: req.session.userId!,
         avatarColor,
-        // New Circle 4 contacts intentionally start 60–120 days back to spread
-        // their first nudges. Other circles retain the unknown-date due-date path.
+        // Sample starting history once at creation, including imports, so new
+        // contacts do not enter the missing-last-contact-date prompt flow.
         lastContacted: normalizedLastContacted,
         emptyLastContactPromptDueAt: normalizedLastContacted
           ? null

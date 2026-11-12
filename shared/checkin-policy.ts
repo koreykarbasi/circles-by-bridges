@@ -54,11 +54,18 @@ export function initialLastContacted(
   suppliedValue: unknown,
   now = new Date(),
   random: () => number = Math.random,
-): string | null {
+): string {
   const supplied = normalizeLastContacted(suppliedValue);
-  if (supplied || circleLevel !== 4) return supplied;
+  if (supplied) return supplied;
+  const ranges = {
+    1: [1, 7],
+    2: [1, 14],
+    3: [14, 35],
+    4: [60, 120],
+  } as const;
+  const [min, max] = ranges[circleLevel];
   const result = new Date(now);
-  result.setDate(result.getDate() - randomInclusive(60, 120, random));
+  result.setDate(result.getDate() - randomInclusive(min, max, random));
   return result.toISOString();
 }
 

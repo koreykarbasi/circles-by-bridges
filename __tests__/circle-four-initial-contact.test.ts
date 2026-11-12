@@ -29,10 +29,9 @@ describe("new Circle 4 starting last-contact dates", () => {
     expect(random).not.toHaveBeenCalled();
   });
 
-  test("does not sample or change the unknown-date policy for Circles 1–3", () => {
+  test("preserves supplied dates for Circles 1–3 without sampling", () => {
     const random = jest.fn();
     for (const circle of [1, 2, 3] as const) {
-      expect(initialLastContacted(circle, undefined, now, random)).toBeNull();
       expect(initialLastContacted(circle, "2026-10-01", now, random)).toBe("2026-10-01");
     }
     expect(random).not.toHaveBeenCalled();
