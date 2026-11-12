@@ -845,11 +845,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
             const tokenHash = crypto.createHash("sha256").update(rawToken).digest("hex");
             const expiresAt = new Date(Date.now() + 15 * 60 * 1000);
             await storage.createPasswordResetToken(user.id, tokenHash, expiresAt);
-            const baseUrl = process.env.APP_BASE_URL ||
-              (process.env.EXPO_PUBLIC_DOMAIN ? `https://${process.env.EXPO_PUBLIC_DOMAIN.replace(/:\d+$/, "")}` : null) ||
-              "https://buildmybridges.com";
-            const resetUrl = `${baseUrl}/reset-password?token=${rawToken}`;
-            await sendPasswordResetEmail(user.email, resetUrl);
+            // The verified email sender domain does not host the reset page.
+            // Never fall back to Expo's development/packager domain for emailed links.
+            const baseUrl = process.env.APP_BASE_URL || "https://circles-by-bridges.replit.app";
+            const resetUrl = new URL("/reset-password", baseUrl);
+            resetUrl.searchParams.set("token", rawToken);
+            await sendPasswordResetEmail(user.email, resetUrl.toString());
           } catch (emailErr) {
             console.error("[forgot-password] Async token/email error:", emailErr);
           }
