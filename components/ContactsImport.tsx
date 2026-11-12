@@ -178,7 +178,7 @@ export function ContactsImport({
       </View>
     ) : null;
 
-  const ManualEntry = () => (
+  const manualEntry = (
     <View style={styles.manualEntry}>
       <Text style={styles.manualLabel}>Or add by name</Text>
       <View style={styles.manualRow}>
@@ -210,7 +210,7 @@ export function ContactsImport({
     return (
       <View style={styles.container}>
         <SelectedChips />
-        <ManualEntry />
+        {manualEntry}
       </View>
     );
   }
@@ -226,7 +226,7 @@ export function ContactsImport({
           <Ionicons name="people-outline" size={22} color={Colors.primary} />
           <Text style={styles.importCtaText}>Import from phone contacts</Text>
         </Pressable>
-        <ManualEntry />
+        {manualEntry}
       </View>
     );
   }
@@ -256,7 +256,7 @@ export function ContactsImport({
             <Text style={styles.settingsBtnText}>Open Settings</Text>
           </Pressable>
         </View>
-        <ManualEntry />
+        {manualEntry}
       </View>
     );
   }
