@@ -24,6 +24,7 @@ import {
 } from "@shared/suggestion-priority";
 import {
   emptyContactPromptDueAt,
+  initialLastContacted,
   normalizeLastContacted,
   promptDueAfterContactUpdate,
 } from "@shared/checkin-policy";
@@ -1331,7 +1332,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return bad(res, "circleLevel must be 1, 2, 3, or 4");
       }
       const safe = pickContactFields(body);
-      const normalizedLastContacted = normalizeLastContacted(safe.lastContacted);
+      const normalizedLastContacted = initialLastContacted(level as 1 | 2 | 3 | 4, safe.lastContacted);
       const avatarColor =
         typeof body.avatarColor === "string" && body.avatarColor
           ? body.avatarColor
@@ -1342,9 +1343,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         circleLevel: level,
         userId: req.session.userId!,
         avatarColor,
-        // Unknown means unknown: do not invent contact history. The persisted,
-        // server-authored due date keeps empty-contact prompts stable across
-        // devices and offline client restarts.
+        // New Circle 4 contacts intentionally start 60–120 days back to spread
+        // their first nudges. Other circles retain the unknown-date due-date path.
         lastContacted: normalizedLastContacted,
         emptyLastContactPromptDueAt: normalizedLastContacted
           ? null

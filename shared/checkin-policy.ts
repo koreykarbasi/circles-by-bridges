@@ -48,6 +48,20 @@ export function normalizeLastContacted(value: unknown): string | null {
   return typeof value === "string" && value.trim() ? value.trim() : null;
 }
 
+/** Only used at creation: persist the sampled date, never resample on reads. */
+export function initialLastContacted(
+  circleLevel: 1 | 2 | 3 | 4,
+  suppliedValue: unknown,
+  now = new Date(),
+  random: () => number = Math.random,
+): string | null {
+  const supplied = normalizeLastContacted(suppliedValue);
+  if (supplied || circleLevel !== 4) return supplied;
+  const result = new Date(now);
+  result.setDate(result.getDate() - randomInclusive(60, 120, random));
+  return result.toISOString();
+}
+
 export function promptDueAfterContactUpdate(params: {
   previousCircleLevel: 1 | 2 | 3 | 4;
   previousLastContacted: string | null;
