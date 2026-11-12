@@ -17,6 +17,7 @@ import {
 import {
   CHECKIN_THRESHOLDS,
   isCheckinQuickPickEligible,
+  getCheckinThreshold,
 } from "@shared/reminder-thresholds";
 import { getCheckinDaysSince } from "@shared/checkin-time";
 
@@ -97,7 +98,7 @@ export function buildReminderMessages(contact: ContactRow, timezone: string): Pu
     // daily reminder. Keep this aligned with lib/reminders.ts.
     const daysSinceContact = getContactDaysSince(contact.lastContacted, timezone);
     const daysSinceCreated = getContactDaysSince(contact.createdAt, timezone);
-    if (isCheckinQuickPickEligible(1, daysSinceContact, daysSinceCreated, contact.emptyLastContactPromptDueAt)) {
+    if (isCheckinQuickPickEligible(contact, 1, daysSinceContact, daysSinceCreated, contact.emptyLastContactPromptDueAt)) {
       messages.push({
         title: `Check in with ${contact.name}`,
         body: `Open the app to confirm when you last spoke.`,
@@ -143,7 +144,7 @@ export function buildReminderMessages(contact: ContactRow, timezone: string): Pu
     // Keep the server threshold identical to the visible quick-pick threshold.
     const daysSinceContact = getContactDaysSince(contact.lastContacted, timezone);
     const daysSinceCreated = getContactDaysSince(contact.createdAt, timezone);
-    if (isCheckinQuickPickEligible(2, daysSinceContact, daysSinceCreated, contact.emptyLastContactPromptDueAt)) {
+    if (isCheckinQuickPickEligible(contact, 2, daysSinceContact, daysSinceCreated, contact.emptyLastContactPromptDueAt)) {
       messages.push({
         title: `Check in with ${contact.name}`,
         body: `Open the app to confirm when you last spoke.`,
@@ -166,7 +167,7 @@ export function buildReminderMessages(contact: ContactRow, timezone: string): Pu
     // Keep the server threshold identical to the visible quick-pick threshold.
     const daysSinceContact3 = getContactDaysSince(contact.lastContacted, timezone);
     const daysSinceCreated = getContactDaysSince(contact.createdAt, timezone);
-    if (isCheckinQuickPickEligible(3, daysSinceContact3, daysSinceCreated, contact.emptyLastContactPromptDueAt)) {
+    if (isCheckinQuickPickEligible(contact, 3, daysSinceContact3, daysSinceCreated, contact.emptyLastContactPromptDueAt)) {
       messages.push({
         title: `Check in with ${contact.name}`,
         body: `Open the app to confirm when you last spoke.`,
@@ -756,7 +757,7 @@ async function sendRemindersForUserUnlocked(
     const circle = contact.circleLevel as 1 | 2 | 3;
     const days = getContactDaysSince(contact.lastContacted, tz);
     if (circle === 1) {
-      return 100 + (days === null ? 80 : Math.min(80, 30 + Math.floor((days - CHECKIN_THRESHOLDS[1]) * 3)));
+      return 100 + (days === null ? 80 : Math.min(80, 30 + Math.floor((days - getCheckinThreshold(1, contact)) * 3)));
     }
     if (circle === 2) {
       return 60 + (days === null ? 60 : Math.min(60, 20 + Math.floor((days - CHECKIN_THRESHOLDS[2]) * 1.2)));
@@ -1073,7 +1074,7 @@ function hasHomeReminder(contact: ContactRow, timezone: string, now: Date): bool
 
   const daysSinceContact = getContactDaysSince(contact.lastContacted, timezone);
   const daysSinceCreated = getContactDaysSince(contact.createdAt, timezone);
-  if (isCheckinQuickPickEligible(circle, daysSinceContact, daysSinceCreated, contact.emptyLastContactPromptDueAt, now)) return true;
+  if (isCheckinQuickPickEligible(contact, circle, daysSinceContact, daysSinceCreated, contact.emptyLastContactPromptDueAt, now)) return true;
 
   const reminderWindow = { 1: 30, 2: 7, 3: 0 }[circle];
   const birthdayDays = getDaysUntilBirthdayInTz(contact.birthday, timezone);

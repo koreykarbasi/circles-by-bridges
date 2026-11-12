@@ -46,23 +46,23 @@ describe("C3 check-in policy", () => {
   });
 
   test("requires more than 160 full days for known C3 dates", () => {
-    expect(isCheckinQuickPickEligible(3, 160, 999, null, now)).toBe(false);
-    expect(isCheckinQuickPickEligible(3, 161, 0, null, now)).toBe(true);
+    expect(isCheckinQuickPickEligible({ id: "test" }, 3, 160, 999, null, now)).toBe(false);
+    expect(isCheckinQuickPickEligible({ id: "test" }, 3, 161, 0, null, now)).toBe(true);
   });
 
   test("uses persisted empty-contact due dates instead of createdAt", () => {
-    expect(isCheckinQuickPickEligible(3, null, 999, "2026-02-18T11:59:59Z", now)).toBe(true);
-    expect(isCheckinQuickPickEligible(3, null, 999, "2026-02-18T12:00:00Z", now)).toBe(false);
-    expect(isCheckinQuickPickEligible(3, null, 999, null, now)).toBe(false);
+    expect(isCheckinQuickPickEligible({ id: "test" }, 3, null, 999, "2026-02-18T11:59:59Z", now)).toBe(true);
+    expect(isCheckinQuickPickEligible({ id: "test" }, 3, null, 999, "2026-02-18T12:00:00Z", now)).toBe(false);
+    expect(isCheckinQuickPickEligible({ id: "test" }, 3, null, 999, null, now)).toBe(false);
   });
 
   test("keeps legacy C1/C2 createdAt grace fallback", () => {
-    expect(isCheckinQuickPickEligible(1, null, 7, null, now)).toBe(false);
-    expect(isCheckinQuickPickEligible(1, null, 8, null, now)).toBe(true);
-    expect(isCheckinQuickPickEligible(2, null, 7, null, now)).toBe(false);
-    expect(isCheckinQuickPickEligible(2, null, 8, null, now)).toBe(true);
-    expect(isCheckinQuickPickEligible(2, null, null, null, now)).toBe(false);
-    expect(isCheckinQuickPickEligible(2, null, null, "2026-02-18T11:00:00Z", now)).toBe(true);
+    expect(isCheckinQuickPickEligible({ id: "test" }, 1, null, 7, null, now)).toBe(false);
+    expect(isCheckinQuickPickEligible({ id: "test" }, 1, null, 8, null, now)).toBe(true);
+    expect(isCheckinQuickPickEligible({ id: "test" }, 2, null, 7, null, now)).toBe(false);
+    expect(isCheckinQuickPickEligible({ id: "test" }, 2, null, 8, null, now)).toBe(true);
+    expect(isCheckinQuickPickEligible({ id: "test" }, 2, null, null, null, now)).toBe(false);
+    expect(isCheckinQuickPickEligible({ id: "test" }, 2, null, null, "2026-02-18T11:00:00Z", now)).toBe(true);
   });
 
   test("anchors rollout to a fake first-production-start clock", () => {

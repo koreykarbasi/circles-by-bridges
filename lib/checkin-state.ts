@@ -2,7 +2,7 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Platform } from "react-native";
 import * as Notifications from "expo-notifications";
 import { apiRequest } from "@/lib/query-client";
-import { CHECKIN_THRESHOLDS } from "@shared/reminder-thresholds";
+import { getCheckinThreshold } from "@shared/reminder-thresholds";
 import {
   ELEVATION_DELAY_HOURS,
   ELEVATION_LIFETIME_HOURS,
@@ -142,7 +142,7 @@ export async function setCheckinElevationIfOverdue(params: {
   const { contactId, contactName, circleLevel, selectedDate } = params;
   const daysSince = getCheckinDaysSince(selectedDate);
   if (daysSince === null) return false;
-  if (daysSince <= CHECKIN_THRESHOLDS[circleLevel]) return false;
+  if (daysSince <= getCheckinThreshold(circleLevel, { id: contactId, lastContacted: selectedDate.toISOString() })) return false;
 
   const now = new Date();
   await setElevation({

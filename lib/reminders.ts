@@ -3,6 +3,7 @@ import { getDaysSince, getDaysUntilBirthday, formatLastContacted } from "./helpe
 import {
   CHECKIN_THRESHOLDS as sharedCheckinThresholds,
   isCheckinQuickPickEligible,
+  getCheckinThreshold,
 } from "@shared/reminder-thresholds";
 import { ELEVATION_DELAY_HOURS } from "@shared/suggestion-priority";
 import { getCheckinDaysSince } from "@shared/checkin-time";
@@ -229,10 +230,10 @@ function generateCircle1Reminders(contact: Contact): Reminder[] {
 
   const daysSinceContact = getCheckinDaysSince(contact.lastContacted);
   const daysSinceCreated = getCheckinDaysSince(contact.createdAt);
-  if (isCheckinQuickPickEligible(1, daysSinceContact, daysSinceCreated, contact.emptyLastContactPromptDueAt)) {
+  if (isCheckinQuickPickEligible(contact, 1, daysSinceContact, daysSinceCreated, contact.emptyLastContactPromptDueAt)) {
     const severity = daysSinceContact === null
       ? 80
-      : Math.min(80, 30 + Math.floor((daysSinceContact - CHECKIN_THRESHOLDS[1]) * 3));
+      : Math.min(80, 30 + Math.floor((daysSinceContact - getCheckinThreshold(1, contact)) * 3));
     reminders.push({
       id: `checkin-${contact.id}`,
       contactId: contact.id,
@@ -302,7 +303,7 @@ function generateCircle2Reminders(contact: Contact): Reminder[] {
 
   const daysSinceContact = getCheckinDaysSince(contact.lastContacted);
   const daysSinceCreated = getCheckinDaysSince(contact.createdAt);
-  if (isCheckinQuickPickEligible(2, daysSinceContact, daysSinceCreated, contact.emptyLastContactPromptDueAt)) {
+  if (isCheckinQuickPickEligible(contact, 2, daysSinceContact, daysSinceCreated, contact.emptyLastContactPromptDueAt)) {
     const severity = daysSinceContact === null
       ? 60
       : Math.min(60, 20 + Math.floor((daysSinceContact - CHECKIN_THRESHOLDS[2]) * 1.2));
@@ -361,7 +362,7 @@ function generateCircle3Reminders(contact: Contact): Reminder[] {
   reminders.push(...generateCustomReminders(contact, 3));
 
   const daysSinceContact = getCheckinDaysSince(contact.lastContacted);
-  if (isCheckinQuickPickEligible(3, daysSinceContact, getCheckinDaysSince(contact.createdAt), contact.emptyLastContactPromptDueAt)) {
+  if (isCheckinQuickPickEligible(contact, 3, daysSinceContact, getCheckinDaysSince(contact.createdAt), contact.emptyLastContactPromptDueAt)) {
     const severity = Math.min(30, Math.floor(((daysSinceContact ?? CHECKIN_THRESHOLDS[3]) - CHECKIN_THRESHOLDS[3]) * 0.4));
     reminders.push({
       id: `checkin-${contact.id}`,

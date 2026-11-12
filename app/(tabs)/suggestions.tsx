@@ -34,6 +34,7 @@ import {
   shouldSuppressCheckin,
 } from "@shared/suggestion-priority";
 import { getCheckinDaysSince } from "@shared/checkin-time";
+import { getCheckinThreshold } from "@shared/reminder-thresholds";
 
 interface GeneratedSuggestion {
   contact: Contact;
@@ -501,7 +502,7 @@ export default function SuggestionsScreen() {
       if (reminder.type === "check-in-quickpick") {
         await markContacted(reminder.contactId, date, label);
         const daysSince = Math.floor((Date.now() - date.getTime()) / (1000 * 60 * 60 * 24));
-        if (daysSince > CHECKIN_THRESHOLDS[circleLevel]) {
+        if (daysSince > getCheckinThreshold(circleLevel, { id: reminder.contactId, lastContacted: date.toISOString() })) {
           await setElevation({
             contactId: reminder.contactId,
             contactName: reminder.contactName,

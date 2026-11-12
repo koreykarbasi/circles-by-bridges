@@ -4,18 +4,44 @@
  * visible quick-pick is never silently ineligible for its daily push.
  */
 export const CHECKIN_THRESHOLDS: Record<1 | 2 | 3, number> = {
-  1: 14,
+  1: 30,
   2: 45,
   3: 160,
 };
 
 export const NEW_CONTACT_GRACE_DAYS = 7;
 
+export interface CheckinThresholdContact {
+  id: string;
+  lastContacted?: string | Date | null;
+}
+
+/**
+ * A stable per-contact/per-check-in interval, shared by native clients and Node.
+ * Hash the stored value identically on both sides; never use time or randomness.
+ */
+export function getCheckinThreshold(
+  circleLevel: 1 | 2 | 3,
+  contact: CheckinThresholdContact,
+): number {
+  if (circleLevel !== 1) return CHECKIN_THRESHOLDS[circleLevel];
+  const lastContacted = contact.lastContacted instanceof Date
+    ? contact.lastContacted.toISOString()
+    : contact.lastContacted ?? "";
+  const input = JSON.stringify([contact.id, lastContacted]);
+  let hash = 2166136261;
+  for (let i = 0; i < input.length; i++) {
+    hash = Math.imul(hash ^ input.charCodeAt(i), 16777619);
+  }
+  return 30 + ((hash >>> 0) % 61);
+}
+
 /**
  * Shared quick-pick eligibility contract. A server push can only be built for a
  * contact that would also appear as a check-in quick-pick in the app.
  */
 export function isCheckinQuickPickEligible(
+  contact: CheckinThresholdContact,
   circleLevel: 1 | 2 | 3,
   daysSinceContact: number | null,
   daysSinceCreated: number | null,
@@ -23,7 +49,7 @@ export function isCheckinQuickPickEligible(
   now = new Date(),
 ): boolean {
   if (daysSinceContact !== null) {
-    return daysSinceContact > CHECKIN_THRESHOLDS[circleLevel];
+    return daysSinceContact > getCheckinThreshold(circleLevel, contact);
   }
 
   if (emptyPromptDueAt) {
