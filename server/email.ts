@@ -26,7 +26,7 @@ export async function sendPasswordResetEmail(to: string, resetUrl: string): Prom
   const resend = getResend();
 
   const { error } = await resend.emails.send({
-    from: "Bridges <onboarding@resend.dev>",
+    from: "Bridges <noreply@buildmybridges.com>",
     to,
     subject: "Reset your Bridges password",
     html: `<!DOCTYPE html>
