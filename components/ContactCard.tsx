@@ -8,6 +8,7 @@ import { formatLastContacted, getContactUrgency } from "@/lib/helpers";
 import type { Contact } from "@/lib/types";
 import * as Haptics from "expo-haptics";
 import { ContactCooldownButton } from "./ContactCooldownButton";
+import { CircleMoveButton } from "./CircleMoveButton";
 
 interface ContactCardProps {
   contact: Contact;
@@ -135,6 +136,7 @@ export function ContactCard({ contact, onPress, onMarkContacted, onPlanHangout, 
       </View>
       <View style={styles.actions}>
         <ContactCooldownButton contact={contact} compact />
+        <CircleMoveButton contact={contact} compact />
         {!incomplete && (
           <>
             {onPlanHangout && (

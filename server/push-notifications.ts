@@ -310,6 +310,7 @@ export async function pruneOldNotificationLog(): Promise<void> {
            'suggestion',
            'suggestion_push',
            'suggestion_dismissed',
+           'elevation',
            'suggestion_priority_1',
            'suggestion_priority_2',
            'suggestion_priority_3'
@@ -794,7 +795,8 @@ async function sendRemindersForUserUnlocked(
          AND (
            (c.circle_level = 1 AND nl.sent_at > NOW() - INTERVAL '7 days')  OR
            (c.circle_level = 2 AND nl.sent_at > NOW() - INTERVAL '5 days')  OR
-           (c.circle_level = 3 AND nl.sent_at > NOW() - INTERVAL '15 days')
+           (c.circle_level = 3 AND nl.sent_at > NOW() - INTERVAL '15 days') OR
+           (c.circle_level = 4 AND nl.sent_at > NOW() - INTERVAL '30 days')
          )`,
       [userId],
     );
@@ -1074,8 +1076,8 @@ function hasHomeReminder(contact: ContactRow, timezone: string, now: Date): bool
   const circle = contact.circleLevel as 1 | 2 | 3 | 4;
   if (![1, 2, 3, 4].includes(circle)) return false;
 
-  const daysSinceContact = getContactDaysSince(contact.lastContacted, timezone);
-  const daysSinceCreated = getContactDaysSince(contact.createdAt, timezone);
+  const daysSinceContact = getContactDaysSince(contact.lastContacted, timezone, now);
+  const daysSinceCreated = getContactDaysSince(contact.createdAt, timezone, now);
   if (isCheckinQuickPickEligible(contact, circle, daysSinceContact, daysSinceCreated, contact.emptyLastContactPromptDueAt, now)) return true;
 
   const reminderWindow = { 1: 30, 2: 7, 3: 0, 4: 0 }[circle];
@@ -1127,7 +1129,7 @@ export async function getPrioritySuggestionCohort(
        FROM notification_log
        WHERE user_id = $1
          AND notif_type IN ('suggestion_dismissed', 'elevation')
-         AND sent_at > NOW() - INTERVAL '15 days'
+         AND sent_at > NOW() - INTERVAL '30 days'
        ORDER BY sent_at DESC`,
       [userId],
     ),

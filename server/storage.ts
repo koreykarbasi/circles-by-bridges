@@ -8,6 +8,9 @@ import type {
   PasswordResetToken,
 } from "@shared/schema";
 import { eq, and, asc, sql as drizzleSql } from "drizzle-orm";
+import { CIRCLE_LIMITS, isCircleLevel } from "@shared/circles";
+import { CircleMoveValidationError, validateCircleMoves, type CircleMove } from "@shared/circle-moves";
+import { emptyContactPromptDueAt } from "@shared/checkin-policy";
 
 export interface IStorage {
   getUser(id: string): Promise<User | undefined>;
@@ -22,6 +25,7 @@ export interface IStorage {
   updateContact(id: string, data: Partial<InsertContact>): Promise<Contact | undefined>;
   deleteContact(id: string): Promise<boolean>;
   reorderContacts(userId: string, contactIds: string[]): Promise<void>;
+  moveContacts(userId: string, moves: CircleMove[]): Promise<Contact[]>;
   getHangoutPlansByUserId(userId: string): Promise<HangoutPlan[]>;
   getHangoutPlan(id: string): Promise<HangoutPlan | undefined>;
   getHangoutPlanByShareCode(shareCode: string): Promise<HangoutPlan | undefined>;
@@ -117,17 +121,56 @@ export class DatabaseStorage implements IStorage {
   }
 
   async createContact(data: InsertContact): Promise<Contact> {
-    const [contact] = await db.insert(contacts).values(data).returning();
-    return contact;
+    return db.transaction(async tx => {
+      if (data.userId) {
+        await tx.execute(drizzleSql`SELECT pg_advisory_xact_lock(hashtext(${data.userId}), 245001)`);
+        const existing = await tx.select().from(contacts).where(eq(contacts.userId, data.userId));
+        if (!isCircleLevel(data.circleLevel)) throw new CircleMoveValidationError("Choose a valid circle.");
+        if (existing.filter(c => c.circleLevel === data.circleLevel).length >= CIRCLE_LIMITS[data.circleLevel]) {
+          throw new CircleMoveValidationError("This circle is full. Move a contact to another circle first.");
+        }
+      }
+      const [contact] = await tx.insert(contacts).values(data).returning();
+      return contact;
+    });
   }
 
   async updateContact(id: string, data: Partial<InsertContact>): Promise<Contact | undefined> {
-    const [contact] = await db
-      .update(contacts)
-      .set(data)
-      .where(eq(contacts.id, id))
-      .returning();
-    return contact;
+    const before = await this.getContact(id);
+    if (!before) return undefined;
+    return db.transaction(async tx => {
+      if (before.userId) {
+        await tx.execute(drizzleSql`SELECT pg_advisory_xact_lock(hashtext(${before.userId}), 245001)`);
+        const existing = await tx.select().from(contacts).where(eq(contacts.userId, before.userId));
+        const current = existing.find(c => c.id === id);
+        if (!current) return undefined;
+        if (data.circleLevel !== undefined && data.circleLevel !== current.circleLevel) {
+          if (!isCircleLevel(data.circleLevel)) throw new CircleMoveValidationError("Choose a valid circle.");
+          validateCircleMoves(existing, [{ contactId: id, circleLevel: data.circleLevel }]);
+        }
+      }
+      const [contact] = await tx.update(contacts).set(data).where(eq(contacts.id, id)).returning();
+      return contact;
+    });
+  }
+
+  async moveContacts(userId: string, moves: CircleMove[]): Promise<Contact[]> {
+    return db.transaction(async tx => {
+      // Same per-user transaction lock as single creates/edits, across instances.
+      await tx.execute(drizzleSql`SELECT pg_advisory_xact_lock(hashtext(${userId}), 245001)`);
+      const existing = await tx.select().from(contacts).where(eq(contacts.userId, userId));
+      validateCircleMoves(existing, moves);
+      for (const move of moves) {
+        const contact = existing.find(c => c.id === move.contactId)!;
+        if (contact.circleLevel === move.circleLevel) continue;
+        await tx.update(contacts).set({
+          circleLevel: move.circleLevel,
+          sortOrder: null,
+          emptyLastContactPromptDueAt: contact.lastContacted ? null : emptyContactPromptDueAt(move.circleLevel),
+        }).where(and(eq(contacts.id, move.contactId), eq(contacts.userId, userId)));
+      }
+      return tx.select().from(contacts).where(eq(contacts.userId, userId)).orderBy(asc(contacts.circleLevel), asc(contacts.sortOrder), asc(contacts.createdAt));
+    });
   }
 
   async deleteContact(id: string): Promise<boolean> {

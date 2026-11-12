@@ -8,6 +8,7 @@ import { useAuth } from "./auth-context";
 import { clearElevation, invalidateElevationCache } from "./checkin-state";
 import { isContactOnCooldown } from "@shared/contact-cooldown";
 import { queryClient } from "./query-client";
+import type { CircleMove } from "@shared/circle-moves";
 
 const fetchFn = Platform.OS === "web" ? globalThis.fetch : expoFetch;
 
@@ -26,6 +27,7 @@ interface ContactsContextValue {
   getUpcomingBirthdays: () => Contact[];
   reorderCircleContacts: (circleLevel: 1 | 2 | 3 | 4, orderedIds: string[]) => Promise<void>;
   setContactCooldown: (id: string, active: boolean) => Promise<void>;
+  moveContacts: (moves: CircleMove[]) => Promise<void>;
 }
 
 const ContactsContext = createContext<ContactsContextValue | null>(null);
@@ -49,6 +51,13 @@ export function ContactsProvider({ children }: { children: ReactNode }) {
     const contact = await response.json() as Contact;
     setContacts(previous => previous.map(c => c.id === id ? contact : c));
     if (active) await clearElevation(id, "checkin");
+    await queryClient.invalidateQueries({ queryKey: ["/api/suggestions/priority"] });
+  }, []);
+
+  const moveContacts = useCallback(async (moves: CircleMove[]) => {
+    const response = await apiRequest("POST", "/api/contacts/move-circles", { moves });
+    setContacts(await response.json() as Contact[]);
+    for (const move of moves) await clearElevation(move.contactId, "checkin");
     await queryClient.invalidateQueries({ queryKey: ["/api/suggestions/priority"] });
   }, []);
 
@@ -94,8 +103,10 @@ export function ContactsProvider({ children }: { children: ReactNode }) {
   const updateContactFn = useCallback(async (contact: Contact) => {
     // Optimistic update so the UI reflects changes (e.g. yellow dot clears) immediately
     // on the next render, without waiting for the server round-trip.
+    const previous = contacts.find(c => c.id === contact.id);
     setContacts((prev) => prev.map((c) => (c.id === contact.id ? { ...c, ...contact } : c)));
-    await apiRequest("PUT", `/api/contacts/${contact.id}`, {
+    try {
+      await apiRequest("PUT", `/api/contacts/${contact.id}`, {
       name: contact.name,
       circleLevel: contact.circleLevel,
       interests: contact.interests,
@@ -110,8 +121,12 @@ export function ContactsProvider({ children }: { children: ReactNode }) {
       photoUri: contact.photoUri,
       customReminders: contact.customReminders ?? [],
     });
-    await fetchContacts();
-  }, [fetchContacts]);
+      await fetchContacts();
+    } catch (error) {
+      if (previous) setContacts(current => current.map(c => c.id === previous.id ? previous : c));
+      throw error;
+    }
+  }, [fetchContacts, contacts]);
 
   const deleteContactFn = useCallback(async (id: string) => {
     await apiRequest("DELETE", `/api/contacts/${id}`);
@@ -264,8 +279,9 @@ export function ContactsProvider({ children }: { children: ReactNode }) {
       getUpcomingBirthdays,
       reorderCircleContacts: reorderCircleContactsFn,
       setContactCooldown,
+      moveContacts,
     }),
-    [contacts, isLoading, fetchContacts, addContactFn, updateContactFn, deleteContactFn, markContactedFn, markHangoutFn, savePhoneNumberFn, getCircleContacts, getOverdueContacts, getUpcomingBirthdays, reorderCircleContactsFn, setContactCooldown],
+    [contacts, isLoading, fetchContacts, addContactFn, updateContactFn, deleteContactFn, markContactedFn, markHangoutFn, savePhoneNumberFn, getCircleContacts, getOverdueContacts, getUpcomingBirthdays, reorderCircleContactsFn, setContactCooldown, moveContacts],
   );
 
   return <ContactsContext.Provider value={value}>{children}</ContactsContext.Provider>;

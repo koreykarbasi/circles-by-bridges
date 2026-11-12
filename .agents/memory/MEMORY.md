@@ -16,3 +16,4 @@
 - [Android fix isolation](android-fix-isolation.md) — Android testing fixes must not modify main/shared code or change the iOS app; use Android-specific files.
 - [EAS archive isolation](eas-archive-isolation.md) — workspace caches can stall EAS packaging; isolated build sources still need local dependencies for Expo config plugins.
 - [Bridges email domain](bridges-email-domain.md) — user owns buildmybridges.com through Hostinger; website repair is separate from email verification.
+- [Live release compatibility](live-release-compatibility.md) — v1 and later apps share the backend/database; preserve old clients with additive, nullable schema changes.

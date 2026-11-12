@@ -56,6 +56,7 @@ function bad(res: Response, message: string) {
 }
 
 import { visibleContactsForClient } from "@shared/circles";
+import { CircleMoveValidationError, type CircleMove } from "@shared/circle-moves";
 const VALID_CIRCLE_LEVELS = [1, 2, 3, 4] as const;
 const VALID_HANGOUT_STATUSES = ["draft", "active", "finalized"] as const;
 // 5 MB image → ~6.7 MB base64 string; cap at 7 MB of string length
@@ -990,7 +991,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
            INNER JOIN contacts c ON c.id = nl.contact_id AND c.user_id = nl.user_id
            WHERE nl.user_id = $1
              AND nl.notif_type = 'suggestion_dismissed'
-             AND nl.sent_at > NOW() - INTERVAL '15 days'
+             AND nl.sent_at > NOW() - INTERVAL '30 days'
            GROUP BY nl.contact_id, c.circle_level`,
           [userId],
         ),
@@ -1004,7 +1005,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
            INNER JOIN contacts c ON c.id = nl.contact_id AND c.user_id = nl.user_id
            WHERE nl.user_id = $1
              AND nl.notif_type = 'elevation'
-             AND nl.sent_at > NOW() - INTERVAL '8 days'
+             AND nl.sent_at > NOW() - INTERVAL '9 days'
            GROUP BY nl.contact_id, c.circle_level`,
           [userId],
         ),
@@ -1282,6 +1283,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  app.post("/api/contacts/move-circles", requireAuth, async (req, res) => {
+    const moves = req.body?.moves;
+    if (!Array.isArray(moves) || !moves.length || moves.length > 150 ||
+        moves.some(move => !move || typeof move.contactId !== "string" ||
+          !Number.isInteger(move.circleLevel) || !VALID_CIRCLE_LEVELS.includes(move.circleLevel))) {
+      return bad(res, "Provide valid contact destinations.");
+    }
+    try {
+      const contacts = await storage.moveContacts(req.session.userId!, moves as CircleMove[]);
+      return res.json(visibleContactsForClient(contacts, req.get("X-Bridges-Client")));
+    } catch (error) {
+      if (error instanceof CircleMoveValidationError) return res.status(409).json({ message: error.message });
+      console.error("Circle moves failed:", error);
+      return res.status(500).json({ message: "Could not move contacts. No moves were saved." });
+    }
+  });
+
   const setContactCooldown = async (req: Request, res: Response, active: boolean) => {
     try {
       const id = String(req.params.id);
@@ -1344,6 +1362,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       });
       res.status(201).json(contact);
     } catch (err) {
+      if (err instanceof CircleMoveValidationError) return res.status(409).json({ message: err.message });
       console.error("Error creating contact:", err);
       res.status(500).json({ message: "Failed to create contact" });
     }
@@ -1386,6 +1405,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const contact = await storage.updateContact(id, safe);
       res.json(contact);
     } catch (err) {
+      if (err instanceof CircleMoveValidationError) return res.status(409).json({ message: err.message });
       console.error("Error updating contact:", err);
       res.status(500).json({ message: "Failed to update contact" });
     }

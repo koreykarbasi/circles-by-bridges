@@ -34,6 +34,7 @@ import {
 } from "@shared/checkin-policy";
 import { setCheckinElevationIfOverdue } from "@/lib/checkin-state";
 import { ContactCooldownButton } from "@/components/ContactCooldownButton";
+import { CircleMoveButton } from "@/components/CircleMoveButton";
 
 const PREDEFINED_LABELS = [
   "Family", "Childhood Friend", "College Friend", "Work Friend", "Neighbor",
@@ -95,10 +96,10 @@ function EditContactForm({ contact, focusBirthday }: { contact: Contact; focusBi
   const { width: viewportWidth } = useWindowDimensions();
   const displayedLabels = viewportWidth < 365 ? COMPACT_PREDEFINED_LABELS : PREDEFINED_LABELS;
   const insets = useSafeAreaInsets();
-  const { updateContact, deleteContact, markContacted, getCircleContacts } = useContacts();
+  const { updateContact, deleteContact, markContacted } = useContacts();
 
   const [name, setName] = useState(contact?.name ?? "");
-  const [circleLevel, setCircleLevel] = useState<1 | 2 | 3 | 4>((contact?.circleLevel ?? 1) as 1 | 2 | 3 | 4);
+  const circleLevel = (contact?.circleLevel ?? 1) as 1 | 2 | 3 | 4;
   const [selectedInterests, setSelectedInterests] = useState<string[]>(contact?.interests ?? []);
   const [selectedLabels, setSelectedLabels] = useState<string[]>(contact?.labels ?? []);
   const [customLabelInput, setCustomLabelInput] = useState("");
@@ -189,15 +190,6 @@ function EditContactForm({ contact, focusBirthday }: { contact: Contact; focusBi
       setShowBirthdayPicker(true);
       Alert.alert("Birthday required", "Birthday is required for Core Circle contacts.");
       return;
-    }
-
-    if (circleLevel !== contact.circleLevel) {
-      const config = CIRCLE_CONFIG[circleLevel];
-      const current = getCircleContacts(circleLevel).filter((c) => c.id !== contact.id);
-      if (current.length >= config.max) {
-        Alert.alert("Circle full", `${config.label} can have up to ${config.max} people.`);
-        return;
-      }
     }
 
     setSaving(true);
@@ -460,38 +452,15 @@ function EditContactForm({ contact, focusBirthday }: { contact: Contact; focusBi
         </View>
 
         <View style={styles.inputGroup}>
-          <Text style={styles.label}>Circle</Text>
-          <View style={styles.circleOptions}>
-            {([1, 2, 3, 4] as const).map((level) => {
-              const cfg = CIRCLE_CONFIG[level];
-              const circleColor = Colors[`circle${level}` as "circle1" | "circle2" | "circle3" | "circle4"];
-              const isActive = circleLevel === level;
-              const count = getCircleContacts(level).filter((c) => c.id !== contact.id).length;
-              const isFull = count >= cfg.max && !isActive;
-              return (
-                <Pressable
-                  key={level}
-                  onPress={() => {
-                    if (isFull) return;
-                    Haptics.selectionAsync();
-                    setCircleLevel(level);
-                  }}
-                  style={[
-                    styles.circleOption,
-                    isActive && { backgroundColor: circleColor + "15", borderColor: circleColor + "50" },
-                    isFull && { opacity: 0.38 },
-                  ]}
-                >
-                  <View style={[styles.circleOptionDot, { backgroundColor: circleColor }]} />
-                  <Text style={[styles.circleOptionLabel, isActive && { color: circleColor }]} numberOfLines={1}>
-                    {level === 4 ? "Network" : cfg.label}
-                  </Text>
-                  <Text style={[styles.circleOptionCount, isActive && { color: circleColor }]}>
-                    {isFull ? "Full" : `${count}/${cfg.max}`}
-                  </Text>
-                </Pressable>
-              );
-            })}
+          <View style={styles.circleMoveHeader}>
+            <View style={styles.circleMoveCopy}>
+              <Text style={styles.label}>Circle</Text>
+              <Text style={styles.circleCurrentValue}>
+                {CIRCLE_CONFIG[contact.circleLevel as 1 | 2 | 3 | 4]?.label ?? "Circle"}
+              </Text>
+              <Text style={styles.circleMoveHint}>Move contacts together when a circle is at capacity.</Text>
+            </View>
+            <CircleMoveButton contact={contact} />
           </View>
         </View>
 
@@ -833,9 +802,32 @@ const createStyles = (Colors: ThemeColors) => StyleSheet.create({
     minHeight: 80,
     textAlignVertical: "top",
   },
-  circleOptions: {
+  circleMoveHeader: {
     flexDirection: "row",
-    gap: 8,
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 12,
+    padding: 14,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: Colors.borderLight,
+    backgroundColor: Colors.surface,
+  },
+  circleMoveCopy: {
+    flex: 1,
+  },
+  circleCurrentValue: {
+    color: Colors.text,
+    fontSize: 15,
+    fontFamily: "Nunito_800ExtraBold",
+    marginTop: -2,
+  },
+  circleMoveHint: {
+    color: Colors.textTertiary,
+    fontSize: 11,
+    lineHeight: 15,
+    fontFamily: "Nunito_400Regular",
+    marginTop: 3,
   },
   circleOption: {
     flex: 1,

@@ -466,7 +466,7 @@ describe("buildReminderMessages — birthday milestone notifType is 'milestone'"
   });
 
   test("uses the visible Circle 1 threshold and compact contact-first title", () => {
-    const c = contact({ id: "c1", name: "Ava", circleLevel: 1, lastContacted: "2024-02-29" });
+    const c = contact({ id: "c1", name: "Ava", circleLevel: 1, lastContacted: "2023-11-01" });
     const reminder = buildReminderMessages(c, "UTC").find((message) => message.notifType === "reminder");
 
     expect(reminder).toEqual(expect.objectContaining({
@@ -516,7 +516,7 @@ describe("buildReminderMessages — birthday milestone notifType is 'milestone'"
     jest.setSystemTime(new Date("2024-06-14T19:00:00Z"));
     const timezone = "Pacific/Kiritimati";
     const reminders = [
-      contact({ id: "c1", name: "Ava", circleLevel: 1, lastContacted: "2024-05-31" }),
+      contact({ id: "c1", name: "Ava", circleLevel: 1, lastContacted: "2024-01-01" }),
       contact({ id: "c2", name: "Ben", circleLevel: 2, lastContacted: "2024-04-29" }),
       contact({ id: "c3", name: "Cam", circleLevel: 3, lastContacted: "2023-12-31" }),
     ].flatMap((item) => buildReminderMessages(item, timezone));
@@ -551,8 +551,8 @@ describe("buildReminderMessages — birthday milestone notifType is 'milestone'"
   });
 
   test("Circle 1 — overdue check-in has notifType 'reminder'", () => {
-    // lastContacted 20 days ago → overdue (threshold > 14)
-    const c = contact({ id: "c1", circleLevel: 1, birthday: "08/01", lastContacted: "2024-02-24" });
+    // More than 90 days ago is overdue for every deterministic C1 interval.
+    const c = contact({ id: "c1", circleLevel: 1, birthday: "08/01", lastContacted: "2023-11-01" });
     const msgs = buildReminderMessages(c, "UTC");
     const reminder = msgs.find((m) => m.notifType === "reminder");
     expect(reminder).toBeDefined();
@@ -568,7 +568,7 @@ describe("buildReminderMessages — birthday milestone notifType is 'milestone'"
 
   test("milestone and reminder for same contact have different notifType values", () => {
     // Circle 1 contact: birthday 7 days away AND overdue check-in (both fire together)
-    const c = contact({ id: "c1", circleLevel: 1, birthday: "03/22", lastContacted: "2024-02-01" });
+    const c = contact({ id: "c1", circleLevel: 1, birthday: "03/22", lastContacted: "2023-11-01" });
     const msgs = buildReminderMessages(c, "UTC");
     const types = new Set(msgs.map((m) => m.notifType));
     expect(types.has("reminder")).toBe(true);
