@@ -27,7 +27,7 @@ export default function CirclesScreen() {
   const insets = useSafeAreaInsets();
   const { contacts, getCircleContacts, markContacted, isLoading, reorderCircleContacts } = useContacts();
   const { circle: circleParam, filter: filterParam } = useLocalSearchParams<{ circle?: string; filter?: string }>();
-  const [activeCircle, setActiveCircle] = useState<1 | 2 | 3>(1);
+  const [activeCircle, setActiveCircle] = useState<1 | 2 | 3 | 4>(1);
   const [searchQuery, setSearchQuery] = useState("");
   const [activeFilter, setActiveFilter] = useState<string | null>(null);
   const [bellSheetOpen, setBellSheetOpen] = useState(false);
@@ -37,7 +37,7 @@ export default function CirclesScreen() {
 
   useEffect(() => {
     const parsed = parseInt(circleParam ?? "", 10);
-    if (parsed === 1 || parsed === 2 || parsed === 3) {
+    if (parsed === 1 || parsed === 2 || parsed === 3 || parsed === 4) {
       setActiveCircle(parsed);
     }
   }, [circleParam]);
@@ -56,8 +56,9 @@ export default function CirclesScreen() {
   const circleContacts = getCircleContacts(activeCircle);
 
   const filteredContacts = useMemo(() => {
+    if (activeCircle === 4 && activeFilter?.startsWith("missing-birthday")) return [];
     if (activeFilter === "yellow-dot") {
-      return contacts.filter(isMissingEnrichment);
+      return contacts.filter((c) => c.circleLevel !== 4 && isMissingEnrichment(c));
     }
     const base = activeFilter === "missing-birthday-c1"
       ? circleContacts.filter((c) => !c.birthday)
@@ -67,10 +68,10 @@ export default function CirclesScreen() {
     const q = searchQuery.trim().toLowerCase();
     if (!q) return base;
     return base.filter((c) => c.name.toLowerCase().includes(q));
-  }, [circleContacts, contacts, searchQuery, activeFilter]);
+  }, [circleContacts, contacts, searchQuery, activeFilter, activeCircle]);
 
   const config = CIRCLE_CONFIG[activeCircle];
-  const circleColor = (level: 1 | 2 | 3) => Colors[`circle${level}` as "circle1" | "circle2" | "circle3"];
+  const circleColor = (level: 1 | 2 | 3 | 4) => Colors[`circle${level}` as "circle1" | "circle2" | "circle3" | "circle4"];
   const isCircleFull = circleContacts.length >= config.max;
   const profileCompletion = useMemo(() => computeProfileCompletion(contacts), [contacts]);
   const bellDotColor = useMemo(
@@ -185,7 +186,7 @@ export default function CirclesScreen() {
       </View>
 
       <View style={styles.tabs}>
-        {([1, 2, 3] as const).map((level) => {
+        {([1, 2, 3, 4] as const).map((level) => {
           const cfg = CIRCLE_CONFIG[level];
           const cfgColor = circleColor(level);
           const count = getCircleContacts(level).length;
@@ -205,7 +206,7 @@ export default function CirclesScreen() {
             >
               <View style={[styles.tabDot, { backgroundColor: cfgColor }]} />
               <Text
-                style={[styles.tabLabel, isActive && { color: cfgColor }]}
+                style={[styles.tabLabel, level === 4 && styles.networkTabLabel, isActive && { color: cfgColor }]}
                 numberOfLines={1}
               >
                 {cfg.label}
@@ -442,7 +443,7 @@ const createStyles = (Colors: ThemeColors) => StyleSheet.create({
   },
   tabs: {
     flexDirection: "row",
-    gap: 8,
+    gap: 6,
     marginBottom: 12,
   },
   tab: {
@@ -450,7 +451,7 @@ const createStyles = (Colors: ThemeColors) => StyleSheet.create({
     flexDirection: "column",
     alignItems: "center",
     paddingVertical: 12,
-    paddingHorizontal: 8,
+    paddingHorizontal: 3,
     borderRadius: 14,
     backgroundColor: Colors.surface,
     borderWidth: 1.5,
@@ -467,6 +468,9 @@ const createStyles = (Colors: ThemeColors) => StyleSheet.create({
     fontFamily: "Nunito_600SemiBold",
     color: Colors.textSecondary,
     textAlign: "center",
+  },
+  networkTabLabel: {
+    fontSize: 10,
   },
   tabCount: {
     fontSize: 11,

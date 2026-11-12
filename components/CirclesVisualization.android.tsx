@@ -2,6 +2,7 @@
 import React, { useEffect, useMemo } from "react";
 import { View, Text, StyleSheet, useWindowDimensions, Pressable } from "react-native";
 import { router } from "expo-router";
+import { homeCircleContacts } from "@shared/circles";
 import Animated, {
   useSharedValue,
   useAnimatedStyle,
@@ -158,7 +159,8 @@ function useRingRotation(speed: number) {
   return rotation;
 }
 
-export function CirclesVisualization({ contacts, user, onCenterPress }: CirclesVisualizationProps) {
+export function CirclesVisualization({ contacts: allContacts, user, onCenterPress }: CirclesVisualizationProps) {
+  const contacts = homeCircleContacts(allContacts);
   const Colors = useThemeColors();
   const styles = useMemo(() => createStyles(Colors), [Colors]);
   const c1 = contacts.filter((c) => c.circleLevel === 1);
@@ -273,7 +275,7 @@ export function CirclesVisualization({ contacts, user, onCenterPress }: CirclesV
           />
         ))}
 
-        {contacts.length > 0 ? (
+        {c1.length + c2.length + c3All.length > 0 ? (
           <Pressable
             onPress={onCenterPress}
             style={({ pressed }) => [

@@ -30,8 +30,8 @@ export function computeProfileCompletion(contacts: Contact[]): ProfileCompletion
   );
   const incompleteAnyContact = contacts.filter(
     (c) =>
-      !c.birthday ||
-      (c.interests ?? []).length === 0,
+      c.circleLevel !== 4 && (!c.birthday ||
+      (c.interests ?? []).length === 0),
   );
 
   const isComplete =

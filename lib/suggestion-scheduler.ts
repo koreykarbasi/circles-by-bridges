@@ -11,7 +11,7 @@ const SCHEDULER_KEY = "bridges_suggestion_scheduler_v2";
 export { CIRCLE_COOLDOWN_DAYS };
 
 export function isInCooldown(
-  circleLevel: 1 | 2 | 3,
+  circleLevel: 1 | 2 | 3 | 4,
   daysSinceLastSuggested: number | null,
 ): boolean {
   return isSuggestionInCooldown(circleLevel, daysSinceLastSuggested);
@@ -106,7 +106,7 @@ export function getDaysSinceLastSuggestedSync(
 }
 
 export function scoreSuggestion(
-  circleLevel: 1 | 2 | 3,
+  circleLevel: 1 | 2 | 3 | 4,
   daysSinceLastSuggested: number | null,
   daysSinceContact: number | null,
   _daysUntilBirthday: number | null,

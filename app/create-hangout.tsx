@@ -367,7 +367,7 @@ export default function CreateHangoutScreen() {
           sortedContacts.map((c) => {
             const selected = selectedContacts.has(c.id);
             const badge = CIRCLE_BADGE[c.circleLevel];
-            const badgeColor = Colors[`circle${c.circleLevel}` as "circle1" | "circle2" | "circle3"];
+            const badgeColor = Colors[`circle${c.circleLevel}` as "circle1" | "circle2" | "circle3" | "circle4"];
             return (
               <Pressable
                 key={c.id}
@@ -663,6 +663,7 @@ const CIRCLE_BADGE: Record<number, { label: string }> = {
   1: { label: "Core" },
   2: { label: "Close" },
   3: { label: "Friend" },
+  4: { label: "Acquaintances" },
 };
 
 const createStyles = (Colors: ThemeColors) => StyleSheet.create({

@@ -55,7 +55,7 @@ interface PrioritySuggestionResponse {
 }
 
 function buildSuggestion(contact: Contact): GeneratedSuggestion {
-  const urgency = getContactUrgency(contact.circleLevel as 1 | 2 | 3, contact.lastContacted ?? undefined);
+  const urgency = getContactUrgency(contact.circleLevel as 1 | 2 | 3 | 4, contact.lastContacted ?? undefined);
   const bday = getDaysUntilBirthday(contact.birthday ?? undefined);
   const hasBirthdaySoon = bday !== null && bday <= 14;
   const birthdayLabel = formatBirthdayCountdown(contact.birthday ?? undefined);
@@ -64,16 +64,16 @@ function buildSuggestion(contact: Contact): GeneratedSuggestion {
   const prompt = getSmartPrompt(
     contact.id,
     contact.name,
-    contact.circleLevel as 1 | 2 | 3,
+    contact.circleLevel as 1 | 2 | 3 | 4,
     contact.interests,
     { isOverdue: urgency === "overdue", hasBirthdaySoon, labels: contact.labels },
   );
 
-  let type = getActionType(contact.circleLevel as 1 | 2 | 3, prompt, contact.id);
+  let type = getActionType(contact.circleLevel as 1 | 2 | 3 | 4, prompt, contact.id);
   // DISABLED: hangout tracking — lastHangout gate removed so hangout suggestions appear freely
   // if (type === "hangout") {
   //   const daysSinceHangout = getDaysSince(contact.lastHangout ?? undefined);
-  //   const hangoutThreshold = HANGOUT_THRESHOLDS[contact.circleLevel as 1 | 2 | 3];
+  //   const hangoutThreshold = HANGOUT_THRESHOLDS[contact.circleLevel as 1 | 2 | 3 | 4];
   //   if (daysSinceHangout !== null && daysSinceHangout < hangoutThreshold) {
   //     type = "text";
   //   }
@@ -109,7 +109,7 @@ export default function SuggestionsScreen() {
   const insets = useSafeAreaInsets();
   const { user } = useAuth();
   const { contacts, markContacted, savePhoneNumber } = useContacts();
-  const [filterCircle, setFilterCircle] = useState<1 | 2 | 3 | null>(null);
+  const [filterCircle, setFilterCircle] = useState<1 | 2 | 3 | 4 | null>(null);
   const [refreshKey, setRefreshKey] = useState(0);
   const [shuffleJitter, setShuffleJitter] = useState<Record<string, number>>({});
   const completedIds = useDismissedSuggestions();
@@ -190,7 +190,7 @@ export default function SuggestionsScreen() {
       getExpiredElevations().then(async (expired) => {
         for (const entry of expired) {
           await markContactSuggested(entry.contactId);
-          await snoozeContact(entry.contactId, SNOOZE_DAYS[entry.circleLevel as 1 | 2 | 3]);
+          await snoozeContact(entry.contactId, SNOOZE_DAYS[entry.circleLevel as 1 | 2 | 3 | 4]);
           await clearElevation(entry.contactId, entry.type);
         }
         if (expired.length > 0) {
@@ -254,10 +254,10 @@ export default function SuggestionsScreen() {
     const elevationBonus = (contact: typeof contacts[0]) =>
       elevationMap[contact.id] ??
       (serverDueIds.has(contact.id)
-        ? ELEVATION_SCORE_BONUS[contact.circleLevel as 1 | 2 | 3]
+        ? ELEVATION_SCORE_BONUS[contact.circleLevel as 1 | 2 | 3 | 4]
         : 0);
     const isDeferred = (contact: typeof contacts[0]) =>
-      contact.circleLevel === 3 &&
+      contact.circleLevel >= 3 &&
       shouldDeferSuggestion(
         contact.id,
         elevatedContactTypes.has(`${contact.id}:checkin`),
@@ -270,7 +270,7 @@ export default function SuggestionsScreen() {
     const inCooldown = (c: typeof contacts[0]) => {
       if (isElevated(c)) return false;
       const daysSinceLastSug = getDaysSinceLastSuggestedSync(c.id, lastSuggestedDates);
-      return isInCooldown(c.circleLevel as 1 | 2 | 3, daysSinceLastSug);
+      return isInCooldown(c.circleLevel as 1 | 2 | 3 | 4, daysSinceLastSug);
     };
 
     const base = filtered.filter((c) => !isDeferred(c) && !isSessionSkipped(c) && !isDismissed(c.id));
@@ -283,7 +283,7 @@ export default function SuggestionsScreen() {
       return {
         contact: c,
         score: scoreSuggestion(
-          c.circleLevel as 1 | 2 | 3,
+          c.circleLevel as 1 | 2 | 3 | 4,
           daysSinceLastSug,
           daysSinceContact,
           daysUntilBday,
@@ -320,10 +320,10 @@ export default function SuggestionsScreen() {
           if (!updated[contact.id]) {
             const cachedPromptText = getCachedPrompt(contact.id);
             if (cachedPromptText) {
-              const urgency = getContactUrgency(contact.circleLevel as 1 | 2 | 3, contact.lastContacted ?? undefined);
+              const urgency = getContactUrgency(contact.circleLevel as 1 | 2 | 3 | 4, contact.lastContacted ?? undefined);
               const bday = getDaysUntilBirthday(contact.birthday ?? undefined);
               const hasBirthdaySoon = bday !== null && bday <= 14;
-              const type = getActionType(contact.circleLevel as 1 | 2 | 3, cachedPromptText, contact.id);
+              const type = getActionType(contact.circleLevel as 1 | 2 | 3 | 4, cachedPromptText, contact.id);
               updated[contact.id] = {
                 contact,
                 prompt: cachedPromptText,
@@ -368,7 +368,7 @@ export default function SuggestionsScreen() {
     const contact = contacts.find((c) => c.id === contactId);
     if (!contact) return;
 
-    const urgency = getContactUrgency(contact.circleLevel as 1 | 2 | 3, contact.lastContacted ?? undefined);
+    const urgency = getContactUrgency(contact.circleLevel as 1 | 2 | 3 | 4, contact.lastContacted ?? undefined);
     const bday = getDaysUntilBirthday(contact.birthday ?? undefined);
     const hasBirthdaySoon = bday !== null && bday <= 14;
 
@@ -376,12 +376,12 @@ export default function SuggestionsScreen() {
       contactId,
       currentPrompt,
       contact.name,
-      contact.circleLevel as 1 | 2 | 3,
+      contact.circleLevel as 1 | 2 | 3 | 4,
       contact.interests,
       { isOverdue: urgency === "overdue", hasBirthdaySoon, labels: contact.labels },
     );
 
-    const type = getActionType(contact.circleLevel as 1 | 2 | 3, newPrompt, contact.id);
+    const type = getActionType(contact.circleLevel as 1 | 2 | 3 | 4, newPrompt, contact.id);
     const birthdayLabel = formatBirthdayCountdown(contact.birthday ?? undefined);
     const lastContactedLabel = formatLastContacted(contact.lastContacted ?? undefined);
 
@@ -420,7 +420,7 @@ export default function SuggestionsScreen() {
       //   markHangout(contactId);
       // }
       const circleLevel = contacts.find((contact) => contact.id === contactId)?.circleLevel;
-      dismissSuggestion(contactId, circleLevel === 1 || circleLevel === 2 ? circleLevel : 3);
+      dismissSuggestion(contactId, circleLevel === 1 || circleLevel === 2 || circleLevel === 4 ? circleLevel : 3);
       setSessionSkippedIds((prev) => new Set(prev).add(contactId));
       markContactSuggested(contactId).catch(() => {});
     },
@@ -429,7 +429,7 @@ export default function SuggestionsScreen() {
 
   const handleSwipeDismiss = useCallback((contactId: string) => {
     const circleLevel = contacts.find((contact) => contact.id === contactId)?.circleLevel;
-    dismissSuggestion(contactId, circleLevel === 1 || circleLevel === 2 ? circleLevel : 3);
+    dismissSuggestion(contactId, circleLevel === 1 || circleLevel === 2 || circleLevel === 4 ? circleLevel : 3);
     markContactSuggested(contactId).catch(() => {});
     // Tell the server so the push-notification picker respects the cooldown too
     persistSuggestionDismissal(contactId)
@@ -497,7 +497,7 @@ export default function SuggestionsScreen() {
     async (reminder: Reminder, date: Date, label: string) => {
       dismissReminder(reminder.id);
       if (!reminder.contactId) return;
-      const circleLevel = reminder.circleLevel as 1 | 2 | 3;
+      const circleLevel = reminder.circleLevel as 1 | 2 | 3 | 4;
 
       if (reminder.type === "check-in-quickpick") {
         await markContacted(reminder.contactId, date, label);
@@ -648,9 +648,9 @@ export default function SuggestionsScreen() {
             All
           </Text>
         </Pressable>
-        {([1, 2, 3] as const).map((level) => {
+        {([1, 2, 3, 4] as const).map((level) => {
           const cfg = CIRCLE_CONFIG[level];
-          const cfgColor = Colors[`circle${level}` as "circle1" | "circle2" | "circle3"];
+          const cfgColor = Colors[`circle${level}` as "circle1" | "circle2" | "circle3" | "circle4"];
           const isActive = filterCircle === level;
           return (
             <Pressable
@@ -764,7 +764,7 @@ export default function SuggestionsScreen() {
               phone={s.contact.phone}
               prompt={s.prompt}
               type={s.type}
-              circleLevel={s.contact.circleLevel as 1 | 2 | 3}
+              circleLevel={s.contact.circleLevel as 1 | 2 | 3 | 4}
               urgency={s.urgency}
               birthdayLabel={s.birthdayLabel}
               lastContactedLabel={s.lastContactedLabel}

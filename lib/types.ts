@@ -93,6 +93,7 @@ export const CIRCLE_CONFIG = {
   1: { label: "Core Circle", max: 5, color: "#FF6B8A", description: "Your closest people" },
   2: { label: "Close Friends", max: 10, color: "#9B7DFF", description: "Trusted confidants" },
   3: { label: "Friends", max: 35, color: "#4ECDC4", description: "Your friends" },
+  4: { label: "Acquaintances", max: 100, color: "#FFB84D", description: "Network, mentors, former coworkers" },
 } as const;
 
 export const AVATAR_COLORS = [

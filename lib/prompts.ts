@@ -18,6 +18,9 @@ interface SyncedPromptsData {
   circle3Call: string[];
   circle3Text: string[];
   circle3Hangout: string[];
+  circle4Call?: string[];
+  circle4Text?: string[];
+  circle4Hangout?: string[];
   universal: string[];
   birthday: string[];
   overdue: string[];
@@ -35,7 +38,7 @@ export async function loadSyncedPrompts(): Promise<void> {
   syncFetchPromise = (async () => {
     try {
       const url = new URL("/api/prompts", getApiUrl());
-      const resp = await fetch(url.toString(), { credentials: "include" });
+      const resp = await fetch(url.toString(), { credentials: "include", headers: { "X-Bridges-Client": "2" } });
       if (resp.ok) {
         syncedData = await resp.json();
         taggedPromptCache.clear();
@@ -444,7 +447,7 @@ function registerPromptActions(template: string, personalized: string, fallback?
 }
 
 function buildTaggedPrompts(
-  circleLevel: 1 | 2 | 3,
+  circleLevel: 1 | 2 | 3 | 4,
 ): TaggedPrompt[] {
   const tagged: TaggedPrompt[] = [];
 
@@ -467,6 +470,11 @@ function buildTaggedPrompts(
       callPrompts = getSyncedList("circle3Call", CIRCLE_3_CALL_PROMPTS);
       textPrompts = getSyncedList("circle3Text", CIRCLE_3_TEXT_PROMPTS);
       hangoutPrompts = getSyncedList("circle3Hangout", CIRCLE_3_HANGOUT_PROMPTS);
+      break;
+    case 4:
+      callPrompts = ["Give {name} a quick call to hear what they have been working on lately.", ...CIRCLE_3_CALL_PROMPTS];
+      textPrompts = ["Send {name} a hello and ask for a life update.", "Share an update with {name} and ask how their work is going.", ...CIRCLE_3_TEXT_PROMPTS];
+      hangoutPrompts = ["Invite {name} for a coffee and a catch-up.", ...CIRCLE_3_HANGOUT_PROMPTS];
       break;
   }
 
@@ -515,7 +523,7 @@ function shuffleArray<T>(arr: T[]): T[] {
 
 export function getPromptsForContact(
   name: string,
-  circleLevel: 1 | 2 | 3,
+  circleLevel: 1 | 2 | 3 | 4,
   interests: string[],
   options?: {
     isOverdue?: boolean;
@@ -553,7 +561,7 @@ export function getPromptsForContact(
     overdueList.forEach((p) => taggedPromptCache.set(p, ["text"]));
   }
 
-  if (options?.hasBirthdaySoon) {
+  if (circleLevel !== 4 && options?.hasBirthdaySoon) {
     const birthdayList = getSyncedList("birthday", BIRTHDAY_PROMPTS);
     allPrompts.push(...birthdayList);
     birthdayList.forEach((p) => taggedPromptCache.set(p, ["text"]));
@@ -597,7 +605,7 @@ export function getPromptsForContact(
 export function getSmartPrompt(
   contactId: string,
   name: string,
-  circleLevel: 1 | 2 | 3,
+  circleLevel: 1 | 2 | 3 | 4,
   interests: string[],
   options?: {
     isOverdue?: boolean;
@@ -622,7 +630,7 @@ export function getNextPrompt(
   contactId: string,
   currentPrompt: string,
   name: string,
-  circleLevel: 1 | 2 | 3,
+  circleLevel: 1 | 2 | 3 | 4,
   interests: string[],
   options?: {
     isOverdue?: boolean;
@@ -652,14 +660,14 @@ export function getNextPrompt(
 
 export function getRandomPrompt(
   name: string,
-  circleLevel: 1 | 2 | 3,
+  circleLevel: 1 | 2 | 3 | 4,
   interests: string[],
 ): string {
   const prompts = getPromptsForContact(name, circleLevel, interests);
   return prompts[Math.floor(Math.random() * prompts.length)];
 }
 
-export function getActionType(circleLevel: 1 | 2 | 3, prompt: string, contactId = ""): ActionType {
+export function getActionType(circleLevel: 1 | 2 | 3 | 4, prompt: string, contactId = ""): ActionType {
   const allowed = findRegisteredActions(prompt) ?? getExplicitAllowedActions(prompt) ?? inferAllowedActions(prompt);
   return chooseAllowedAction(allowed, circleLevel, prompt, contactId);
 }

@@ -693,8 +693,8 @@ function CirclesPage() {
                       width: sizes[level],
                       height: sizes[level],
                       borderRadius: sizes[level] / 2,
-                       borderColor: Colors[`circle${level}` as "circle1" | "circle2" | "circle3"] + "60",
-                       backgroundColor: Colors[`circle${level}` as "circle1" | "circle2" | "circle3"] + "12",
+                        borderColor: Colors[`circle${level}` as "circle1" | "circle2" | "circle3" | "circle4"] + "60",
+                        backgroundColor: Colors[`circle${level}` as "circle1" | "circle2" | "circle3" | "circle4"] + "12",
                     },
                   ]}
                 />
@@ -704,18 +704,18 @@ function CirclesPage() {
         </Animated.View>
 
         <Animated.View entering={FadeIn.delay(200).duration(600)}>
-          <Text style={pageStyles.title}>Your 3 Circles</Text>
+          <Text style={pageStyles.title}>Your Circles</Text>
           <Text style={pageStyles.subtitle}>
-            Based on Dunbar's research, we organize your relationships into three levels of closeness.
+            Keep close relationships and wider connections in four thoughtful circles.
           </Text>
         </Animated.View>
 
         <Animated.View entering={FadeIn.delay(400).duration(600)} style={pageStyles.circlesList}>
-          {([1, 2, 3] as const).map((level) => {
+          {([1, 2, 3, 4] as const).map((level) => {
             const cfg = CIRCLE_CONFIG[level];
             return (
               <View key={level} style={pageStyles.circleItem}>
-                 <View style={[pageStyles.circleDot, { backgroundColor: Colors[`circle${level}` as "circle1" | "circle2" | "circle3"] }]} />
+                 <View style={[pageStyles.circleDot, { backgroundColor: Colors[`circle${level}` as "circle1" | "circle2" | "circle3" | "circle4"] }]} />
                 <View style={pageStyles.circleItemContent}>
                   <Text style={pageStyles.circleLabel}>
                     {cfg.label}{" "}

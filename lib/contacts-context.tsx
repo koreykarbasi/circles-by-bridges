@@ -19,10 +19,10 @@ interface ContactsContextValue {
   markContacted: (id: string, date?: Date, label?: string) => Promise<void>;
   markHangout: (id: string, date?: Date, label?: string) => Promise<void>;
   savePhoneNumber: (id: string, phone: string, extra?: { birthday?: string; photoUri?: string }) => Promise<void>;
-  getCircleContacts: (level: 1 | 2 | 3) => Contact[];
+  getCircleContacts: (level: 1 | 2 | 3 | 4) => Contact[];
   getOverdueContacts: () => Contact[];
   getUpcomingBirthdays: () => Contact[];
-  reorderCircleContacts: (circleLevel: 1 | 2 | 3, orderedIds: string[]) => Promise<void>;
+  reorderCircleContacts: (circleLevel: 1 | 2 | 3 | 4, orderedIds: string[]) => Promise<void>;
 }
 
 const ContactsContext = createContext<ContactsContextValue | null>(null);
@@ -37,7 +37,7 @@ export function ContactsProvider({ children }: { children: ReactNode }) {
     try {
       const baseUrl = getApiUrl();
       const url = new URL("/api/contacts", baseUrl);
-      const res = await fetch(url.toString(), { credentials: "include" });
+      const res = await fetch(url.toString(), { credentials: "include", headers: { "X-Bridges-Client": "2" } });
       if (res.ok) {
         const data = await res.json();
         setContacts(data);
@@ -161,7 +161,7 @@ export function ContactsProvider({ children }: { children: ReactNode }) {
     //   .then(fetchContacts);
   }, []);
 
-  const reorderCircleContactsFn = useCallback(async (circleLevel: 1 | 2 | 3, orderedIds: string[]) => {
+  const reorderCircleContactsFn = useCallback(async (circleLevel: 1 | 2 | 3 | 4, orderedIds: string[]) => {
     const previous = [...contacts];
     setContacts((prev) => {
       const others = prev.filter((c) => c.circleLevel !== circleLevel);
@@ -182,7 +182,7 @@ export function ContactsProvider({ children }: { children: ReactNode }) {
   }, [contacts]);
 
   const getCircleContacts = useCallback(
-    (level: 1 | 2 | 3) => contacts.filter((c) => c.circleLevel === level),
+    (level: 1 | 2 | 3 | 4) => contacts.filter((c) => c.circleLevel === level),
     [contacts],
   );
 

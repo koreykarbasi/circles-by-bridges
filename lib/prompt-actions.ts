@@ -44,7 +44,7 @@ function stableFraction(value: string): number {
 
 export function chooseAllowedAction(
   allowed: ActionType[],
-  circleLevel: 1 | 2 | 3,
+  circleLevel: 1 | 2 | 3 | 4,
   prompt: string,
   contactId = "",
 ): ActionType {
@@ -54,7 +54,7 @@ export function chooseAllowedAction(
   const weighted = allowed.map((action) => ({
     action,
     weight:
-      circleLevel === 3
+      circleLevel >= 3
         ? (action === "text" ? 1.5 : 1)
         : (action === "call" ? 1.5 : 1),
   }));

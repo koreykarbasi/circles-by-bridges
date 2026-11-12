@@ -74,7 +74,7 @@ export function buildBirthdayDayOfMessages(contact: ContactRow, timezone: string
       contactId: contact.id,
       notifType: "birthday",
     });
-  } else if (contact.circleLevel === 3) {
+  } else if (contact.circleLevel === 3 || contact.circleLevel === 4) {
     messages.push({
       title: `${contact.name}'s birthday`,
       body: `Today is ${contact.name}'s birthday.`,
@@ -163,11 +163,11 @@ export function buildReminderMessages(contact: ContactRow, timezone: string): Pu
     }
     // Custom reminders: C2 advance at 7/day-of
     buildCustomReminderMessages(contact, [7, 0], timezone, messages);
-  } else if (contact.circleLevel === 3) {
+  } else if (contact.circleLevel === 3 || contact.circleLevel === 4) {
     // Keep the server threshold identical to the visible quick-pick threshold.
     const daysSinceContact3 = getContactDaysSince(contact.lastContacted, timezone);
     const daysSinceCreated = getContactDaysSince(contact.createdAt, timezone);
-    if (isCheckinQuickPickEligible(contact, 3, daysSinceContact3, daysSinceCreated, contact.emptyLastContactPromptDueAt)) {
+    if (isCheckinQuickPickEligible(contact, contact.circleLevel, daysSinceContact3, daysSinceCreated, contact.emptyLastContactPromptDueAt)) {
       messages.push({
         title: `Check in with ${contact.name}`,
         body: `Open the app to confirm when you last spoke.`,
@@ -754,7 +754,7 @@ async function sendRemindersForUserUnlocked(
   const reminderPriority = (msg: PushMessage): number => {
     const contact = msg.contactId ? contactsById.get(msg.contactId) : undefined;
     if (!contact) return 0;
-    const circle = contact.circleLevel as 1 | 2 | 3;
+    const circle = contact.circleLevel as 1 | 2 | 3 | 4;
     const days = getContactDaysSince(contact.lastContacted, tz);
     if (circle === 1) {
       return 100 + (days === null ? 80 : Math.min(80, 30 + Math.floor((days - getCheckinThreshold(1, contact)) * 3)));
@@ -1069,14 +1069,14 @@ export type PrioritySuggestionContact = ContactRow & {
 };
 
 function hasHomeReminder(contact: ContactRow, timezone: string, now: Date): boolean {
-  const circle = contact.circleLevel as 1 | 2 | 3;
-  if (![1, 2, 3].includes(circle)) return false;
+  const circle = contact.circleLevel as 1 | 2 | 3 | 4;
+  if (![1, 2, 3, 4].includes(circle)) return false;
 
   const daysSinceContact = getContactDaysSince(contact.lastContacted, timezone);
   const daysSinceCreated = getContactDaysSince(contact.createdAt, timezone);
   if (isCheckinQuickPickEligible(contact, circle, daysSinceContact, daysSinceCreated, contact.emptyLastContactPromptDueAt, now)) return true;
 
-  const reminderWindow = { 1: 30, 2: 7, 3: 0 }[circle];
+  const reminderWindow = { 1: 30, 2: 7, 3: 0, 4: 0 }[circle];
   const birthdayDays = getDaysUntilBirthdayInTz(contact.birthday, timezone);
   if (birthdayDays !== null && birthdayDays >= 0 && birthdayDays <= reminderWindow) {
     return true;
@@ -1105,7 +1105,7 @@ export function selectSuggestionPushCandidates(
   // Defense in depth: a caller must never turn the pre-delay "Longer" answer
   // into an ordinary suggestion via the all-reminders fallback.
   const eligibleCohort = priorityCohort.filter(
-    (contact) => contact.circleLevel !== 3 || contact.elevationPhase !== "deferred",
+    (contact) => contact.circleLevel < 3 || contact.elevationPhase !== "deferred",
   );
   const reminderFree = eligibleCohort.filter(
     (contact) => !hasHomeReminder(contact, timezone, now),
@@ -1154,8 +1154,8 @@ export async function getPrioritySuggestionCohort(
 
   const rankedContacts = (userContacts as ContactRow[])
     .filter((contact) => {
-      const circle = contact.circleLevel as 1 | 2 | 3;
-      if (![1, 2, 3].includes(circle)) return false;
+      const circle = contact.circleLevel as 1 | 2 | 3 | 4;
+      if (![1, 2, 3, 4].includes(circle)) return false;
 
       const dismissedAt = latestDismissal.get(contact.id);
       if (dismissedAt) {
@@ -1166,10 +1166,10 @@ export async function getPrioritySuggestionCohort(
       const elevationAgeHours = elevatedAt
         ? (now.getTime() - elevatedAt.getTime()) / 3_600_000
         : null;
-      return circle !== 3 || elevationPhaseForAge(circle, elevationAgeHours) !== "deferred";
+      return circle < 3 || elevationPhaseForAge(circle, elevationAgeHours) !== "deferred";
     })
     .map((contact) => {
-      const circle = contact.circleLevel as 1 | 2 | 3;
+      const circle = contact.circleLevel as 1 | 2 | 3 | 4;
       const elevatedAt = latestElevation.get(contact.id);
       const elevationAgeHours = elevatedAt
         ? (now.getTime() - elevatedAt.getTime()) / 3_600_000

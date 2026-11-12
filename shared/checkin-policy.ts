@@ -26,12 +26,12 @@ export function dateForCheckinOption(
 }
 
 export function emptyContactPromptDueAt(
-  circleLevel: 1 | 2 | 3,
+  circleLevel: 1 | 2 | 3 | 4,
   now = new Date(),
   random: () => number = Math.random,
 ): Date {
   const result = new Date(now);
-  const days = circleLevel === 3 ? randomInclusive(14, 30, random) : 7;
+  const days = circleLevel === 4 ? 320 : circleLevel === 3 ? randomInclusive(14, 30, random) : 7;
   result.setDate(result.getDate() + days);
   return result;
 }
@@ -49,10 +49,10 @@ export function normalizeLastContacted(value: unknown): string | null {
 }
 
 export function promptDueAfterContactUpdate(params: {
-  previousCircleLevel: 1 | 2 | 3;
+  previousCircleLevel: 1 | 2 | 3 | 4;
   previousLastContacted: string | null;
   previousDueAt: Date | null;
-  nextCircleLevel: 1 | 2 | 3;
+  nextCircleLevel: 1 | 2 | 3 | 4;
   nextLastContacted: string | null;
   now?: Date;
   random?: () => number;

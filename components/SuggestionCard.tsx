@@ -21,7 +21,7 @@ interface SuggestionCardProps {
   phone?: string | null;
   prompt: string;
   type: "call" | "text" | "hangout";
-  circleLevel: 1 | 2 | 3;
+  circleLevel: 1 | 2 | 3 | 4;
   urgency?: "overdue" | "soon" | "ok";
   birthdayLabel?: string;
   lastContactedLabel?: string;
@@ -77,7 +77,7 @@ export function SuggestionCard({
 }: SuggestionCardProps) {
   const Colors = useThemeColors();
   const styles = useMemo(() => createStyles(Colors), [Colors]);
-  const circleColor = circleLevel === 1 ? Colors.circle1 : circleLevel === 2 ? Colors.circle2 : Colors.circle3;
+  const circleColor = Colors[`circle${circleLevel}` as "circle1" | "circle2" | "circle3" | "circle4"];
   const typeConfig = TYPE_CONFIG[type];
   const urgencyConfig = {
     overdue: { color: Colors.danger, label: "Overdue" },

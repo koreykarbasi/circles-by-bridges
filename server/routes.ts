@@ -55,7 +55,8 @@ function bad(res: Response, message: string) {
   return res.status(400).json({ message });
 }
 
-const VALID_CIRCLE_LEVELS = [1, 2, 3] as const;
+import { visibleContactsForClient } from "@shared/circles";
+const VALID_CIRCLE_LEVELS = [1, 2, 3, 4] as const;
 const VALID_HANGOUT_STATUSES = ["draft", "active", "finalized"] as const;
 // 5 MB image → ~6.7 MB base64 string; cap at 7 MB of string length
 const MAX_PHOTO_CHARS = 7 * 1024 * 1024;
@@ -1011,32 +1012,32 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const now = Date.now();
       const dismissedContactIds = dismissalResult.rows
         .filter((row) => {
-          const circle = row.circle_level as 1 | 2 | 3;
-          if (![1, 2, 3].includes(circle)) return false;
+          const circle = row.circle_level as 1 | 2 | 3 | 4;
+          if (![1, 2, 3, 4].includes(circle)) return false;
           const ageMs = now - new Date(row.dismissed_at).getTime();
           return ageMs < CIRCLE_COOLDOWN_DAYS[circle] * 86_400_000;
         })
         .map((row) => row.contact_id);
       const pendingElevationContactIds = elevationResult.rows
         .filter((row) => {
-          const circle = row.circle_level as 1 | 2 | 3;
-          if (![1, 2, 3].includes(circle)) return false;
+          const circle = row.circle_level as 1 | 2 | 3 | 4;
+          if (![1, 2, 3, 4].includes(circle)) return false;
           return now - new Date(row.elevated_at).getTime() <
             ELEVATION_LIFETIME_HOURS[circle] * 3_600_000;
         })
         .map((row) => row.contact_id);
       const deferredElevationContactIds = elevationResult.rows
         .filter((row) => {
-          const circle = row.circle_level as 1 | 2 | 3;
-          if (![1, 2, 3].includes(circle)) return false;
+          const circle = row.circle_level as 1 | 2 | 3 | 4;
+          if (![1, 2, 3, 4].includes(circle)) return false;
           const ageHours = (now - new Date(row.elevated_at).getTime()) / 3_600_000;
-          return circle === 3 && elevationPhaseForAge(circle, ageHours) === "deferred";
+          return circle >= 3 && elevationPhaseForAge(circle, ageHours) === "deferred";
         })
         .map((row) => row.contact_id);
       const dueElevationContactIds = elevationResult.rows
         .filter((row) => {
-          const circle = row.circle_level as 1 | 2 | 3;
-          if (![1, 2, 3].includes(circle)) return false;
+          const circle = row.circle_level as 1 | 2 | 3 | 4;
+          if (![1, 2, 3, 4].includes(circle)) return false;
           const ageHours = (now - new Date(row.elevated_at).getTime()) / 3_600_000;
           return elevationPhaseForAge(circle, ageHours) === "due";
         })
@@ -1236,7 +1237,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get("/api/contacts", requireAuth, async (req, res) => {
     try {
       const contacts = await storage.getContactsByUserId(req.session.userId!);
-      res.json(contacts);
+      res.json(visibleContactsForClient(contacts, req.get("X-Bridges-Client")));
     } catch (err) {
       console.error("Error fetching contacts:", err);
       res.status(500).json({ message: "Failed to fetch contacts" });
@@ -1270,7 +1271,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const { id } = req.params as { id: string };
       const contact = await storage.getContact(id);
-      if (!contact || contact.userId !== req.session.userId) {
+      if (!contact || contact.userId !== req.session.userId ||
+          (contact.circleLevel === 4 && req.get("X-Bridges-Client") !== "2")) {
         return res.status(404).json({ message: "Contact not found" });
       }
       res.json(contact);
@@ -1288,8 +1290,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return bad(res, "Name is required");
       }
       const level = Number(circleLevel);
-      if (!VALID_CIRCLE_LEVELS.includes(level as 1 | 2 | 3)) {
-        return bad(res, "circleLevel must be 1, 2, or 3");
+      if (!VALID_CIRCLE_LEVELS.includes(level as 1 | 2 | 3 | 4)) {
+        return bad(res, "circleLevel must be 1, 2, 3, or 4");
       }
       const safe = pickContactFields(body);
       const normalizedLastContacted = normalizeLastContacted(safe.lastContacted);
@@ -1309,7 +1311,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         lastContacted: normalizedLastContacted,
         emptyLastContactPromptDueAt: normalizedLastContacted
           ? null
-          : emptyContactPromptDueAt(level as 1 | 2 | 3),
+          : emptyContactPromptDueAt(level as 1 | 2 | 3 | 4),
         lastHangout: (() => {
           if (safe.lastHangout) return safe.lastHangout;
           const now = new Date();
@@ -1343,8 +1345,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return bad(res, "Photo data exceeds maximum allowed size");
       }
       const normalizedLevel = Number(body.circleLevel);
-      if (!VALID_CIRCLE_LEVELS.includes(normalizedLevel as 1 | 2 | 3)) {
-        return bad(res, "circleLevel must be 1, 2, or 3");
+      if (!VALID_CIRCLE_LEVELS.includes(normalizedLevel as 1 | 2 | 3 | 4)) {
+        return bad(res, "circleLevel must be 1, 2, 3, or 4");
       }
       const safe = pickContactFields(body);
       safe.name = (body.name as string).trim();
@@ -1356,10 +1358,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
         ? safe.lastContacted
         : existing.lastContacted;
       safe.emptyLastContactPromptDueAt = promptDueAfterContactUpdate({
-        previousCircleLevel: existing.circleLevel as 1 | 2 | 3,
+        previousCircleLevel: existing.circleLevel as 1 | 2 | 3 | 4,
         previousLastContacted: normalizeLastContacted(existing.lastContacted),
         previousDueAt: existing.emptyLastContactPromptDueAt,
-        nextCircleLevel: normalizedLevel as 1 | 2 | 3,
+        nextCircleLevel: normalizedLevel as 1 | 2 | 3 | 4,
         nextLastContacted: normalizeLastContacted(incomingLastContacted),
       });
       const contact = await storage.updateContact(id, safe);

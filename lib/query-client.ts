@@ -40,7 +40,7 @@ export async function apiRequest(
 
   const res = await fetchFn(url.toString(), {
     method,
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", "X-Bridges-Client": "2" },
     body: data ? JSON.stringify(data) : undefined,
     credentials: "include",
   });
@@ -60,6 +60,7 @@ export const getQueryFn: <T>(options: {
 
     const res = await fetchFn(url.toString(), {
       credentials: "include",
+      headers: { "X-Bridges-Client": "2" },
     });
 
     if (unauthorizedBehavior === "returnNull" && res.status === 401) {

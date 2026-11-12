@@ -45,7 +45,7 @@ const HANGOUT_C3: Option[] = [
 ];
 
 interface QuickPickRowProps {
-  circleLevel: 1 | 2 | 3;
+  circleLevel: 1 | 2 | 3 | 4;
   variant: "checkin" | "hangout";
   onSelect: (date: Date, label: string) => void;
   onCalendarPress?: () => void;
@@ -56,9 +56,9 @@ export function QuickPickRow({ circleLevel, variant, onSelect, onCalendarPress }
   const styles = useMemo(() => createStyles(Colors), [Colors]);
   let options: Option[];
   if (variant === "hangout") {
-    options = circleLevel === 3 ? HANGOUT_C3 : HANGOUT_C1_C2;
+    options = circleLevel >= 3 ? HANGOUT_C3 : HANGOUT_C1_C2;
   } else {
-    options = circleLevel === 3 ? CHECKIN_C3 : CHECKIN_C1_C2;
+    options = circleLevel >= 3 ? CHECKIN_C3 : CHECKIN_C1_C2;
   }
 
   const handlePress = useCallback(

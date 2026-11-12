@@ -18,7 +18,7 @@ import { EmptyState } from "@/components/EmptyState";
 import { NoPhoneSheet } from "@/components/NoPhoneSheet";
 import { formatLastContacted, getDaysSince, getDaysUntilBirthday } from "@/lib/helpers";
 import { CIRCLE_CONFIG, HangoutPlan } from "@/lib/types";
-import { generateReminders, selectHomeReminders, Reminder, CHECKIN_THRESHOLDS, ELEVATION_PUSH_DELAY_HOURS, ELEVATION_CLEANUP_DAYS } from "@/lib/reminders";
+import { generateReminders, selectHomeReminders, Reminder, ELEVATION_PUSH_DELAY_HOURS, ELEVATION_CLEANUP_DAYS } from "@/lib/reminders";
 import { setElevation, getElevations, getExpiredElevations, clearElevation, ELEVATION_SCORE_BONUS, invalidateElevationCache } from "@/lib/checkin-state";
 import { snoozeContact, getSnoozedContacts, SNOOZE_DAYS } from "@/lib/reminder-snooze";
 import { getSmartPrompt, getActionType, getNextPrompt, loadSyncedPrompts } from "@/lib/prompts";
@@ -71,7 +71,7 @@ interface Suggestion {
   avatarColor: string;
   photoUri?: string | null;
   phone?: string | null;
-  circleLevel: 1 | 2 | 3;
+  circleLevel: 1 | 2 | 3 | 4;
   prompt: string;
   actionType: "call" | "text" | "hangout";
   isEnrichmentMissing: boolean;
@@ -245,7 +245,7 @@ export default function HomeScreen() {
       getExpiredElevations().then(async (expired) => {
         for (const entry of expired) {
           await markContactSuggested(entry.contactId);
-          await snoozeContact(entry.contactId, SNOOZE_DAYS[entry.circleLevel as 1 | 2 | 3]);
+          await snoozeContact(entry.contactId, SNOOZE_DAYS[entry.circleLevel as 1 | 2 | 3 | 4]);
           await clearElevation(entry.contactId, entry.type);
         }
         if (expired.length > 0) {
@@ -296,7 +296,7 @@ export default function HomeScreen() {
 
   const getSuggestionForContact = useCallback(
     (contact: typeof contacts[0]): Suggestion => {
-      const circleLevel = contact.circleLevel as 1 | 2 | 3;
+      const circleLevel = contact.circleLevel as 1 | 2 | 3 | 4;
       const daysSinceContact = getCheckinDaysSince(contact.lastContacted);
       const daysUntilBday = getDaysUntilBirthday(contact.birthday ?? undefined);
 
@@ -307,7 +307,10 @@ export default function HomeScreen() {
       const prompt =
         existing ||
         getSmartPrompt(contact.id, contact.name, circleLevel, contact.interests, {
-          isOverdue: daysSinceContact !== null && daysSinceContact > (circleLevel === 1 ? 7 : circleLevel === 2 ? 30 : 90),
+          isOverdue: daysSinceContact !== null && daysSinceContact > getCheckinThreshold(circleLevel, {
+            id: contact.id,
+            lastContacted: contact.lastContacted ?? undefined,
+          }),
           hasBirthdaySoon: daysUntilBday !== null && daysUntilBday <= 30,
           labels: contact.labels,
         });
@@ -328,7 +331,7 @@ export default function HomeScreen() {
         circleLevel,
         prompt,
         actionType,
-        isEnrichmentMissing: (contact.labels ?? []).length === 0 && (contact.interests ?? []).length === 0,
+        isEnrichmentMissing: contact.circleLevel !== 4 && (contact.labels ?? []).length === 0 && (contact.interests ?? []).length === 0,
       };
     },
     [suggestionPrompts],
@@ -347,10 +350,10 @@ export default function HomeScreen() {
     const elevationBonus = (contact: typeof contacts[0]) =>
       elevationMap[contact.id] ??
       (serverDueIds.has(contact.id)
-        ? ELEVATION_SCORE_BONUS[contact.circleLevel as 1 | 2 | 3]
+        ? ELEVATION_SCORE_BONUS[contact.circleLevel as 1 | 2 | 3 | 4]
         : 0);
     const isDeferred = (contact: typeof contacts[0]) =>
-      contact.circleLevel === 3 &&
+      contact.circleLevel >= 3 &&
       shouldDeferSuggestion(
         contact.id,
         elevatedContactTypes.has(`${contact.id}:checkin`),
@@ -363,7 +366,7 @@ export default function HomeScreen() {
       if (reminderContactIds.has(c.id)) return false;
       if (elevationBonus(c)) return true;
       const daysSinceLastSug = getDaysSinceLastSuggestedSync(c.id, lastSuggestedDates);
-      if (isInCooldown(c.circleLevel as 1 | 2 | 3, daysSinceLastSug)) return false;
+      if (isInCooldown(c.circleLevel as 1 | 2 | 3 | 4, daysSinceLastSug)) return false;
       return true;
     });
 
@@ -373,7 +376,7 @@ export default function HomeScreen() {
       const daysUntilBday = getDaysUntilBirthday(c.birthday ?? undefined);
       return {
         contact: c,
-        score: scoreSuggestion(c.circleLevel as 1 | 2 | 3, daysSinceLastSug, daysSinceContact, daysUntilBday, elevationBonus(c)),
+        score: scoreSuggestion(c.circleLevel as 1 | 2 | 3 | 4, daysSinceLastSug, daysSinceContact, daysUntilBday, elevationBonus(c)),
         elevated: !!elevationBonus(c),
       };
     };
@@ -474,7 +477,7 @@ export default function HomeScreen() {
   const handleReminderQuickPick = useCallback(
     async (reminder: Reminder, date: Date, label: string) => {
       if (!reminder.contactId) return;
-      const circleLevel = reminder.circleLevel as 1 | 2 | 3;
+      const circleLevel = reminder.circleLevel as 1 | 2 | 3 | 4;
 
       if (reminder.type === "check-in-quickpick") {
         const saveContact = markContacted(reminder.contactId, date, label);
@@ -595,7 +598,7 @@ export default function HomeScreen() {
     (suggestion: Suggestion) => {
       const contact = contacts.find((c) => c.id === suggestion.contactId);
       if (!contact) return;
-      const circleLevel = contact.circleLevel as 1 | 2 | 3;
+      const circleLevel = contact.circleLevel as 1 | 2 | 3 | 4;
       const daysSinceContact = getDaysSince(contact.lastContacted ?? undefined);
       const daysUntilBday = getDaysUntilBirthday(contact.birthday ?? undefined);
       const newPrompt = getNextPrompt(
@@ -605,7 +608,10 @@ export default function HomeScreen() {
         circleLevel,
         contact.interests,
         {
-          isOverdue: daysSinceContact !== null && daysSinceContact > (circleLevel === 1 ? 7 : circleLevel === 2 ? 30 : 90),
+          isOverdue: daysSinceContact !== null && daysSinceContact > getCheckinThreshold(circleLevel, {
+            id: contact.id,
+            lastContacted: contact.lastContacted ?? undefined,
+          }),
           hasBirthdaySoon: daysUntilBday !== null && daysUntilBday <= 30,
           labels: contact.labels,
         },
@@ -931,12 +937,7 @@ export default function HomeScreen() {
             </View>
 
             {suggestions.map((suggestion) => {
-              const circleColor =
-                suggestion.circleLevel === 1
-                  ? Colors.circle1
-                  : suggestion.circleLevel === 2
-                    ? Colors.circle2
-                    : Colors.circle3;
+              const circleColor = Colors[`circle${suggestion.circleLevel}` as "circle1" | "circle2" | "circle3" | "circle4"];
               const circleLabel = CIRCLE_CONFIG[suggestion.circleLevel]?.label ?? "Circle";
 
               return (

@@ -24,14 +24,14 @@ function isMissingBirthday(contact: Contact): boolean {
 }
 
 function isMissingEnrichment(contact: Contact): boolean {
-  return (contact.interests ?? []).length === 0;
+  return contact.circleLevel !== 4 && (contact.interests ?? []).length === 0;
 }
 
 export function ContactCard({ contact, onPress, onMarkContacted, onPlanHangout, showCircleLabel, onLongPress, isProfileIncomplete }: ContactCardProps) {
   const Colors = useThemeColors();
   const styles = useMemo(() => createStyles(Colors), [Colors]);
-  const urgency = getContactUrgency(contact.circleLevel as 1 | 2 | 3, contact.lastContacted ?? undefined);
-  const circleColor = contact.circleLevel === 1 ? Colors.circle1 : contact.circleLevel === 2 ? Colors.circle2 : Colors.circle3;
+  const urgency = getContactUrgency(contact.circleLevel as 1 | 2 | 3 | 4, contact.lastContacted ?? undefined);
+  const circleColor = Colors[`circle${contact.circleLevel}` as "circle1" | "circle2" | "circle3" | "circle4"];
   const flashAnim = useRef(new Animated.Value(0)).current;
 
   const incomplete = isMissingBirthday(contact);
@@ -87,7 +87,7 @@ export function ContactCard({ contact, onPress, onMarkContacted, onPlanHangout, 
           {showCircleLabel && (
             <View style={[styles.circleBadge, { backgroundColor: circleColor + "20" }]}>
               <Text style={[styles.circleBadgeText, { color: circleColor }]}>
-                {contact.circleLevel === 1 ? "Core" : contact.circleLevel === 2 ? "Close" : "Acq."}
+                {contact.circleLevel === 1 ? "Core" : contact.circleLevel === 2 ? "Close" : contact.circleLevel === 3 ? "Friends" : "Acquaintances"}
               </Text>
             </View>
           )}
@@ -121,12 +121,14 @@ export function ContactCard({ contact, onPress, onMarkContacted, onPlanHangout, 
           </Text>
         )}
         {enrichmentMissing && (
-          <Text style={[styles.incompleteHint, { color: Colors.yellow }]} numberOfLines={contact.circleLevel === 2 || contact.circleLevel === 3 ? 1 : undefined}>
+          <Text style={[styles.incompleteHint, { color: Colors.yellow }]} numberOfLines={contact.circleLevel >= 2 ? 1 : undefined}>
             {contact.circleLevel === 3
               ? "Add Birthday and Interests"
               : contact.circleLevel === 2
                 ? "Add interests and labels"
-                : "Add labels for curated suggestions"}
+                : contact.circleLevel === 1
+                  ? "Add labels for curated suggestions"
+                  : "Add interests for curated suggestions"}
           </Text>
         )}
       </View>

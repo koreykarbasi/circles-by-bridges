@@ -1,31 +1,35 @@
 export const PRIORITY_COHORT_SIZE = 3;
 
-export const CIRCLE_COOLDOWN_DAYS: Record<1 | 2 | 3, number> = {
+export const CIRCLE_COOLDOWN_DAYS: Record<1 | 2 | 3 | 4, number> = {
   1: 7,
   2: 5,
   3: 15,
+  4: 30,
 };
 
-export const ELEVATION_SCORE_BONUS: Record<1 | 2 | 3, number> = {
+export const ELEVATION_SCORE_BONUS: Record<1 | 2 | 3 | 4, number> = {
   1: 3000,
   2: 1500,
   3: 1001,
+  4: 500,
 };
 
-export const ELEVATION_DELAY_HOURS: Record<1 | 2 | 3, number> = {
+export const ELEVATION_DELAY_HOURS: Record<1 | 2 | 3 | 4, number> = {
   1: 24,
   2: 48,
   3: 72,
+  4: 96,
 };
 
-export const ELEVATION_LIFETIME_HOURS: Record<1 | 2 | 3, number> = {
+export const ELEVATION_LIFETIME_HOURS: Record<1 | 2 | 3 | 4, number> = {
   1: 6 * 24,
   2: 7 * 24,
   3: 8 * 24,
+  4: 216,
 };
 
 export function elevationBonusForAge(
-  circleLevel: 1 | 2 | 3,
+  circleLevel: 1 | 2 | 3 | 4,
   ageHours: number | null,
 ): number {
   if (
@@ -41,7 +45,7 @@ export function elevationBonusForAge(
 export type ElevationPhase = "none" | "deferred" | "due";
 
 export function elevationPhaseForAge(
-  circleLevel: 1 | 2 | 3,
+  circleLevel: 1 | 2 | 3 | 4,
   ageHours: number | null,
 ): ElevationPhase {
   if (ageHours === null || ageHours < 0 || ageHours >= ELEVATION_LIFETIME_HOURS[circleLevel]) {
@@ -71,7 +75,7 @@ export function shouldSuppressCheckin(
 }
 
 export function isSuggestionInCooldown(
-  circleLevel: 1 | 2 | 3,
+  circleLevel: 1 | 2 | 3 | 4,
   daysSinceLastSuggested: number | null,
 ): boolean {
   if (daysSinceLastSuggested === null) return false;
@@ -83,7 +87,7 @@ export function isSuggestionInCooldown(
  * Keep this function pure so it can be imported by React Native and Node.
  */
 export function scorePrioritySuggestion(
-  circleLevel: 1 | 2 | 3,
+  circleLevel: 1 | 2 | 3 | 4,
   daysSinceLastSuggested: number | null,
   daysSinceContact: number | null,
   elevationBonus = 0,
@@ -96,7 +100,7 @@ export function scorePrioritySuggestion(
     score += Math.min(daysSinceLastSuggested * 12, 150);
   }
 
-  const freshThreshold: Record<1 | 2 | 3, number> = { 1: 2, 2: 5, 3: 10 };
+  const freshThreshold: Record<1 | 2 | 3 | 4, number> = { 1: 2, 2: 5, 3: 10, 4: 10 };
   if (daysSinceContact !== null && daysSinceContact < freshThreshold[circleLevel]) {
     score -= (freshThreshold[circleLevel] - daysSinceContact) * 50;
   }

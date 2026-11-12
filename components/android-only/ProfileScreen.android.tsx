@@ -188,6 +188,7 @@ export default function ProfileScreen() {
   const circle1Count = contacts.filter((c) => c.circleLevel === 1).length;
   const circle2Count = contacts.filter((c) => c.circleLevel === 2).length;
   const circle3Count = contacts.filter((c) => c.circleLevel === 3).length;
+  const circle4Count = contacts.filter((c) => c.circleLevel === 4).length;
 
   const handleReplayWalkthrough = () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
@@ -393,12 +394,12 @@ export default function ProfileScreen() {
         </View>
 
         <View style={styles.statsRow}>
-          {([1, 2, 3] as const).map((level) => {
+          {([1, 2, 3, 4] as const).map((level) => {
              const cfg = CIRCLE_CONFIG[level];
-            const count = level === 1 ? circle1Count : level === 2 ? circle2Count : circle3Count;
+            const count = level === 1 ? circle1Count : level === 2 ? circle2Count : level === 3 ? circle3Count : circle4Count;
             return (
               <View key={level} style={styles.statItem}>
-                 <View style={[styles.statDot, { backgroundColor: Colors[`circle${level}`] }]} />
+              <View style={[styles.statDot, { backgroundColor: Colors[`circle${level}` as "circle1" | "circle2" | "circle3" | "circle4"] }]} />
                 <Text style={styles.statCount}>{count}</Text>
                 <Text style={styles.statLabel}>{cfg.label}</Text>
               </View>

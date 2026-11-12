@@ -3,10 +3,11 @@ import { Platform } from "react-native";
 
 const SNOOZE_KEY = "bridges_reminder_snooze_v1";
 
-export const SNOOZE_DAYS: Record<1 | 2 | 3, number> = {
+export const SNOOZE_DAYS: Record<1 | 2 | 3 | 4, number> = {
   1: 14,
   2: 22,
   3: 19,
+  4: 30,
 };
 
 type SnoozeStore = Record<string, string>;

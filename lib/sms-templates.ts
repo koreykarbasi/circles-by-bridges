@@ -565,7 +565,7 @@ export function getTextCopyMessage(
     labels?: string[];
     daysSinceContact?: number | null;
     hasBirthdaySoon?: boolean;
-    circleLevel?: 1 | 2 | 3;
+    circleLevel?: 1 | 2 | 3 | 4;
   },
 ): string {
   const firstName = contactName.split(" ")[0];

@@ -97,7 +97,7 @@ function EditContactForm({ contact, focusBirthday }: { contact: Contact; focusBi
   const { updateContact, deleteContact, markContacted, getCircleContacts } = useContacts();
 
   const [name, setName] = useState(contact?.name ?? "");
-  const [circleLevel, setCircleLevel] = useState<1 | 2 | 3>((contact?.circleLevel ?? 1) as 1 | 2 | 3);
+  const [circleLevel, setCircleLevel] = useState<1 | 2 | 3 | 4>((contact?.circleLevel ?? 1) as 1 | 2 | 3 | 4);
   const [selectedInterests, setSelectedInterests] = useState<string[]>(contact?.interests ?? []);
   const [selectedLabels, setSelectedLabels] = useState<string[]>(contact?.labels ?? []);
   const [customLabelInput, setCustomLabelInput] = useState("");
@@ -242,7 +242,7 @@ function EditContactForm({ contact, focusBirthday }: { contact: Contact; focusBi
     );
   };
 
-  const QUICK_CONTACT_CHIPS: Array<{ label: string; getDate: () => Date }> = circleLevel === 3
+  const QUICK_CONTACT_CHIPS: Array<{ label: string; getDate: () => Date }> = circleLevel >= 3
     ? C3_CHECKIN_OPTIONS.map((option) => ({
         label: option.label,
         getDate: () => dateForCheckinOption(option),
@@ -264,11 +264,11 @@ function EditContactForm({ contact, focusBirthday }: { contact: Contact; focusBi
     setSelectedContactDate(date.toISOString());
     markContacted(contact.id, date, label)
       .then(async () => {
-        if (circleLevel === 3 && label === "Longer") {
+        if (circleLevel >= 3 && label === "Longer") {
           await setCheckinElevationIfOverdue({
             contactId: contact.id,
             contactName: contact.name,
-            circleLevel: 3,
+            circleLevel,
             selectedDate: date,
           });
         }
@@ -457,9 +457,9 @@ function EditContactForm({ contact, focusBirthday }: { contact: Contact; focusBi
         <View style={styles.inputGroup}>
           <Text style={styles.label}>Circle</Text>
           <View style={styles.circleOptions}>
-            {([1, 2, 3] as const).map((level) => {
+            {([1, 2, 3, 4] as const).map((level) => {
               const cfg = CIRCLE_CONFIG[level];
-              const circleColor = level === 1 ? Colors.circle1 : level === 2 ? Colors.circle2 : Colors.circle3;
+              const circleColor = Colors[`circle${level}` as "circle1" | "circle2" | "circle3" | "circle4"];
               const isActive = circleLevel === level;
               const count = getCircleContacts(level).filter((c) => c.id !== contact.id).length;
               const isFull = count >= cfg.max && !isActive;
@@ -479,7 +479,7 @@ function EditContactForm({ contact, focusBirthday }: { contact: Contact; focusBi
                 >
                   <View style={[styles.circleOptionDot, { backgroundColor: circleColor }]} />
                   <Text style={[styles.circleOptionLabel, isActive && { color: circleColor }]} numberOfLines={1}>
-                    {cfg.label}
+                    {level === 4 ? "Network" : cfg.label}
                   </Text>
                   <Text style={[styles.circleOptionCount, isActive && { color: circleColor }]}>
                     {isFull ? "Full" : `${count}/${cfg.max}`}

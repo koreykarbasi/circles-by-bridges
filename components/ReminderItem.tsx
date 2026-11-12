@@ -50,7 +50,7 @@ export function ReminderItem({ reminder, onComplete, onQuickPick, onCalendarPres
   const isProfileCompletion = reminder.type.startsWith("profile-completion");
   const circleColor = isProfileCompletion
     ? (getProfileCompletionColor(reminder.type, Colors) ?? Colors.primary)
-    : (reminder.circleLevel === 1 ? Colors.circle1 : reminder.circleLevel === 2 ? Colors.circle2 : Colors.circle3);
+    : Colors[`circle${reminder.circleLevel}` as "circle1" | "circle2" | "circle3" | "circle4"];
   const priorityColor = getProfileCompletionColor(reminder.type, Colors) ?? getPriorityColor(reminder.priority, Colors);
   const typeIcon = TYPE_ICONS[reminder.type] ?? "alert-circle-outline";
   const isBirthday = reminder.type === "birthday";
@@ -129,7 +129,7 @@ export function ReminderItem({ reminder, onComplete, onQuickPick, onCalendarPres
       ) : cardContent}
       {isQuickPick && (
         <QuickPickRow
-          circleLevel={reminder.circleLevel as 1 | 2 | 3}
+          circleLevel={reminder.circleLevel as 1 | 2 | 3 | 4}
           variant={quickPickVariant}
           onSelect={handleQuickPick}
           onCalendarPress={quickPickVariant === "hangout" ? onCalendarPress : undefined}

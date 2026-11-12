@@ -24,10 +24,10 @@ export default function ImportContactsScreen() {
   const styles = useMemo(() => createStyles(Colors), [Colors]);
   const insets = useSafeAreaInsets();
   const params = useLocalSearchParams<{ circle?: string }>();
-  const initialCircle = params.circle ? (parseInt(params.circle) as 1 | 2 | 3) : 1;
+  const initialCircle = params.circle ? (parseInt(params.circle) as 1 | 2 | 3 | 4) : 1;
 
   const { addContact, getCircleContacts } = useContacts();
-  const [activeCircle, setActiveCircle] = useState<1 | 2 | 3>(initialCircle);
+  const [activeCircle, setActiveCircle] = useState<1 | 2 | 3 | 4>(initialCircle);
   const [selected, setSelected] = useState<ImportedContact[]>([]);
   const [saving, setSaving] = useState(false);
 
@@ -89,6 +89,10 @@ export default function ImportContactsScreen() {
       }
 
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      if (activeCircle === 4) {
+        router.replace({ pathname: "/(tabs)/circles", params: { circle: "4" } });
+        return;
+      }
       router.replace({
         pathname: "/complete-contacts",
         params: {
@@ -117,9 +121,9 @@ export default function ImportContactsScreen() {
       </View>
 
       <View style={styles.circleTabs}>
-        {([1, 2, 3] as const).map((level) => {
+        {([1, 2, 3, 4] as const).map((level) => {
           const cfg = CIRCLE_CONFIG[level];
-          const circleColor = level === 1 ? Colors.circle1 : level === 2 ? Colors.circle2 : Colors.circle3;
+          const circleColor = Colors[`circle${level}` as "circle1" | "circle2" | "circle3" | "circle4"];
           const isActive = activeCircle === level;
           return (
             <Pressable
@@ -136,7 +140,7 @@ export default function ImportContactsScreen() {
             >
               <View style={[styles.tabDot, { backgroundColor: circleColor }]} />
               <Text style={[styles.tabLabel, isActive && { color: circleColor }]} numberOfLines={1}>
-                {cfg.label}
+                {level === 4 ? "Network" : cfg.label}
               </Text>
             </Pressable>
           );

@@ -51,22 +51,24 @@ export function selectHomeReminders(
 }
 
 export const CHECKIN_THRESHOLDS = sharedCheckinThresholds;
-export const HANGOUT_THRESHOLDS: Record<1 | 2 | 3, number> = { 1: 21, 2: 60, 3: 90 };
+export const HANGOUT_THRESHOLDS: Record<1 | 2 | 3 | 4, number> = { 1: 21, 2: 60, 3: 90, 4: 90 };
 export const ELEVATION_PUSH_DELAY_HOURS = ELEVATION_DELAY_HOURS;
-export const ELEVATION_CLEANUP_DAYS: Record<1 | 2 | 3, { checkin: number; hangout: number }> = {
+export const ELEVATION_CLEANUP_DAYS: Record<1 | 2 | 3 | 4, { checkin: number; hangout: number }> = {
   1: { checkin: 6, hangout: 6 },
   2: { checkin: 7, hangout: 7 },
   3: { checkin: 8, hangout: 8 },
+  4: { checkin: 9, hangout: 9 },
 };
 
 // Priority baselines for custom reminders per circle (equivalent to birthday priorities)
-const CUSTOM_REMINDER_PRIORITIES: Record<1 | 2 | 3, { today: number; week: number; twoWeek: number; month: number }> = {
+const CUSTOM_REMINDER_PRIORITIES: Record<1 | 2 | 3 | 4, { today: number; week: number; twoWeek: number; month: number }> = {
   1: { today: 200, week: 190, twoWeek: 180, month: 170 },
   2: { today: 150, week: 140, twoWeek: 140, month: 140 },
   3: { today: 70, week: 70, twoWeek: 70, month: 70 },
+  4: { today: 70, week: 70, twoWeek: 70, month: 70 },
 };
 
-function generateCustomReminders(contact: Contact, circleLevel: 1 | 2 | 3): Reminder[] {
+function generateCustomReminders(contact: Contact, circleLevel: 1 | 2 | 3 | 4): Reminder[] {
   const reminders: Reminder[] = [];
   const customReminders = contact.customReminders ?? [];
   const priorities = CUSTOM_REMINDER_PRIORITIES[circleLevel];
@@ -342,6 +344,7 @@ function generateCircle2Reminders(contact: Contact): Reminder[] {
 
 function generateCircle3Reminders(contact: Contact): Reminder[] {
   const reminders: Reminder[] = [];
+  const circleLevel = contact.circleLevel === 4 ? 4 : 3;
 
   const daysUntil = getDaysUntilBirthday(contact.birthday ?? undefined);
   if (daysUntil !== null && daysUntil === 0) {
@@ -349,7 +352,7 @@ function generateCircle3Reminders(contact: Contact): Reminder[] {
       id: `birthday-0d-${contact.id}`,
       contactId: contact.id,
       contactName: contact.name,
-      circleLevel: 3,
+      circleLevel,
       type: "birthday",
       priority: 70,
       title: `Today is ${contact.name}'s birthday.`,
@@ -359,16 +362,16 @@ function generateCircle3Reminders(contact: Contact): Reminder[] {
     });
   }
 
-  reminders.push(...generateCustomReminders(contact, 3));
+  reminders.push(...generateCustomReminders(contact, circleLevel));
 
   const daysSinceContact = getCheckinDaysSince(contact.lastContacted);
-  if (isCheckinQuickPickEligible(contact, 3, daysSinceContact, getCheckinDaysSince(contact.createdAt), contact.emptyLastContactPromptDueAt)) {
-    const severity = Math.min(30, Math.floor(((daysSinceContact ?? CHECKIN_THRESHOLDS[3]) - CHECKIN_THRESHOLDS[3]) * 0.4));
+  if (isCheckinQuickPickEligible(contact, circleLevel, daysSinceContact, getCheckinDaysSince(contact.createdAt), contact.emptyLastContactPromptDueAt)) {
+    const severity = Math.min(30, Math.floor(((daysSinceContact ?? CHECKIN_THRESHOLDS[circleLevel]) - CHECKIN_THRESHOLDS[circleLevel]) * 0.4));
     reminders.push({
       id: `checkin-${contact.id}`,
       contactId: contact.id,
       contactName: contact.name,
-      circleLevel: 3,
+      circleLevel,
       type: "check-in-quickpick",
       priority: 30 + severity,
       title: `When did you last speak to ${contact.name}?`,
@@ -438,7 +441,7 @@ export function generateProfileCompletionReminders(contacts: Contact[]): Reminde
 
   const c3NoBirthday = contacts.filter((c) => c.circleLevel === 3 && !c.birthday);
   const anyMissingEnrichment = contacts.filter(
-    (c) => (c.interests ?? []).length === 0,
+    (c) => c.circleLevel !== 4 && (c.interests ?? []).length === 0,
   );
   if (c3NoBirthday.length > 0 || anyMissingEnrichment.length > 0) {
     reminders.push({
@@ -473,6 +476,7 @@ export function generateReminders(contacts: Contact[]): Reminder[] {
         reminders.push(...generateCircle2Reminders(contact));
         break;
       case 3:
+      case 4:
         reminders.push(...generateCircle3Reminders(contact));
         break;
     }

@@ -96,9 +96,15 @@ export function formatBirthdayCountdown(birthday?: string): string {
   return "";
 }
 
-export function getContactUrgency(circleLevel: 1 | 2 | 3, lastContacted?: string): "overdue" | "soon" | "ok" {
+export function getContactUrgency(circleLevel: 1 | 2 | 3 | 4, lastContacted?: string): "overdue" | "soon" | "ok" {
   const days = getDaysSince(lastContacted);
   if (days === null) return "overdue";
+
+  if (circleLevel === 4) {
+    if (days > 320) return "overdue";
+    if (days > 280) return "soon";
+    return "ok";
+  }
 
   if (circleLevel === 1) {
     if (days > 14) return "overdue";

@@ -63,10 +63,10 @@ export default function AddContactScreen() {
     prefillBirthday?: string;
     prefillPhotoUri?: string;
   }>();
-  const initialCircle = params.circle ? (parseInt(params.circle) as 1 | 2 | 3) : 1;
+  const initialCircle = params.circle ? (parseInt(params.circle) as 1 | 2 | 3 | 4) : 1;
 
   const [name, setName] = useState(params.prefillName ?? "");
-  const [circleLevel, setCircleLevel] = useState<1 | 2 | 3>(initialCircle);
+  const [circleLevel, setCircleLevel] = useState<1 | 2 | 3 | 4>(initialCircle);
   const [selectedInterests, setSelectedInterests] = useState<string[]>([]);
   const [selectedLabels, setSelectedLabels] = useState<string[]>([]);
   const [customLabelInput, setCustomLabelInput] = useState("");
@@ -326,9 +326,9 @@ export default function AddContactScreen() {
         <View style={styles.inputGroup}>
           <Text style={styles.label}>Circle</Text>
           <View style={styles.circleOptions}>
-            {([1, 2, 3] as const).map((level) => {
+            {([1, 2, 3, 4] as const).map((level) => {
               const cfg = CIRCLE_CONFIG[level];
-              const circleColor = level === 1 ? Colors.circle1 : level === 2 ? Colors.circle2 : Colors.circle3;
+              const circleColor = Colors[`circle${level}` as "circle1" | "circle2" | "circle3" | "circle4"];
               const isActive = circleLevel === level;
               const count = getCircleContacts(level).length;
               const isFull = count >= cfg.max && !isActive;
@@ -351,7 +351,7 @@ export default function AddContactScreen() {
                     style={[styles.circleOptionLabel, isActive && { color: circleColor }]}
                     numberOfLines={1}
                   >
-                    {cfg.label}
+                    {level === 4 ? "Network" : cfg.label}
                   </Text>
                   <Text style={[styles.circleOptionCount, isActive && { color: circleColor }]}>
                     {isFull ? "Full" : `${count}/${cfg.max}`}

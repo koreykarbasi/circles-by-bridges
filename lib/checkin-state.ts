@@ -16,7 +16,7 @@ export type ElevationType = "checkin" | "hangout";
 export interface ElevationEntry {
   contactId: string;
   contactName: string;
-  circleLevel: 1 | 2 | 3;
+  circleLevel: 1 | 2 | 3 | 4;
   type: ElevationType;
   elevatedAt: string;
   pushDue: string;
@@ -131,12 +131,12 @@ export async function invalidateElevationCache(): Promise<void> {
   _cache = null;
 }
 
-export const ELEVATION_SCORE_BONUS: Record<1 | 2 | 3, number> = { 1: 3000, 2: 1500, 3: 1001 };
+export const ELEVATION_SCORE_BONUS: Record<1 | 2 | 3 | 4, number> = { 1: 3000, 2: 1500, 3: 1001, 4: 500 };
 
 export async function setCheckinElevationIfOverdue(params: {
   contactId: string;
   contactName: string;
-  circleLevel: 1 | 2 | 3;
+  circleLevel: 1 | 2 | 3 | 4;
   selectedDate: Date;
 }): Promise<boolean> {
   const { contactId, contactName, circleLevel, selectedDate } = params;

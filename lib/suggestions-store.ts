@@ -14,7 +14,7 @@ const PENDING_SERVER_DISMISSALS_KEY = "bridges_pending_suggestion_dismissals_v1"
 
 interface DismissedEntry {
   dismissedAt: string;
-  circleLevel: 1 | 2 | 3;
+  circleLevel: 1 | 2 | 3 | 4;
 }
 
 type DismissedStore = Record<string, DismissedEntry>;
@@ -149,7 +149,7 @@ export function getDismissedIds(): ReadonlySet<string> {
 
 export function dismissSuggestion(
   contactId: string,
-  circleLevel: 1 | 2 | 3 = 3,
+  circleLevel: 1 | 2 | 3 | 4 = 3,
 ): void {
   ensureDismissedSync();
   if (_dismissedIds.has(contactId)) return;

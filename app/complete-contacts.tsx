@@ -55,6 +55,7 @@ export default function CompleteContactsScreen() {
         const isImported = importedIdSet.size > 0 ? importedIdSet.has(c.id) : true;
         return (
           isImported &&
+          c.circleLevel !== 4 &&
           (c.labels ?? []).length === 0 &&
           (c.interests ?? []).length === 0
         );

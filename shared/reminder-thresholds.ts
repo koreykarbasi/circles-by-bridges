@@ -3,10 +3,11 @@
  * last contact. Both the mobile UI and server delivery import these values so a
  * visible quick-pick is never silently ineligible for its daily push.
  */
-export const CHECKIN_THRESHOLDS: Record<1 | 2 | 3, number> = {
+export const CHECKIN_THRESHOLDS: Record<1 | 2 | 3 | 4, number> = {
   1: 30,
   2: 45,
   3: 160,
+  4: 320,
 };
 
 export const NEW_CONTACT_GRACE_DAYS = 7;
@@ -21,7 +22,7 @@ export interface CheckinThresholdContact {
  * Hash the stored value identically on both sides; never use time or randomness.
  */
 export function getCheckinThreshold(
-  circleLevel: 1 | 2 | 3,
+  circleLevel: 1 | 2 | 3 | 4,
   contact: CheckinThresholdContact,
 ): number {
   if (circleLevel !== 1) return CHECKIN_THRESHOLDS[circleLevel];
@@ -42,7 +43,7 @@ export function getCheckinThreshold(
  */
 export function isCheckinQuickPickEligible(
   contact: CheckinThresholdContact,
-  circleLevel: 1 | 2 | 3,
+  circleLevel: 1 | 2 | 3 | 4,
   daysSinceContact: number | null,
   daysSinceCreated: number | null,
   emptyPromptDueAt?: string | Date | null,
@@ -59,7 +60,7 @@ export function isCheckinQuickPickEligible(
 
   // Legacy C1/C2 rows keep their established createdAt grace behavior. Legacy
   // C3 rows stay hidden until the production rollout persists a stable due date.
-  if (circleLevel === 3) return false;
+  if (circleLevel >= 3) return false;
   // Pre-column rows without a creation timestamp cannot derive a stable grace
   // period. Production startup assigns them a persisted due date.
   if (daysSinceCreated === null) return false;
