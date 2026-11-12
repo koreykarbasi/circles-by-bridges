@@ -6,6 +6,8 @@ import { apiRequest, getApiUrl } from "./query-client";
 import { fetch as expoFetch } from "expo/fetch";
 import { useAuth } from "./auth-context";
 import { clearElevation, invalidateElevationCache } from "./checkin-state";
+import { isContactOnCooldown } from "@shared/contact-cooldown";
+import { queryClient } from "./query-client";
 
 const fetchFn = Platform.OS === "web" ? globalThis.fetch : expoFetch;
 
@@ -23,6 +25,7 @@ interface ContactsContextValue {
   getOverdueContacts: () => Contact[];
   getUpcomingBirthdays: () => Contact[];
   reorderCircleContacts: (circleLevel: 1 | 2 | 3 | 4, orderedIds: string[]) => Promise<void>;
+  setContactCooldown: (id: string, active: boolean) => Promise<void>;
 }
 
 const ContactsContext = createContext<ContactsContextValue | null>(null);
@@ -31,6 +34,23 @@ export function ContactsProvider({ children }: { children: ReactNode }) {
   const { user } = useAuth();
   const [contacts, setContacts] = useState<Contact[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+
+  useEffect(() => {
+    // Also cancel a legacy scheduled check-in when another device starts cooldown.
+    void (async () => {
+      for (const contact of contacts) {
+        if (isContactOnCooldown(contact)) await clearElevation(contact.id, "checkin");
+      }
+    })();
+  }, [contacts]);
+
+  const setContactCooldown = useCallback(async (id: string, active: boolean) => {
+    const response = await apiRequest(active ? "POST" : "DELETE", `/api/contacts/${id}/cooldown`, {});
+    const contact = await response.json() as Contact;
+    setContacts(previous => previous.map(c => c.id === id ? contact : c));
+    if (active) await clearElevation(id, "checkin");
+    await queryClient.invalidateQueries({ queryKey: ["/api/suggestions/priority"] });
+  }, []);
 
   const fetchContacts = useCallback(async () => {
     setIsLoading(true);
@@ -243,8 +263,9 @@ export function ContactsProvider({ children }: { children: ReactNode }) {
       getOverdueContacts,
       getUpcomingBirthdays,
       reorderCircleContacts: reorderCircleContactsFn,
+      setContactCooldown,
     }),
-    [contacts, isLoading, fetchContacts, addContactFn, updateContactFn, deleteContactFn, markContactedFn, markHangoutFn, savePhoneNumberFn, getCircleContacts, getOverdueContacts, getUpcomingBirthdays, reorderCircleContactsFn],
+    [contacts, isLoading, fetchContacts, addContactFn, updateContactFn, deleteContactFn, markContactedFn, markHangoutFn, savePhoneNumberFn, getCircleContacts, getOverdueContacts, getUpcomingBirthdays, reorderCircleContactsFn, setContactCooldown],
   );
 
   return <ContactsContext.Provider value={value}>{children}</ContactsContext.Provider>;

@@ -41,6 +41,7 @@ import {
 } from "@shared/suggestion-priority";
 import { getCheckinDaysSince } from "@shared/checkin-time";
 import { getCheckinThreshold } from "@shared/reminder-thresholds";
+import { isContactOnCooldown } from "@shared/contact-cooldown";
 
 const MAX_SUGGESTIONS = 3;
 
@@ -362,6 +363,7 @@ export default function HomeScreen() {
       );
 
     const eligible = contacts.filter((c) => {
+      if (isContactOnCooldown(c)) return false;
       if (isDeferred(c)) return false;
       if (reminderContactIds.has(c.id)) return false;
       if (elevationBonus(c)) return true;
@@ -393,7 +395,7 @@ export default function HomeScreen() {
     // dismissedSuggestions store now persists across restarts.
     const eligibleIds = new Set(eligible.map((c) => c.id));
     const cooldownPool = contacts.filter(
-      (c) => !isDeferred(c) && !reminderContactIds.has(c.id) && !eligibleIds.has(c.id),
+      (c) => !isContactOnCooldown(c) && !isDeferred(c) && !reminderContactIds.has(c.id) && !eligibleIds.has(c.id),
     );
     const rankedCooldown = cooldownPool.map(rankContact).sort((a, b) => {
       if (a.elevated !== b.elevated) return a.elevated ? -1 : 1;

@@ -35,6 +35,7 @@ import {
 } from "@shared/suggestion-priority";
 import { getCheckinDaysSince } from "@shared/checkin-time";
 import { getCheckinThreshold } from "@shared/reminder-thresholds";
+import { isContactOnCooldown } from "@shared/contact-cooldown";
 
 interface GeneratedSuggestion {
   contact: Contact;
@@ -273,7 +274,7 @@ export default function SuggestionsScreen() {
       return isInCooldown(c.circleLevel as 1 | 2 | 3 | 4, daysSinceLastSug);
     };
 
-    const base = filtered.filter((c) => !isDeferred(c) && !isSessionSkipped(c) && !isDismissed(c.id));
+    const base = filtered.filter((c) => !isContactOnCooldown(c) && !isDeferred(c) && !isSessionSkipped(c) && !isDismissed(c.id));
     const eligible = base.filter((c) => !inCooldown(c));
 
     const rankContact = (c: typeof contacts[0]) => {

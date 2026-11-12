@@ -8,6 +8,7 @@ import {
   ELEVATION_LIFETIME_HOURS,
 } from "@shared/suggestion-priority";
 import { getCheckinDaysSince } from "@shared/checkin-time";
+import { isContactOnCooldown } from "@shared/contact-cooldown";
 
 const ELEVATION_KEY = "bridges_checkin_elevation_v1";
 
@@ -138,7 +139,9 @@ export async function setCheckinElevationIfOverdue(params: {
   contactName: string;
   circleLevel: 1 | 2 | 3 | 4;
   selectedDate: Date;
+  notificationsCooldownUntil?: string | null;
 }): Promise<boolean> {
+  if (isContactOnCooldown(params)) return false;
   const { contactId, contactName, circleLevel, selectedDate } = params;
   const daysSince = getCheckinDaysSince(selectedDate);
   if (daysSince === null) return false;

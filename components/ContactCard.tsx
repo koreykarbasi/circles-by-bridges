@@ -7,6 +7,7 @@ import type { ThemeColors } from "@/constants/colors";
 import { formatLastContacted, getContactUrgency } from "@/lib/helpers";
 import type { Contact } from "@/lib/types";
 import * as Haptics from "expo-haptics";
+import { ContactCooldownButton } from "./ContactCooldownButton";
 
 interface ContactCardProps {
   contact: Contact;
@@ -132,31 +133,34 @@ export function ContactCard({ contact, onPress, onMarkContacted, onPlanHangout, 
           </Text>
         )}
       </View>
-      {!incomplete && (
-        <View style={styles.actions}>
-          {onPlanHangout && (
-            <Pressable
-              onPress={() => {
-                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                onPlanHangout();
-              }}
-              hitSlop={8}
-              style={({ pressed }) => [styles.actionButton, pressed && { opacity: 0.5 }]}
-            >
-              <Ionicons name="calendar-outline" size={22} color={Colors.primary} />
-            </Pressable>
-          )}
-          {onMarkContacted && (
-            <Pressable
-              onPress={handleMarkContacted}
-              hitSlop={8}
-              style={({ pressed }) => [styles.actionButton, pressed && { opacity: 0.5 }]}
-            >
-              <Ionicons name="checkmark-circle-outline" size={26} color={Colors.primaryLight} />
-            </Pressable>
-          )}
-        </View>
-      )}
+      <View style={styles.actions}>
+        <ContactCooldownButton contact={contact} compact />
+        {!incomplete && (
+          <>
+            {onPlanHangout && (
+              <Pressable
+                onPress={() => {
+                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                  onPlanHangout();
+                }}
+                hitSlop={8}
+                style={({ pressed }) => [styles.actionButton, pressed && { opacity: 0.5 }]}
+              >
+                <Ionicons name="calendar-outline" size={22} color={Colors.primary} />
+              </Pressable>
+            )}
+            {onMarkContacted && (
+              <Pressable
+                onPress={handleMarkContacted}
+                hitSlop={8}
+                style={({ pressed }) => [styles.actionButton, pressed && { opacity: 0.5 }]}
+              >
+                <Ionicons name="checkmark-circle-outline" size={26} color={Colors.primaryLight} />
+              </Pressable>
+            )}
+          </>
+        )}
+      </View>
     </Pressable>
   );
 }

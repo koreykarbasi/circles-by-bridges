@@ -1282,6 +1282,25 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  const setContactCooldown = async (req: Request, res: Response, active: boolean) => {
+    try {
+      const id = String(req.params.id);
+      const existing = await storage.getContact(id);
+      if (!existing || existing.userId !== req.session.userId) {
+        return res.status(404).json({ message: "Contact not found" });
+      }
+      const contact = await storage.updateContact(id, {
+        notificationsCooldownUntil: active ? new Date(Date.now() + 30 * 86400000) : null,
+      });
+      return res.json(contact);
+    } catch (error) {
+      console.error("Contact cooldown failed:", error);
+      return res.status(500).json({ message: "Could not update cooldown" });
+    }
+  };
+  app.post("/api/contacts/:id/cooldown", requireAuth, (req, res) => setContactCooldown(req, res, true));
+  app.delete("/api/contacts/:id/cooldown", requireAuth, (req, res) => setContactCooldown(req, res, false));
+
   app.post("/api/contacts", requireAuth, async (req, res) => {
     try {
       const body = req.body as Record<string, unknown>;

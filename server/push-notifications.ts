@@ -20,6 +20,7 @@ import {
   getCheckinThreshold,
 } from "@shared/reminder-thresholds";
 import { getCheckinDaysSince } from "@shared/checkin-time";
+import { isContactOnCooldown } from "@shared/contact-cooldown";
 
 interface CustomReminder {
   label: string;
@@ -49,6 +50,7 @@ export type ContactRow = {
   customReminders?: unknown;
   createdAt?: string | Date | null;
   emptyLastContactPromptDueAt?: string | Date | null;
+  notificationsCooldownUntil?: string | Date | null;
 };
 
 function getContactDaysSince(
@@ -762,7 +764,7 @@ async function sendRemindersForUserUnlocked(
     if (circle === 2) {
       return 60 + (days === null ? 60 : Math.min(60, 20 + Math.floor((days - CHECKIN_THRESHOLDS[2]) * 1.2)));
     }
-    return 30 + (days === null ? 0 : Math.min(30, Math.floor((days - CHECKIN_THRESHOLDS[3]) * 0.4)));
+    return 30 + (days === null ? 0 : Math.min(30, Math.floor((days - CHECKIN_THRESHOLDS[circle]) * 0.4)));
   };
   const sortRemindersByVisiblePriority = (messages: PushMessage[]) =>
     messages.sort((a, b) =>
@@ -1105,7 +1107,7 @@ export function selectSuggestionPushCandidates(
   // Defense in depth: a caller must never turn the pre-delay "Longer" answer
   // into an ordinary suggestion via the all-reminders fallback.
   const eligibleCohort = priorityCohort.filter(
-    (contact) => contact.circleLevel < 3 || contact.elevationPhase !== "deferred",
+    (contact) => !isContactOnCooldown(contact, now) && (contact.circleLevel < 3 || contact.elevationPhase !== "deferred"),
   );
   const reminderFree = eligibleCohort.filter(
     (contact) => !hasHomeReminder(contact, timezone, now),
@@ -1154,6 +1156,7 @@ export async function getPrioritySuggestionCohort(
 
   const rankedContacts = (userContacts as ContactRow[])
     .filter((contact) => {
+      if (isContactOnCooldown(contact, now)) return false;
       const circle = contact.circleLevel as 1 | 2 | 3 | 4;
       if (![1, 2, 3, 4].includes(circle)) return false;
 

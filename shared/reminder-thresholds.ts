@@ -3,6 +3,8 @@
  * last contact. Both the mobile UI and server delivery import these values so a
  * visible quick-pick is never silently ineligible for its daily push.
  */
+import { isContactOnCooldown, type CooldownContact } from "./contact-cooldown";
+
 export const CHECKIN_THRESHOLDS: Record<1 | 2 | 3 | 4, number> = {
   1: 30,
   2: 45,
@@ -12,7 +14,7 @@ export const CHECKIN_THRESHOLDS: Record<1 | 2 | 3 | 4, number> = {
 
 export const NEW_CONTACT_GRACE_DAYS = 7;
 
-export interface CheckinThresholdContact {
+export interface CheckinThresholdContact extends CooldownContact {
   id: string;
   lastContacted?: string | Date | null;
 }
@@ -49,6 +51,7 @@ export function isCheckinQuickPickEligible(
   emptyPromptDueAt?: string | Date | null,
   now = new Date(),
 ): boolean {
+  if (isContactOnCooldown(contact, now)) return false;
   if (daysSinceContact !== null) {
     return daysSinceContact > getCheckinThreshold(circleLevel, contact);
   }

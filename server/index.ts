@@ -445,6 +445,8 @@ async function ensureEmptyLastContactPromptDueAtColumn() {
   await ensureProviderSubColumns();
   await ensureUserCreatedAtColumn();
   await ensureEmptyLastContactPromptDueAtColumn();
+  // Shared external Supabase: additive, nullable, and safe for existing v1 servers.
+  await pool.query("ALTER TABLE contacts ADD COLUMN IF NOT EXISTS notifications_cooldown_until TIMESTAMP");
 
   const server = await registerRoutes(app);
 

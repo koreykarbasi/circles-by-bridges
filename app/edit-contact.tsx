@@ -33,6 +33,7 @@ import {
   dateForCheckinOption,
 } from "@shared/checkin-policy";
 import { setCheckinElevationIfOverdue } from "@/lib/checkin-state";
+import { ContactCooldownButton } from "@/components/ContactCooldownButton";
 
 const PREDEFINED_LABELS = [
   "Family", "Childhood Friend", "College Friend", "Work Friend", "Neighbor",
@@ -216,6 +217,7 @@ function EditContactForm({ contact, focusBirthday }: { contact: Contact; focusBi
         photoUri,
         customReminders,
         lastContacted: selectedContactDate ?? contact.lastContacted,
+        notificationsCooldownUntil: contact.notificationsCooldownUntil,
       });
       router.back();
     } catch (err) {
@@ -270,6 +272,7 @@ function EditContactForm({ contact, focusBirthday }: { contact: Contact; focusBi
             contactName: contact.name,
             circleLevel,
             selectedDate: date,
+            notificationsCooldownUntil: contact.notificationsCooldownUntil,
           });
         }
       })
@@ -282,7 +285,7 @@ function EditContactForm({ contact, focusBirthday }: { contact: Contact; focusBi
         quickContactPendingRef.current = false;
         setQuickContactSaving(false);
       });
-  }, [circleLevel, contact.id, contact.name, markContacted, saving]);
+  }, [circleLevel, contact.id, contact.name, contact.notificationsCooldownUntil, markContacted, saving]);
 
   const webTopInset = Platform.OS === "web" ? 67 : 0;
   const [activeHint, dismissHint] = useSequentialHints(["edit_custom_reminder", "edit_labels"]);
@@ -370,6 +373,8 @@ function EditContactForm({ contact, focusBirthday }: { contact: Contact; focusBi
             })}
           </View>
         </View>
+
+        <ContactCooldownButton contact={contact} />
 
         <View style={styles.inputGroup}>
           <View style={styles.birthdayHeader}>

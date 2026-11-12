@@ -11,6 +11,8 @@ import * as Haptics from "expo-haptics";
 import * as Clipboard from "expo-clipboard";
 import { NoPhoneSheet, type ExtraContactData } from "./NoPhoneSheet";
 import { getTextCopyMessage } from "@/lib/sms-templates";
+import { useContacts } from "@/lib/contacts-context";
+import { ContactCooldownButton } from "./ContactCooldownButton";
 export { getTextCopyMessage } from "@/lib/sms-templates";
 
 interface SuggestionCardProps {
@@ -77,6 +79,8 @@ export function SuggestionCard({
 }: SuggestionCardProps) {
   const Colors = useThemeColors();
   const styles = useMemo(() => createStyles(Colors), [Colors]);
+  const { contacts } = useContacts();
+  const cooldownContact = contacts.find((contact) => contact.id === contactId);
   const circleColor = Colors[`circle${circleLevel}` as "circle1" | "circle2" | "circle3" | "circle4"];
   const typeConfig = TYPE_CONFIG[type];
   const urgencyConfig = {
@@ -341,6 +345,8 @@ export function SuggestionCard({
               <Ionicons name="calendar-outline" size={20} color={Colors.primaryLight} />
             </Pressable>
           )}
+
+          {cooldownContact && <ContactCooldownButton contact={cooldownContact} compact />}
 
           <View style={{ flex: 1 }} />
 

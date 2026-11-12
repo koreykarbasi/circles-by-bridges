@@ -12,6 +12,7 @@ export interface Contact {
   birthday?: string | null;
   lastContacted?: string | null;
   emptyLastContactPromptDueAt?: string | null;
+  notificationsCooldownUntil?: string | null;
   lastHangout?: string | null;
   lastContactedLabel?: string | null;
   lastHangoutLabel?: string | null;
