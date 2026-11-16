@@ -17,3 +17,4 @@
 - [EAS archive isolation](eas-archive-isolation.md) — workspace caches can stall EAS packaging; isolated build sources still need local dependencies for Expo config plugins.
 - [Bridges email domain](bridges-email-domain.md) — user owns buildmybridges.com through Hostinger; website repair is separate from email verification.
 - [Live release compatibility](live-release-compatibility.md) — v1 and later apps share the backend/database; preserve old clients with additive, nullable schema changes.
+- [Publishing startup checks](publishing-startup-checks.md) — early health-check 500s can precede a successful publish; correlate with server readiness before changing code.
