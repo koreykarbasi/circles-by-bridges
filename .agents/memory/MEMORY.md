@@ -18,3 +18,4 @@
 - [Bridges email domain](bridges-email-domain.md) — user owns buildmybridges.com through Hostinger; website repair is separate from email verification.
 - [Live release compatibility](live-release-compatibility.md) — v1 and later apps share the backend/database; preserve old clients with additive, nullable schema changes.
 - [Publishing startup checks](publishing-startup-checks.md) — early health-check 500s can precede a successful publish; correlate with server readiness before changing code.
+- [Portable npm lockfiles](portable-npm-lockfiles.md) — package installs can record private registry URLs; external EAS builders need public tarball URLs.
