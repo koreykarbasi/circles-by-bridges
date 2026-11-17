@@ -218,6 +218,32 @@ test("Existing email sign-in still works; auth errors stay on the form", async (
   }
 });
 
+test("Existing six-character passwords can still sign in", async () => {
+  const h = harness();
+  h.fill("auth-email", "test@example.com");
+  h.fill("auth-password", "abc123");
+  await h.click("auth-submit");
+  assert.deepEqual(h.calls, [["login", "test@example.com", "abc123"]]);
+});
+
+test("Sign-up rejects six and seven characters and accepts eight", async () => {
+  for (const password of ["abc123", "abc1234", "abc12345"]) {
+    const h = harness();
+    await h.click("auth-switch");
+    h.fill("auth-email", "test@example.com");
+    h.fill("auth-password", password);
+    h.fill("auth-confirm-password", password);
+    await h.click("auth-submit");
+    if (password.length < 8) {
+      assert.equal(h.calls.length, 0);
+      assert.match(h.text(), /at least 8 characters/);
+    } else {
+      assert.equal(h.calls[0][0], "register");
+      assert.equal(h.calls[0][2], password);
+    }
+  }
+});
+
 test("Forgot-password uses the existing endpoint and preserves its confirmation", async () => {
   const h = harness();
   h.fill("auth-email", "test@example.com");

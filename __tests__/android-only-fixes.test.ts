@@ -13,8 +13,8 @@ describe("Android signup without changing shared authentication policy", () => {
     expect(login).toHaveBeenCalledWith("test@example.com", " abcde");
     expect(register.mock.invocationCallOrder[0]).toBeLessThan(login.mock.invocationCallOrder[0]);
   });
-  test("only describes the real six-character requirement", () => {
-    expect(ANDROID_PASSWORD_HINT).toContain("Minimum 6 characters");
+  test("only describes the real eight-character requirement", () => {
+    expect(ANDROID_PASSWORD_HINT).toContain("Minimum 8 characters");
     expect(ANDROID_PASSWORD_HINT).toContain("No other character requirements");
   });
   test("does not try login if registration failed", async () => {

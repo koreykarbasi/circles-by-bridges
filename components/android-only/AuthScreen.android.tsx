@@ -58,8 +58,8 @@ export default function AuthScreen() {
       setError("Passwords don't match");
       return;
     }
-    if (password.length < 6) {
-      setError("Password must be at least 6 characters");
+    if (!isLogin && password.length < 8) {
+      setError("Password must be at least 8 characters");
       return;
     }
 
@@ -188,7 +188,7 @@ export default function AuthScreen() {
               <Ionicons name="lock-closed-outline" size={18} color={Colors.textSecondary} style={styles.inputIcon} />
               <TextInput
                 style={[styles.input, { flex: 1 }]}
-                placeholder={isLogin ? "Your password" : "Minimum 6 characters"}
+                placeholder={isLogin ? "Your password" : "Minimum 8 characters"}
                 placeholderTextColor={Colors.textTertiary}
                 value={password}
                 onChangeText={setPassword}

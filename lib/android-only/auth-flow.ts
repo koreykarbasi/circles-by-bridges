@@ -2,7 +2,7 @@
  * Android-only auth copy/flow. The shared registration endpoint intentionally
  * does not reveal whether an email already exists.
  */
-export const ANDROID_PASSWORD_HINT = "Minimum 6 characters. No other character requirements.";
+export const ANDROID_PASSWORD_HINT = "Minimum 8 characters. No other character requirements.";
 
 export function authErrorMessage(error: unknown): string {
   const raw = error instanceof Error ? error.message : "Something went wrong. Please try again.";

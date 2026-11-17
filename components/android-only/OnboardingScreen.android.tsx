@@ -306,8 +306,8 @@ function AuthPage({ onSuccess, isActive }: { onSuccess: () => void; isActive: bo
       setError("Please enter your email.");
       return;
     }
-    if (password.length < 6) {
-      setError("Password must be at least 6 characters.");
+    if (!password || (mode === "signup" && password.length < 8)) {
+      setError(mode === "signup" ? "Password must be at least 8 characters." : "Please enter your password.");
       return;
     }
     if (mode === "signup" && password !== confirmPassword) {
@@ -492,7 +492,7 @@ function AuthPage({ onSuccess, isActive }: { onSuccess: () => void; isActive: bo
             <View style={authStyles.passwordRow}>
               <TextInput
                 style={[authStyles.input, { flex: 1 }]}
-                placeholder={mode === "signup" ? "Minimum 6 characters" : "Your password"}
+                placeholder={mode === "signup" ? "Minimum 8 characters" : "Your password"}
                 placeholderTextColor={Colors.textTertiary}
                 value={password}
                 onChangeText={(t) => { setPassword(t); setError(""); }}

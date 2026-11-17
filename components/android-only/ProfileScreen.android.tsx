@@ -302,8 +302,8 @@ export default function ProfileScreen() {
       setChangePwError("Please enter your current password");
       return;
     }
-    if (!newPassword || newPassword.length < 6) {
-      setChangePwError("New password must be at least 6 characters");
+    if (!newPassword || newPassword.length < 8) {
+      setChangePwError("New password must be at least 8 characters");
       return;
     }
     if (newPassword !== confirmNewPassword) {
@@ -607,7 +607,7 @@ export default function ProfileScreen() {
                 <View style={pwStyles.inputRow}>
                   <TextInput
                     style={pwStyles.input}
-                    placeholder="At least 6 characters"
+                    placeholder="At least 8 characters"
                     placeholderTextColor={Colors.textTertiary}
                     value={newPassword}
                     onChangeText={(t) => { setNewPassword(t); setChangePwError(""); setChangePwSuccess(false); }}

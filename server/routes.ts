@@ -477,8 +477,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (!email || !password) {
         return res.status(400).json({ message: "Email and password are required" });
       }
-      if (password.length < 6) {
-        return res.status(400).json({ message: "Password must be at least 6 characters" });
+      if (typeof password !== "string" || password.length < 8) {
+        return res.status(400).json({ message: "Password must be at least 8 characters" });
       }
       // Block disposable/throwaway email domains
       const emailDomain = email.toLowerCase().trim().split("@")[1] ?? "";
@@ -873,8 +873,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (!token || typeof token !== "string") {
         return res.status(400).json({ message: "Invalid or missing token" });
       }
-      if (!newPassword || typeof newPassword !== "string" || newPassword.length < 6) {
-        return res.status(400).json({ message: "Password must be at least 6 characters" });
+      if (!newPassword || typeof newPassword !== "string" || newPassword.length < 8) {
+        return res.status(400).json({ message: "Password must be at least 8 characters" });
       }
 
       const tokenHash = crypto.createHash("sha256").update(token).digest("hex");
@@ -909,8 +909,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (!currentPassword || typeof currentPassword !== "string") {
         return bad(res, "Current password is required");
       }
-      if (!newPassword || typeof newPassword !== "string" || newPassword.length < 6) {
-        return bad(res, "New password must be at least 6 characters");
+      if (!newPassword || typeof newPassword !== "string" || newPassword.length < 8) {
+        return bad(res, "New password must be at least 8 characters");
       }
 
       const user = await storage.getUser(req.session.userId!);
