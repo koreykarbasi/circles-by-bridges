@@ -1402,10 +1402,10 @@ export async function sendSuggestionNudges(userId?: string) {
 
       // Vary the copy so the same body doesn't repeat — deterministic per contact+day
       const nudgeTemplates: { title: (n: string) => string; body: (n: string) => string }[] = [
-        { title: (n) => `Time to reach out to ${n}`, body: () => "Open the app to see what to say." },
-        { title: (n) => `${n} is due for a check-in`, body: (n) => `It's been a while since you connected with ${n} — open Bridges for a suggestion.` },
-        { title: () => "A friendly nudge", body: (n) => `Thinking of ${n}? Open Bridges for a quick way to reach out.` },
-        { title: (n) => `Say hi to ${n}`, body: () => "Open Bridges for a suggestion on what to say." },
+        { title: (n) => `Reach out to ${n}`, body: () => "Open the app to see what to say." },
+        { title: (n) => `Reach out to ${n}`, body: (n) => `It's been a while since you connected with ${n} — open Bridges for a suggestion.` },
+        { title: (n) => `Reach out to ${n}`, body: (n) => `Thinking of ${n}? Open Bridges for a quick way to reach out.` },
+        { title: (n) => `Reach out to ${n}`, body: () => "Open Bridges for a suggestion on what to say." },
       ];
       const dayKey = new Date().toISOString().slice(0, 10);
       let hash = 0;
