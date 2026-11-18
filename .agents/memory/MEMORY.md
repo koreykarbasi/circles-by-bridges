@@ -20,3 +20,4 @@
 - [Publishing startup checks](publishing-startup-checks.md) — early health-check 500s can precede a successful publish; correlate with server readiness before changing code.
 - [Portable npm lockfiles](portable-npm-lockfiles.md) — package installs can record private registry URLs; external EAS builders need public tarball URLs.
 - [Onboarding circle scope](onboarding-circle-scope.md) — keep the original three-circle onboarding on both platforms; Acquaintances remains available elsewhere.
+- [Profile social health scope](profile-social-health-scope.md) — score only eligible Close Friends and Friends; keep the health card off Home.

@@ -35,6 +35,7 @@ import { CIRCLE_CONFIG } from "@/lib/types";
 import * as Haptics from "expo-haptics";
 import { apiRequest } from "@/lib/query-client";
 import { scheduleSuggestionNudge, sendTestNotification } from "@/lib/reminder-notifications";
+import { SocialHealthBar } from "@/components/SocialHealthBar";
 
 export default function ProfileScreen() {
   const { colors: Colors, mode, setMode } = useTheme();
@@ -392,6 +393,8 @@ export default function ProfileScreen() {
             );
           })}
         </View>
+
+        <SocialHealthBar />
 
         <View style={styles.section}>
           <Text style={styles.sectionLabel}>Notifications</Text>
