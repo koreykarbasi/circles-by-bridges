@@ -20,3 +20,9 @@ Circle 4 explicit last-contacted selections must differ from creation defaults: 
 **Why:** The user wants choosing Past Year to sample a date below the check-in threshold, while keeping a broader human-readable status band.
 
 **How to apply:** Keep display bands separate from sampling ranges. Do not change the 60–120-day creation default or the existing check-in threshold to implement these choices.
+
+The Circle 4-only "Remind me to check in soon" shortcut must save a Reach out custom reminder immediately for a random local calendar date 7–21 days ahead, without requiring the form's Save button or marking the contact as contacted.
+
+**Why:** The user asked for a one-click reminder independently of editing the contact.
+
+**How to apply:** Preserve saved reminders and unsaved form edits when saving the shortcut. Its custom reminder uses the established month/day contract and existing delivery behavior; do not silently change other reminders' recurrence rules.

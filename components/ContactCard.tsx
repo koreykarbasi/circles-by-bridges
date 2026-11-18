@@ -4,7 +4,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { Avatar } from "./Avatar";
 import { useThemeColors } from "@/lib/theme-context";
 import type { ThemeColors } from "@/constants/colors";
-import { formatLastContacted, getContactUrgency } from "@/lib/helpers";
+import { formatContactLastContacted, getContactUrgency } from "@/lib/helpers";
 import type { Contact } from "@/lib/types";
 import * as Haptics from "expo-haptics";
 import { ContactCooldownButton } from "./ContactCooldownButton";
@@ -106,7 +106,7 @@ export function ContactCard({ contact, onPress, onMarkContacted, onPlanHangout, 
                 }
           />
           <Text style={styles.lastContacted}>
-            {contact.lastContactedLabel ?? formatLastContacted(contact.lastContacted ?? undefined)}
+            {formatContactLastContacted(contact.circleLevel, contact.lastContacted, contact.lastContactedLabel)}
           </Text>
           {contact.interests.length > 0 && (
             <Text style={styles.interests} numberOfLines={1}>

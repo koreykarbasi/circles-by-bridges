@@ -3,7 +3,7 @@ import { View, Text, Pressable, StyleSheet, ScrollView } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useThemeColors } from "@/lib/theme-context";
 import type { ThemeColors } from "@/constants/colors";
-import { C3_CHECKIN_OPTIONS, dateForCheckinOption } from "@shared/checkin-policy";
+import { C3_CHECKIN_OPTIONS, C4_CHECKIN_OPTIONS, dateForCheckinOption } from "@shared/checkin-policy";
 
 function randomInRange(min: number, max: number): number {
   return Math.floor(Math.random() * (max - min + 1)) + min;
@@ -32,6 +32,11 @@ const CHECKIN_C3: Option[] = [
   })),
 ];
 
+const CHECKIN_C4: Option[] = C4_CHECKIN_OPTIONS.map((option) => ({
+  label: option.label,
+  getDate: () => dateForCheckinOption(option),
+}));
+
 const HANGOUT_C1_C2: Option[] = [
   { label: "This week", getDate: () => daysAgoRandom(3, 6) },
   { label: "This month", getDate: () => daysAgoRandom(12, 24) },
@@ -58,7 +63,7 @@ export function QuickPickRow({ circleLevel, variant, onSelect, onCalendarPress }
   if (variant === "hangout") {
     options = circleLevel >= 3 ? HANGOUT_C3 : HANGOUT_C1_C2;
   } else {
-    options = circleLevel >= 3 ? CHECKIN_C3 : CHECKIN_C1_C2;
+    options = circleLevel === 4 ? CHECKIN_C4 : circleLevel === 3 ? CHECKIN_C3 : CHECKIN_C1_C2;
   }
 
   const handlePress = useCallback(

@@ -21,7 +21,7 @@ import { useContacts } from "@/lib/contacts-context";
 import { CIRCLE_CONFIG } from "@/lib/types";
 import type { Contact, CustomReminder } from "@/lib/types";
 import { AVAILABLE_INTERESTS } from "@/lib/prompts";
-import { formatLastContacted } from "@/lib/helpers";
+import { formatContactLastContacted } from "@/lib/helpers";
 import { Avatar } from "@/components/Avatar";
 import { DateWheelPicker } from "@/components/DateWheelPicker";
 import * as Haptics from "expo-haptics";
@@ -29,6 +29,7 @@ import { useSequentialHints, HINT_TEXT } from "@/lib/hints-store";
 import { HintTooltip } from "@/components/HintTooltip";
 import {
   C3_CHECKIN_OPTIONS,
+  C4_CHECKIN_OPTIONS,
   canSaveContactEdit,
   dateForCheckinOption,
 } from "@shared/checkin-policy";
@@ -36,6 +37,7 @@ import { setCheckinElevationIfOverdue } from "@/lib/checkin-state";
 import { ContactCooldownButton } from "@/components/ContactCooldownButton";
 import { CircleMoveButton } from "@/components/CircleMoveButton";
 import { ContactRefreshButton } from "@/components/ContactRefreshButton";
+import { reachOutReminderDate } from "@shared/reach-out-reminder";
 
 const PREDEFINED_LABELS = [
   "Family", "Childhood Friend", "College Friend", "Work Friend", "Neighbor",
@@ -97,7 +99,7 @@ function EditContactForm({ contact, focusBirthday }: { contact: Contact; focusBi
   const { width: viewportWidth } = useWindowDimensions();
   const displayedLabels = viewportWidth < 365 ? COMPACT_PREDEFINED_LABELS : PREDEFINED_LABELS;
   const insets = useSafeAreaInsets();
-  const { updateContact, deleteContact, markContacted } = useContacts();
+  const { updateContact, deleteContact, markContacted, addReachOutReminder } = useContacts();
 
   const [name, setName] = useState(contact?.name ?? "");
   const circleLevel = (contact?.circleLevel ?? 1) as 1 | 2 | 3 | 4;
@@ -122,6 +124,10 @@ function EditContactForm({ contact, focusBirthday }: { contact: Contact; focusBi
   const [showAddReminder, setShowAddReminder] = useState(false);
   const [newReminderLabel, setNewReminderLabel] = useState("");
   const [newReminderDate, setNewReminderDate] = useState("03/23");
+  const [reachOutSaving, setReachOutSaving] = useState(false);
+  const reachOutPendingRef = useRef(false);
+  const [reachOutStatus, setReachOutStatus] = useState("");
+  const quickSaveBusy = quickContactSaving || reachOutSaving;
 
   const scrollRef = useRef<ScrollView>(null);
 
@@ -180,7 +186,7 @@ function EditContactForm({ contact, focusBirthday }: { contact: Contact; focusBi
   };
 
   const handleSave = async () => {
-    if (saving || quickContactSaving || quickContactPendingRef.current) return;
+    if (saving || quickSaveBusy || quickContactPendingRef.current || reachOutPendingRef.current) return;
     if (!name.trim()) {
       Alert.alert("Name required", "Please enter a name.");
       return;
@@ -238,7 +244,7 @@ function EditContactForm({ contact, focusBirthday }: { contact: Contact; focusBi
   };
 
   const QUICK_CONTACT_CHIPS: Array<{ label: string; getDate: () => Date }> = circleLevel >= 3
-    ? C3_CHECKIN_OPTIONS.map((option) => ({
+    ? (circleLevel === 4 ? C4_CHECKIN_OPTIONS : C3_CHECKIN_OPTIONS).map((option) => ({
         label: option.label,
         getDate: () => dateForCheckinOption(option),
       }))
@@ -250,7 +256,7 @@ function EditContactForm({ contact, focusBirthday }: { contact: Contact; focusBi
       ];
 
   const handleQuickContact = useCallback((label: string, getDate: () => Date) => {
-    if (saving || quickContactPendingRef.current) return;
+    if (saving || quickContactPendingRef.current || reachOutPendingRef.current) return;
     quickContactPendingRef.current = true;
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     setQuickContactSaving(true);
@@ -259,7 +265,7 @@ function EditContactForm({ contact, focusBirthday }: { contact: Contact; focusBi
     setSelectedContactDate(date.toISOString());
     markContacted(contact.id, date, label)
       .then(async () => {
-        if (circleLevel >= 3 && label === "Longer") {
+        if (circleLevel >= 3 && (label === "Longer" || (circleLevel === 4 && label === "Years ago"))) {
           await setCheckinElevationIfOverdue({
             contactId: contact.id,
             contactName: contact.name,
@@ -280,6 +286,28 @@ function EditContactForm({ contact, focusBirthday }: { contact: Contact; focusBi
       });
   }, [circleLevel, contact.id, contact.name, contact.notificationsCooldownUntil, markContacted, saving]);
 
+  const handleReachOutSoon = async () => {
+    if (circleLevel !== 4 || saving || quickContactPendingRef.current || reachOutPendingRef.current) return;
+    reachOutPendingRef.current = true;
+    setReachOutSaving(true);
+    setReachOutStatus("");
+    try {
+      const { reminder, scheduledFor } = reachOutReminderDate();
+      const saved = await addReachOutReminder(contact.id, reminder.date);
+      // Merge just the new reminder into the draft, preserving pending additions/removals.
+      setCustomReminders(previous => previous.some(item => item.label === saved.label && item.date === saved.date)
+        ? previous : [...previous, saved]);
+      setReachOutStatus(`Reminder set for ${scheduledFor.toLocaleDateString(undefined, {
+        month: "long", day: "numeric", year: "numeric",
+      })}`);
+    } catch {
+      Alert.alert("Could not save reminder", "Please check your connection and try again.");
+    } finally {
+      reachOutPendingRef.current = false;
+      setReachOutSaving(false);
+    }
+  };
+
   const webTopInset = Platform.OS === "web" ? 67 : 0;
   const [activeHint, dismissHint] = useSequentialHints(["edit_custom_reminder", "edit_labels"]);
 
@@ -298,13 +326,13 @@ function EditContactForm({ contact, focusBirthday }: { contact: Contact; focusBi
           accessibilityLabel="Save contact"
           testID="save-contact-header"
           onPress={handleSave}
-          disabled={!canSaveContactEdit(name, saving, quickContactSaving)}
+          disabled={!canSaveContactEdit(name, saving, quickSaveBusy)}
           style={({ pressed }) => [pressed && { opacity: 0.5 }]}
         >
           <Ionicons
             name="checkmark"
             size={26}
-            color={!canSaveContactEdit(name, saving, quickContactSaving) ? Colors.textTertiary : Colors.primary}
+            color={!canSaveContactEdit(name, saving, quickSaveBusy) ? Colors.textTertiary : Colors.primary}
           />
         </Pressable>
       </View>
@@ -351,17 +379,17 @@ function EditContactForm({ contact, focusBirthday }: { contact: Contact; focusBi
           <View style={styles.contactMetaHeader}>
             <Text style={styles.lastContactLabel}>Last contacted</Text>
             <Text style={styles.lastContactValue}>
-              {selectedChip ?? (contact.lastContactedLabel ?? formatLastContacted(contact.lastContacted ?? undefined))}
+              {selectedChip ?? formatContactLastContacted(circleLevel, contact.lastContacted, contact.lastContactedLabel)}
             </Text>
           </View>
           <View style={styles.quickContactRow}>
             {QUICK_CONTACT_CHIPS.map(({ label, getDate }) => {
-              const currentLabel = selectedChip ?? (contact.lastContactedLabel ?? formatLastContacted(contact.lastContacted ?? undefined));
+              const currentLabel = selectedChip ?? formatContactLastContacted(circleLevel, contact.lastContacted, contact.lastContactedLabel);
               const isSelected = currentLabel === label;
               return (
                 <Pressable
                   key={label}
-                  disabled={saving || quickContactSaving}
+                  disabled={saving || quickSaveBusy}
                   onPress={() => handleQuickContact(label, getDate)}
                   style={({ pressed }) => [
                     styles.quickChip,
@@ -376,6 +404,25 @@ function EditContactForm({ contact, focusBirthday }: { contact: Contact; focusBi
               );
             })}
           </View>
+          {circleLevel === 4 && (
+            <View>
+              <Pressable
+                testID="reach-out-soon"
+                accessibilityRole="button"
+                accessibilityLabel="Remind me to check in soon"
+                accessibilityState={{ disabled: saving || quickSaveBusy, busy: reachOutSaving }}
+                disabled={saving || quickSaveBusy}
+                onPress={handleReachOutSoon}
+                style={({ pressed }) => [styles.addReminderBtn, (pressed || reachOutSaving) && { opacity: 0.7 }]}
+              >
+                <Ionicons name="notifications-outline" size={18} color={Colors.primary} />
+                <Text style={styles.addReminderBtnText}>
+                  {reachOutSaving ? "Saving reminder..." : "Remind me to check in soon"}
+                </Text>
+              </Pressable>
+              {!!reachOutStatus && <Text accessibilityLiveRegion="polite" style={styles.customReminderChipDate}>{reachOutStatus}</Text>}
+            </View>
+          )}
         </View>
 
         <ContactCooldownButton contact={contact} />
@@ -709,14 +756,14 @@ function EditContactForm({ contact, focusBirthday }: { contact: Contact; focusBi
         <Pressable
           testID="save-contact-changes"
           onPress={handleSave}
-          disabled={!canSaveContactEdit(name, saving, quickContactSaving)}
+          disabled={!canSaveContactEdit(name, saving, quickSaveBusy)}
           style={({ pressed }) => [
             styles.saveButton,
-            !canSaveContactEdit(name, saving, quickContactSaving) && styles.saveButtonDisabled,
+            !canSaveContactEdit(name, saving, quickSaveBusy) && styles.saveButtonDisabled,
             pressed && { opacity: 0.8 },
           ]}
         >
-          <Text style={styles.saveButtonText}>{saving || quickContactSaving ? "Saving..." : "Save Changes"}</Text>
+          <Text style={styles.saveButtonText}>{saving || quickSaveBusy ? "Saving..." : "Save Changes"}</Text>
         </Pressable>
 
         <Pressable

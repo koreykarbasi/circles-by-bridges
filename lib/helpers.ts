@@ -1,3 +1,5 @@
+import { getCheckinDaysSince } from "@shared/checkin-time";
+
 export function getInitials(name: string): string {
   const parts = name.trim().split(/\s+/);
   if (parts.length >= 2) {
@@ -124,4 +126,21 @@ export function getContactUrgency(circleLevel: 1 | 2 | 3 | 4, lastContacted?: st
 export function formatLastContactedLabel(label?: string | null, dateStr?: string | null): string {
   if (label) return label;
   return formatLastContacted(dateStr ?? undefined);
+}
+
+/** Circle 4 display bands are wider than its deliberately separated sampling ranges. */
+export function formatContactLastContacted(
+  circleLevel: number,
+  dateStr?: string | null,
+  label?: string | null,
+): string {
+  if (circleLevel === 4) {
+    const days = getCheckinDaysSince(dateStr);
+    if (days !== null && days >= 350) return "Years ago";
+    if (days !== null && days >= 121) return "Past Year";
+    if (days !== null && days >= 30) return "Recently";
+    // A previously chosen label must not mask a newer actual contact date.
+    return formatLastContacted(dateStr ?? undefined);
+  }
+  return label ?? formatLastContacted(dateStr ?? undefined);
 }

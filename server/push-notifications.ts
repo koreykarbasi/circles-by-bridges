@@ -209,8 +209,10 @@ function buildCustomReminderMessages(
     // from actual birthdays and birthday milestones.
     if (daysUntil === 0) {
       messages.push({
-        title: `${cr.label} — ${contact.name}`,
-        body: `Today is ${contact.name}'s ${cr.label}.`,
+        title: contact.circleLevel === 4 && cr.label === "Reach out"
+          ? `Reach out to ${contact.name}` : `${cr.label} — ${contact.name}`,
+        body: contact.circleLevel === 4 && cr.label === "Reach out"
+          ? `A reminder to reach out to ${contact.name}.` : `Today is ${contact.name}'s ${cr.label}.`,
         contactId: contact.id,
         notifType: "custom",
       });

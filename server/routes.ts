@@ -2,6 +2,7 @@ import type { Express, Request, Response, NextFunction } from "express";
 import { createServer, type Server } from "node:http";
 import { storage } from "./storage";
 import { registerContactRefreshRoutes } from "./contact-refresh";
+import { registerReachOutReminderRoutes } from "./reach-out-reminder";
 import bcrypt from "bcryptjs";
 import session from "express-session";
 import connectPgSimple from "connect-pg-simple";
@@ -1271,6 +1272,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   registerContactRefreshRoutes(app, requireAuth);
+  registerReachOutReminderRoutes(app, requireAuth);
 
   app.get("/api/contacts/:id", requireAuth, async (req, res) => {
     try {

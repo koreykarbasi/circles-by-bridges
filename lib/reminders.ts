@@ -7,6 +7,7 @@ import {
 } from "@shared/reminder-thresholds";
 import { ELEVATION_DELAY_HOURS } from "@shared/suggestion-priority";
 import { getCheckinDaysSince } from "@shared/checkin-time";
+import { REACH_OUT_LABEL } from "@shared/reach-out-reminder";
 
 export type ReminderType =
   | "birthday"
@@ -80,6 +81,20 @@ function generateCustomReminders(contact: Contact, circleLevel: 1 | 2 | 3 | 4): 
 
     const safeLabel = cr.label.trim();
     const idBase = `custom-${contact.id}-${safeLabel.replace(/\s+/g, "-").toLowerCase()}`;
+
+    if (circleLevel === 4 && safeLabel === REACH_OUT_LABEL) {
+      if (daysUntil <= 1) reminders.push({
+        id: `${idBase}-0d`,
+        contactId: contact.id,
+        contactName: contact.name,
+        circleLevel,
+        type: "custom-reminder",
+        priority: priorities.today,
+        title: `Reach out to ${contact.name}`,
+        subtitle: daysUntil === 0 ? "Today" : "Tomorrow",
+      });
+      continue;
+    }
 
     // Circle 1: advance notice at 30d/14d/7d/day-of
     // Circle 2: advance notice at 7d/day-of

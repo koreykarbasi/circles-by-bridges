@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, useMemo, useCallback, ReactNode } from "react";
-import type { Contact } from "./types";
+import type { Contact, CustomReminder } from "./types";
 import { AVATAR_COLORS } from "./types";
 import { Platform } from "react-native";
 import { apiRequest, getApiUrl } from "./query-client";
@@ -30,6 +30,7 @@ interface ContactsContextValue {
   setContactCooldown: (id: string, active: boolean) => Promise<void>;
   moveContacts: (moves: CircleMove[]) => Promise<void>;
   fillContactFields: (id: string, changes: ContactRefreshChanges) => Promise<{ contact: Contact; appliedFields: RefreshField[] }>;
+  addReachOutReminder: (id: string, date: string) => Promise<CustomReminder>;
 }
 
 const ContactsContext = createContext<ContactsContextValue | null>(null);
@@ -69,6 +70,13 @@ export function ContactsProvider({ children }: { children: ReactNode }) {
     setContacts(previous => previous.map(contact => contact.id === id ? result.contact : contact));
     await queryClient.invalidateQueries({ queryKey: ["/api/suggestions/priority"] });
     return result;
+  }, []);
+
+  const addReachOutReminder = useCallback(async (id: string, date: string) => {
+    const response = await apiRequest("POST", `/api/contacts/${id}/reach-out-reminder`, { date });
+    const result = await response.json() as { contact: Contact; reminder: CustomReminder };
+    setContacts(previous => previous.map(contact => contact.id === id ? result.contact : contact));
+    return result.reminder;
   }, []);
 
   const fetchContacts = useCallback(async () => {
@@ -291,8 +299,9 @@ export function ContactsProvider({ children }: { children: ReactNode }) {
       setContactCooldown,
       moveContacts,
       fillContactFields,
+      addReachOutReminder,
     }),
-    [contacts, isLoading, fetchContacts, addContactFn, updateContactFn, deleteContactFn, markContactedFn, markHangoutFn, savePhoneNumberFn, getCircleContacts, getOverdueContacts, getUpcomingBirthdays, reorderCircleContactsFn, setContactCooldown, moveContacts, fillContactFields],
+    [contacts, isLoading, fetchContacts, addContactFn, updateContactFn, deleteContactFn, markContactedFn, markHangoutFn, savePhoneNumberFn, getCircleContacts, getOverdueContacts, getUpcomingBirthdays, reorderCircleContactsFn, setContactCooldown, moveContacts, fillContactFields, addReachOutReminder],
   );
 
   return <ContactsContext.Provider value={value}>{children}</ContactsContext.Provider>;

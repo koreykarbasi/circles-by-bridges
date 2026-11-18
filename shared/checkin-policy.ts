@@ -7,6 +7,12 @@ export const C3_CHECKIN_OPTIONS = [
 
 export type C3CheckinOption = (typeof C3_CHECKIN_OPTIONS)[number];
 
+export const C4_CHECKIN_OPTIONS = [
+  { label: "Recently", minDaysAgo: 30, maxDaysAgo: 120 },
+  { label: "Past Year", minDaysAgo: 121, maxDaysAgo: 300 },
+  { label: "Years ago", minDaysAgo: 350, maxDaysAgo: 450 },
+] as const;
+
 export function randomInclusive(
   min: number,
   max: number,
@@ -16,7 +22,7 @@ export function randomInclusive(
 }
 
 export function dateForCheckinOption(
-  option: Pick<C3CheckinOption, "minDaysAgo" | "maxDaysAgo">,
+  option: { readonly minDaysAgo: number; readonly maxDaysAgo: number },
   now = new Date(),
   random: () => number = Math.random,
 ): Date {
