@@ -245,7 +245,8 @@ export default function CirclesScreen() {
         <Text style={styles.circleDescription}>{config.description}</Text>
       )}
 
-      {!activeFilter && circleContacts.length > 0 && (
+      {!activeFilter && (
+        <View style={styles.searchTools}>
         <View style={styles.searchRow}>
           <Ionicons name="search-outline" size={16} color={Colors.textTertiary} style={styles.searchIcon} />
           <TextInput
@@ -263,6 +264,20 @@ export default function CirclesScreen() {
               <Ionicons name="close-circle" size={16} color={Colors.textTertiary} />
             </Pressable>
           )}
+        </View>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={`About ${config.label}`}
+          onPress={() => setCircleInfoOpen(true)}
+          hitSlop={8}
+          style={({ pressed }) => [
+            styles.circleInfoButton,
+            { borderColor: circleColor(activeCircle), backgroundColor: circleColor(activeCircle) + "18" },
+            pressed && { opacity: 0.65 },
+          ]}
+        >
+          <Ionicons name="information-outline" size={20} color={circleColor(activeCircle)} />
+        </Pressable>
         </View>
       )}
 
@@ -555,7 +570,22 @@ const createStyles = (Colors: ThemeColors) => StyleSheet.create({
     marginBottom: 12,
     textAlign: "center",
   },
+  searchTools: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    marginBottom: 14,
+  },
+  circleInfoButton: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    borderWidth: 1,
+    alignItems: "center",
+    justifyContent: "center",
+  },
   searchRow: {
+    flex: 1,
     flexDirection: "row",
     alignItems: "center",
     backgroundColor: Colors.surface,
@@ -563,7 +593,6 @@ const createStyles = (Colors: ThemeColors) => StyleSheet.create({
     borderWidth: 1,
     borderColor: Colors.borderLight,
     paddingHorizontal: 12,
-    marginBottom: 14,
     height: 40,
   },
   searchIcon: {
