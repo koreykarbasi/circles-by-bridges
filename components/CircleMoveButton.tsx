@@ -114,7 +114,7 @@ export function CircleMoveButton({ contact, compact = false }: CircleMoveButtonP
         hitSlop={8}
         style={({ pressed }) => [compact ? styles.compactTrigger : styles.fullTrigger, pressed && styles.pressed]}
       >
-        <ContactCardActionIcon action="move" size={compact ? 19 : 17} color={Colors.primary} />
+        <ContactCardActionIcon action="move" size={compact ? 16 : 17} color={Colors.primary} />
         {!compact && <Text style={styles.triggerText}>Move circle</Text>}
       </Pressable>
 
@@ -349,11 +349,11 @@ export function CircleMoveButton({ contact, compact = false }: CircleMoveButtonP
 
 const createStyles = (Colors: ThemeColors) => StyleSheet.create({
   compactTrigger: {
-    width: 32,
-    height: 32,
+    width: 27.2,
+    height: 27.2,
     alignItems: "center",
     justifyContent: "center",
-    borderRadius: 10,
+    borderRadius: 8,
     backgroundColor: Colors.primary + "12",
   },
   fullTrigger: {
