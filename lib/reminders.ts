@@ -308,7 +308,7 @@ function generateCircle2Reminders(contact: Contact): Reminder[] {
   if (isCheckinQuickPickEligible(contact, 2, daysSinceContact, daysSinceCreated, contact.emptyLastContactPromptDueAt)) {
     const severity = daysSinceContact === null
       ? 60
-      : Math.min(60, 20 + Math.floor((daysSinceContact - CHECKIN_THRESHOLDS[2]) * 1.2));
+      : Math.min(60, 20 + Math.floor((daysSinceContact - getCheckinThreshold(2, contact)) * 1.2));
     reminders.push({
       id: `checkin-${contact.id}`,
       contactId: contact.id,
@@ -366,7 +366,8 @@ function generateCircle3Reminders(contact: Contact): Reminder[] {
 
   const daysSinceContact = getCheckinDaysSince(contact.lastContacted);
   if (isCheckinQuickPickEligible(contact, circleLevel, daysSinceContact, getCheckinDaysSince(contact.createdAt), contact.emptyLastContactPromptDueAt)) {
-    const severity = Math.min(30, Math.floor(((daysSinceContact ?? CHECKIN_THRESHOLDS[circleLevel]) - CHECKIN_THRESHOLDS[circleLevel]) * 0.4));
+    const threshold = getCheckinThreshold(circleLevel, contact);
+    const severity = Math.min(30, Math.floor(((daysSinceContact ?? threshold) - threshold) * 0.4));
     reminders.push({
       id: `checkin-${contact.id}`,
       contactId: contact.id,
