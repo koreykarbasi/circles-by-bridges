@@ -69,7 +69,7 @@ export function ContactCooldownButton({ contact, compact = false }: ContactCoold
         hitSlop={8}
         style={({ pressed }) => [styles.iconButton, active && styles.iconButtonActive, pressed && !busy && styles.pressed]}
       >
-        <SnoozeGlyph color={active ? Colors.primaryDeep : Colors.primary} />
+        <SnoozeGlyph color={active ? Colors.primaryDeep : Colors.primary} size={12.8} />
       </Pressable>
     );
   }
@@ -104,12 +104,12 @@ export function ContactCooldownButton({ contact, compact = false }: ContactCoold
 
 const createStyles = (Colors: ThemeColors) => StyleSheet.create({
   iconButton: {
-    width: 34,
-    height: 34,
-    padding: 4,
+    width: 27.2,
+    height: 27.2,
+    padding: 3.2,
     borderWidth: 1,
     borderColor: Colors.primary,
-    borderRadius: 10,
+    borderRadius: 8,
     alignItems: "center",
     justifyContent: "center",
   },

@@ -9,8 +9,8 @@ export function ContactSymbolLegend() {
   const entries = [
     { key: "contacted", symbol: <ContactCardActionIcon action="contacted" size={26} color={Colors.primaryLight} />, text: "Mark contacted: record that you connected today." },
     { key: "move", symbol: <ContactCardActionIcon action="move" size={19} color={Colors.primary} />, text: "Move circle: move this contact, or swap people between full circles." },
-    { key: "snooze", symbol: <SnoozeGlyph color={Colors.primary} />, text: "Snooze: pause check-in nudges and suggestions for 30 days. Tap again to end the snooze. Birthdays and custom reminders still come through." },
-    { key: "snoozed", symbol: <View style={{ backgroundColor: SNOOZE_ACTIVE_COLOR, borderColor: SNOOZE_ACTIVE_COLOR, borderWidth: 1, borderRadius: 10, width: 34, height: 34, alignItems: "center", justifyContent: "center" }}><SnoozeGlyph color={Colors.primaryDeep} /></View>, text: "Orange-filled Zzz: this contact is currently snoozed." },
+    { key: "snooze", symbol: <SnoozeGlyph color={Colors.primary} size={12.8} />, text: "Snooze: pause check-in nudges and suggestions for 30 days. Tap again to end the snooze. Birthdays and custom reminders still come through." },
+    { key: "snoozed", symbol: <View style={{ backgroundColor: SNOOZE_ACTIVE_COLOR, borderColor: SNOOZE_ACTIVE_COLOR, borderWidth: 1, borderRadius: 8, width: 27.2, height: 27.2, alignItems: "center", justifyContent: "center" }}><SnoozeGlyph color={Colors.primaryDeep} size={12.8} /></View>, text: "Orange-filled Zzz: this contact is currently snoozed." },
     { key: "warning", symbol: <ContactWarningGlyph color={Colors.yellow} />, text: "Exclamation badge: profile information is missing. Red or orange highlights a missing birthday; yellow highlights missing details." },
     { key: "birthday", symbol: <ContactCardActionIcon action="birthday" size={14} color={Colors.accent} />, text: "Gift: tap the birthday hint to add this contact's birthday." },
     { key: "overdue", symbol: <ContactUrgencyDot color={Colors.danger} />, text: "Red dot: overdue for a check-in." },

@@ -94,8 +94,10 @@ describe.each(["ios", "android"])("snooze button on %s", (platform) => {
     expect(Alert.alert).toHaveBeenCalledTimes(1);
     if (compact) {
       expect(h.render().props.style({ pressed: false })[0]).toMatchObject({
-        width: 34, height: 34, borderColor: darkColors.primary,
+        width: 27.2, height: 27.2, borderRadius: 8, borderColor: darkColors.primary,
       });
+      expect(h.render().props.children.props.size).toBe(12.8);
+      expect(h.render().props.hitSlop).toBe(8);
     }
   });
 
