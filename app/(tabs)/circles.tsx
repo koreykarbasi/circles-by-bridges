@@ -17,6 +17,8 @@ import { useSequentialHints, HINT_TEXT } from "@/lib/hints-store";
 import { HintTooltip } from "@/components/HintTooltip";
 import DraggableFlatList, { RenderItemParams, ScaleDecorator } from "react-native-draggable-flatlist";
 import { CIRCLE_DESCRIPTIONS } from "@/shared/circle-descriptions";
+import { ContactSymbolLegend } from "@/components/ContactSymbolLegend";
+import { ContactCardActionIcon } from "@/components/ContactCardSymbols";
 
 function isMissingEnrichment(c: Contact): boolean {
   return (c.interests ?? []).length === 0;
@@ -34,6 +36,8 @@ export default function CirclesScreen() {
   const [bellSheetOpen, setBellSheetOpen] = useState(false);
   const [addSheetOpen, setAddSheetOpen] = useState(false);
   const [circleInfoOpen, setCircleInfoOpen] = useState(false);
+  const [symbolLegendOpen, setSymbolLegendOpen] = useState(false);
+  const closeInformation = () => { setCircleInfoOpen(false); setSymbolLegendOpen(false); };
   const searchRef = useRef<TextInput>(null);
   const [activeHint, dismissHint] = useSequentialHints(["circles_viz", "circles_calendar"]);
 
@@ -122,7 +126,7 @@ export default function CirclesScreen() {
                 onPress={() => router.push({ pathname: "/edit-contact", params: { id: contact.id, focusBirthday: "true" } })}
                 style={({ pressed }) => [styles.birthdayNudge, pressed && { opacity: 0.7 }]}
               >
-                <Ionicons name="gift-outline" size={14} color={Colors.accent} />
+                <ContactCardActionIcon action="birthday" size={14} color={Colors.accent} />
                 <Text style={styles.birthdayNudgeText}>Add {contact.name.split(" ")[0]}'s birthday</Text>
                 <Ionicons name="chevron-forward" size={13} color={Colors.textTertiary} />
               </Pressable>
@@ -148,8 +152,8 @@ export default function CirclesScreen() {
           <Text style={styles.title}>Circles</Text>
           <Pressable
             accessibilityRole="button"
-            accessibilityLabel={`About ${config.label}`}
-            onPress={() => setCircleInfoOpen(true)}
+            accessibilityLabel="Contact card symbol legend"
+            onPress={() => setSymbolLegendOpen(true)}
             hitSlop={8}
             style={({ pressed }) => [styles.infoButton, pressed && { opacity: 0.65 }]}
           >
@@ -342,15 +346,15 @@ export default function CirclesScreen() {
       />
 
       <Modal
-        visible={circleInfoOpen}
+        visible={circleInfoOpen || symbolLegendOpen}
         transparent
         animationType="fade"
-        onRequestClose={() => setCircleInfoOpen(false)}
+        onRequestClose={closeInformation}
       >
         <View style={styles.infoBackdrop}>
           <Pressable
             style={StyleSheet.absoluteFill}
-            onPress={() => setCircleInfoOpen(false)}
+            onPress={closeInformation}
             accessibilityRole="button"
             accessibilityLabel="Close circle information"
           />
@@ -362,11 +366,11 @@ export default function CirclesScreen() {
             ]}
           >
             <View style={styles.infoModalHeader}>
-              <Text style={styles.infoModalTitle}>{CIRCLE_DESCRIPTIONS[activeCircle].name}</Text>
+              <Text style={styles.infoModalTitle}>{symbolLegendOpen ? "Contact card symbols" : CIRCLE_DESCRIPTIONS[activeCircle].name}</Text>
               <Pressable
                 accessibilityRole="button"
                 accessibilityLabel="Close"
-                onPress={() => setCircleInfoOpen(false)}
+                onPress={closeInformation}
                 hitSlop={10}
                 style={({ pressed }) => [styles.infoCloseButton, pressed && { opacity: 0.65 }]}
               >
@@ -378,7 +382,9 @@ export default function CirclesScreen() {
               contentContainerStyle={styles.infoScrollContent}
               showsVerticalScrollIndicator
             >
-              <Text style={styles.infoExplanation}>{CIRCLE_DESCRIPTIONS[activeCircle].explanation}</Text>
+              {symbolLegendOpen ? <ContactSymbolLegend /> : (
+                <Text style={styles.infoExplanation}>{CIRCLE_DESCRIPTIONS[activeCircle].explanation}</Text>
+              )}
             </ScrollView>
           </View>
         </View>

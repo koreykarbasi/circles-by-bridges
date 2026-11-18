@@ -9,6 +9,7 @@ import type { Contact } from "@/lib/types";
 import * as Haptics from "expo-haptics";
 import { ContactCooldownButton } from "./ContactCooldownButton";
 import { CircleMoveButton } from "./CircleMoveButton";
+import { ContactCardActionIcon, ContactUrgencyDot, ContactWarningGlyph } from "./ContactCardSymbols";
 
 interface ContactCardProps {
   contact: Contact;
@@ -72,12 +73,12 @@ export function ContactCard({ contact, onPress, onMarkContacted, onPlanHangout, 
         <Animated.View style={[styles.avatarFlash, { opacity: flashOpacity }]} />
         {incomplete && (
           <View style={[styles.incompleteBadge, { backgroundColor: badgeColor }]}>
-            <Text style={styles.incompleteBadgeText}>!</Text>
+            <ContactWarningGlyph color={Colors.onPrimary} />
           </View>
         )}
         {enrichmentMissing && (
           <View style={[styles.incompleteBadge, styles.enrichmentBadge]}>
-            <Text style={styles.enrichmentBadgeText}>!</Text>
+            <ContactWarningGlyph color={Colors.yellow} />
           </View>
         )}
       </View>
@@ -95,18 +96,14 @@ export function ContactCard({ contact, onPress, onMarkContacted, onPlanHangout, 
           )}
         </View>
         <View style={styles.metaRow}>
-          <View
-            style={[
-              styles.urgencyDot,
-              {
-                backgroundColor:
+          <ContactUrgencyDot
+                color={
                   urgency === "overdue"
                     ? Colors.danger
                     : urgency === "soon"
                       ? Colors.warning
-                      : Colors.success,
-              },
-            ]}
+                      : Colors.success
+                }
           />
           <Text style={styles.lastContacted}>
             {contact.lastContactedLabel ?? formatLastContacted(contact.lastContacted ?? undefined)}
@@ -157,7 +154,7 @@ export function ContactCard({ contact, onPress, onMarkContacted, onPlanHangout, 
                 hitSlop={8}
                 style={({ pressed }) => [styles.actionButton, pressed && { opacity: 0.5 }]}
               >
-                <Ionicons name="checkmark-circle-outline" size={26} color={Colors.primaryLight} />
+                <ContactCardActionIcon action="contacted" size={26} color={Colors.primaryLight} />
               </Pressable>
             )}
           </>

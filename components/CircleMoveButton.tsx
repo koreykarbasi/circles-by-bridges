@@ -15,6 +15,7 @@ import { useThemeColors } from "@/lib/theme-context";
 import type { ThemeColors } from "@/constants/colors";
 import { projectCircleMoves, validateCircleMoves, type CircleMove } from "@shared/circle-moves";
 import type { CircleLevel } from "@shared/circles";
+import { ContactCardActionIcon } from "./ContactCardSymbols";
 
 const LEVELS: CircleLevel[] = [1, 2, 3, 4];
 
@@ -113,7 +114,7 @@ export function CircleMoveButton({ contact, compact = false }: CircleMoveButtonP
         hitSlop={8}
         style={({ pressed }) => [compact ? styles.compactTrigger : styles.fullTrigger, pressed && styles.pressed]}
       >
-        <Ionicons name="swap-horizontal-outline" size={compact ? 19 : 17} color={Colors.primary} />
+        <ContactCardActionIcon action="move" size={compact ? 19 : 17} color={Colors.primary} />
         {!compact && <Text style={styles.triggerText}>Move circle</Text>}
       </Pressable>
 
