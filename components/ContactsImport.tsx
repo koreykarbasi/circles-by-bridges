@@ -17,6 +17,7 @@ import type { ThemeColors } from "@/constants/colors";
 import { useThemeColors } from "@/lib/theme-context";
 import { AVATAR_COLORS } from "@/lib/types";
 import * as Haptics from "expo-haptics";
+import { deviceBirthday, devicePhoto } from "@shared/device-contact-fields";
 
 export interface ImportedContact {
   name: string;
@@ -58,19 +59,8 @@ async function loadDeviceContacts(): Promise<DeviceContact[]> {
   return data
     .filter((c) => c.name)
     .map((c) => {
-      let birthday: string | undefined;
-      if (c.birthday && c.birthday.month != null && c.birthday.day != null) {
-        const month = c.birthday.month + 1;
-        birthday = `${String(month).padStart(2, "0")}/${String(c.birthday.day).padStart(2, "0")}`;
-      }
-      let photoUri: string | undefined;
-      if (c.imageAvailable) {
-        if (c.rawImage?.base64) {
-          photoUri = `data:image/jpeg;base64,${c.rawImage.base64}`;
-        } else if (c.image?.uri) {
-          photoUri = c.image.uri;
-        }
-      }
+      const birthday = deviceBirthday(c);
+      const photoUri = devicePhoto(c);
       return {
         id: c.id ?? c.name ?? "",
         name: c.name ?? "",

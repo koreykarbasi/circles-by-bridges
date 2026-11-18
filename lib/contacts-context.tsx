@@ -9,6 +9,7 @@ import { clearElevation, invalidateElevationCache } from "./checkin-state";
 import { isContactOnCooldown } from "@shared/contact-cooldown";
 import { queryClient } from "./query-client";
 import type { CircleMove } from "@shared/circle-moves";
+import type { ContactRefreshChanges, RefreshField } from "@shared/contact-refresh";
 
 const fetchFn = Platform.OS === "web" ? globalThis.fetch : expoFetch;
 
@@ -28,6 +29,7 @@ interface ContactsContextValue {
   reorderCircleContacts: (circleLevel: 1 | 2 | 3 | 4, orderedIds: string[]) => Promise<void>;
   setContactCooldown: (id: string, active: boolean) => Promise<void>;
   moveContacts: (moves: CircleMove[]) => Promise<void>;
+  fillContactFields: (id: string, changes: ContactRefreshChanges) => Promise<{ contact: Contact; appliedFields: RefreshField[] }>;
 }
 
 const ContactsContext = createContext<ContactsContextValue | null>(null);
@@ -59,6 +61,14 @@ export function ContactsProvider({ children }: { children: ReactNode }) {
     setContacts(await response.json() as Contact[]);
     for (const move of moves) await clearElevation(move.contactId, "checkin");
     await queryClient.invalidateQueries({ queryKey: ["/api/suggestions/priority"] });
+  }, []);
+
+  const fillContactFields = useCallback(async (id: string, changes: ContactRefreshChanges) => {
+    const response = await apiRequest("POST", `/api/contacts/${id}/refresh-from-phone`, changes);
+    const result = await response.json() as { contact: Contact; appliedFields: RefreshField[] };
+    setContacts(previous => previous.map(contact => contact.id === id ? result.contact : contact));
+    await queryClient.invalidateQueries({ queryKey: ["/api/suggestions/priority"] });
+    return result;
   }, []);
 
   const fetchContacts = useCallback(async () => {
@@ -280,8 +290,9 @@ export function ContactsProvider({ children }: { children: ReactNode }) {
       reorderCircleContacts: reorderCircleContactsFn,
       setContactCooldown,
       moveContacts,
+      fillContactFields,
     }),
-    [contacts, isLoading, fetchContacts, addContactFn, updateContactFn, deleteContactFn, markContactedFn, markHangoutFn, savePhoneNumberFn, getCircleContacts, getOverdueContacts, getUpcomingBirthdays, reorderCircleContactsFn, setContactCooldown, moveContacts],
+    [contacts, isLoading, fetchContacts, addContactFn, updateContactFn, deleteContactFn, markContactedFn, markHangoutFn, savePhoneNumberFn, getCircleContacts, getOverdueContacts, getUpcomingBirthdays, reorderCircleContactsFn, setContactCooldown, moveContacts, fillContactFields],
   );
 
   return <ContactsContext.Provider value={value}>{children}</ContactsContext.Provider>;

@@ -35,6 +35,7 @@ import {
 import { setCheckinElevationIfOverdue } from "@/lib/checkin-state";
 import { ContactCooldownButton } from "@/components/ContactCooldownButton";
 import { CircleMoveButton } from "@/components/CircleMoveButton";
+import { ContactRefreshButton } from "@/components/ContactRefreshButton";
 
 const PREDEFINED_LABELS = [
   "Family", "Childhood Friend", "College Friend", "Work Friend", "Neighbor",
@@ -314,6 +315,17 @@ function EditContactForm({ contact, focusBirthday }: { contact: Contact; focusBi
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
       >
+        <ContactRefreshButton
+          contactId={contact.id}
+          draft={{ phone, email, birthday, photoUri }}
+          onApplied={changes => {
+            if (changes.phone) setPhone(previous => previous.trim() ? previous : changes.phone!);
+            if (changes.email) setEmail(previous => previous.trim() ? previous : changes.email!);
+            if (changes.birthday) setBirthday(previous => previous.trim() ? previous : changes.birthday!);
+            if (changes.photoUri) setPhotoUri(previous => previous?.trim() ? previous : changes.photoUri!);
+          }}
+        />
+
         <View style={styles.photoSection}>
           <Pressable onPress={handlePickPhoto} style={({ pressed }) => [pressed && { opacity: 0.8 }]}>
             <View style={styles.photoWrapper}>

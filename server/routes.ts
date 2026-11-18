@@ -1,6 +1,7 @@
 import type { Express, Request, Response, NextFunction } from "express";
 import { createServer, type Server } from "node:http";
 import { storage } from "./storage";
+import { registerContactRefreshRoutes } from "./contact-refresh";
 import bcrypt from "bcryptjs";
 import session from "express-session";
 import connectPgSimple from "connect-pg-simple";
@@ -1268,6 +1269,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.status(500).json({ message: "Failed to reorder contacts" });
     }
   });
+
+  registerContactRefreshRoutes(app, requireAuth);
 
   app.get("/api/contacts/:id", requireAuth, async (req, res) => {
     try {

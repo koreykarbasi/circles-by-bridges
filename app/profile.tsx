@@ -36,6 +36,7 @@ import * as Haptics from "expo-haptics";
 import { apiRequest } from "@/lib/query-client";
 import { scheduleSuggestionNudge, sendTestNotification } from "@/lib/reminder-notifications";
 import { SocialHealthBar } from "@/components/SocialHealthBar";
+import { ContactRefreshButton } from "@/components/ContactRefreshButton";
 
 export default function ProfileScreen() {
   const { colors: Colors, mode, setMode } = useTheme();
@@ -395,6 +396,11 @@ export default function ProfileScreen() {
         </View>
 
         <SocialHealthBar />
+
+        <View style={styles.section}>
+          <Text style={styles.sectionLabel}>Contacts</Text>
+          <ContactRefreshButton />
+        </View>
 
         <View style={styles.section}>
           <Text style={styles.sectionLabel}>Notifications</Text>
