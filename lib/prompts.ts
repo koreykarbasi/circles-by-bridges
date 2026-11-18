@@ -636,14 +636,20 @@ export function getNextPrompt(
     isOverdue?: boolean;
     hasBirthdaySoon?: boolean;
     labels?: string[];
+    nonCheckinOnly?: boolean;
   },
 ): string {
   markPromptSeen(contactId, currentPrompt);
 
-  const prompts = getPromptsForContact(name, circleLevel, interests, options);
+  // ActionType currently has only call, text, and hangout. Filter the complete
+  // personalized pool, including interest/label invitations, not just base ideas.
+  const prompts = getPromptsForContact(name, circleLevel, interests, options)
+    .filter((prompt) => !options?.nonCheckinOnly ||
+      getActionType(circleLevel, prompt, contactId) === "hangout");
+  if (!prompts.some((prompt) => prompt !== currentPrompt)) return currentPrompt;
   const seen = seenPromptsMap.get(getSeenKey(contactId)) || new Set();
 
-  const unseen = prompts.filter((p) => !seen.has(p));
+  const unseen = prompts.filter((p) => p !== currentPrompt && !seen.has(p));
   if (unseen.length > 0) {
     const shuffled = shuffleArray(unseen);
     const chosen = shuffled[0];

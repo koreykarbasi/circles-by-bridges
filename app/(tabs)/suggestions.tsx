@@ -379,7 +379,10 @@ export default function SuggestionsScreen() {
       contact.name,
       contact.circleLevel as 1 | 2 | 3 | 4,
       contact.interests,
-      { isOverdue: urgency === "overdue", hasBirthdaySoon, labels: contact.labels },
+      {
+        isOverdue: urgency === "overdue", hasBirthdaySoon, labels: contact.labels,
+        nonCheckinOnly: getActionType(contact.circleLevel as 1 | 2 | 3 | 4, currentPrompt, contact.id) === "hangout",
+      },
     );
 
     const type = getActionType(contact.circleLevel as 1 | 2 | 3 | 4, newPrompt, contact.id);

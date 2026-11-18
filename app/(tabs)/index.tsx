@@ -42,6 +42,7 @@ import {
 import { getCheckinDaysSince } from "@shared/checkin-time";
 import { getCheckinThreshold } from "@shared/reminder-thresholds";
 import { isContactOnCooldown } from "@shared/contact-cooldown";
+import { ContactCooldownButton } from "@/components/ContactCooldownButton";
 
 const MAX_SUGGESTIONS = 3;
 
@@ -610,6 +611,7 @@ export default function HomeScreen() {
         circleLevel,
         contact.interests,
         {
+          nonCheckinOnly: suggestion.actionType === "hangout",
           isOverdue: daysSinceContact !== null && daysSinceContact > getCheckinThreshold(circleLevel, {
             id: contact.id,
             lastContacted: contact.lastContacted ?? undefined,
@@ -939,6 +941,7 @@ export default function HomeScreen() {
             </View>
 
             {suggestions.map((suggestion) => {
+              const cooldownContact = contacts.find((contact) => contact.id === suggestion.contactId);
               const circleColor = Colors[`circle${suggestion.circleLevel}` as "circle1" | "circle2" | "circle3" | "circle4"];
               const circleLabel = CIRCLE_CONFIG[suggestion.circleLevel]?.label ?? "Circle";
 
@@ -960,15 +963,16 @@ export default function HomeScreen() {
                   </View>
                   <Text style={styles.suggestionPrompt} numberOfLines={2}>{suggestion.prompt}</Text>
                   <View style={styles.suggestionActions}>
-                    {suggestion.actionType !== "hangout" && (
                       <Pressable
+                        accessibilityRole="button"
+                        accessibilityLabel="Shuffle suggestion"
                         onPress={() => handleSuggestionRefresh(suggestion)}
                         hitSlop={8}
                         style={({ pressed }) => [styles.suggestionActionBtn, pressed && { opacity: 0.5 }]}
                       >
                         <Ionicons name="shuffle-outline" size={18} color={Colors.textSecondary} />
                       </Pressable>
-                    )}
+                    {cooldownContact && <ContactCooldownButton contact={cooldownContact} compact />}
                     {suggestion.actionType === "text" && (
                       <Pressable
                         onPress={() => handleSuggestionSms(suggestion)}
