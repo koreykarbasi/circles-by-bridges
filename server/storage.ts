@@ -8,8 +8,8 @@ import type {
   PasswordResetToken,
 } from "@shared/schema";
 import { eq, and, asc, sql as drizzleSql } from "drizzle-orm";
-import { CIRCLE_LIMITS, isCircleLevel } from "@shared/circles";
-import { CircleMoveValidationError, validateCircleMoves, type CircleMove } from "@shared/circle-moves";
+import { isCircleLevel } from "@shared/circles";
+import { CircleMoveValidationError, increasesOverCapacity, validateCircleMoves, type CircleMove } from "@shared/circle-moves";
 import { emptyContactPromptDueAt } from "@shared/checkin-policy";
 
 export interface IStorage {
@@ -126,7 +126,8 @@ export class DatabaseStorage implements IStorage {
         await tx.execute(drizzleSql`SELECT pg_advisory_xact_lock(hashtext(${data.userId}), 245001)`);
         const existing = await tx.select().from(contacts).where(eq(contacts.userId, data.userId));
         if (!isCircleLevel(data.circleLevel)) throw new CircleMoveValidationError("Choose a valid circle.");
-        if (existing.filter(c => c.circleLevel === data.circleLevel).length >= CIRCLE_LIMITS[data.circleLevel]) {
+        const beforeCount = existing.filter(c => c.circleLevel === data.circleLevel).length;
+        if (increasesOverCapacity(data.circleLevel, beforeCount, beforeCount + 1)) {
           throw new CircleMoveValidationError("This circle is full. Move a contact to another circle first.");
         }
       }

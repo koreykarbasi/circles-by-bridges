@@ -55,7 +55,7 @@ export function CircleMoveButton({ contact, compact = false }: CircleMoveButtonP
     [projection.assignments],
   );
   const activeContact = contacts.find((person) => person.id === activeContactId) ?? contact;
-  const isBalanced = projection.overfullCircles.length === 0;
+  const isBalanced = projection.blockingCircles.length === 0;
   const hasChanges = moves.length > 0;
 
   const begin = () => {
@@ -240,7 +240,7 @@ export function CircleMoveButton({ contact, compact = false }: CircleMoveButtonP
                 </View>
               )}
 
-              {projection.overfullCircles.length > 0 && (
+              {projection.blockingCircles.length > 0 && (
                 <View style={styles.displacementPanel}>
                   <View style={styles.displacementHeading}>
                     <Ionicons name="people-outline" size={18} color={Colors.warning} />
@@ -249,7 +249,7 @@ export function CircleMoveButton({ contact, compact = false }: CircleMoveButtonP
                   <Text style={styles.displacementHint}>
                     Choose someone in each over-capacity circle, then pick where they belong. You can move people into another full circle and resolve that next.
                   </Text>
-                  {projection.overfullCircles.map((level) => {
+                  {projection.blockingCircles.map((level) => {
                     const members = contacts.filter((person) => assignments.get(person.id) === level);
                     return (
                       <View key={level} style={styles.overfullGroup}>
