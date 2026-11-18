@@ -381,7 +381,6 @@ export default function SuggestionsScreen() {
       contact.interests,
       {
         isOverdue: urgency === "overdue", hasBirthdaySoon, labels: contact.labels,
-        nonCheckinOnly: getActionType(contact.circleLevel as 1 | 2 | 3 | 4, currentPrompt, contact.id) === "hangout",
       },
     );
 

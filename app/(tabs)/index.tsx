@@ -611,7 +611,6 @@ export default function HomeScreen() {
         circleLevel,
         contact.interests,
         {
-          nonCheckinOnly: suggestion.actionType === "hangout",
           isOverdue: daysSinceContact !== null && daysSinceContact > getCheckinThreshold(circleLevel, {
             id: contact.id,
             lastContacted: contact.lastContacted ?? undefined,

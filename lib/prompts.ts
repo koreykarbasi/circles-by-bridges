@@ -636,16 +636,13 @@ export function getNextPrompt(
     isOverdue?: boolean;
     hasBirthdaySoon?: boolean;
     labels?: string[];
-    nonCheckinOnly?: boolean;
   },
 ): string {
   markPromptSeen(contactId, currentPrompt);
 
-  // ActionType currently has only call, text, and hangout. Filter the complete
-  // personalized pool, including interest/label invitations, not just base ideas.
-  const prompts = getPromptsForContact(name, circleLevel, interests, options)
-    .filter((prompt) => !options?.nonCheckinOnly ||
-      getActionType(circleLevel, prompt, contactId) === "hangout");
+  // This pool contains suggestion prompts only, never reminder/quick-pick cards.
+  // Keep every eligible action available regardless of the current card's action.
+  const prompts = getPromptsForContact(name, circleLevel, interests, options);
   if (!prompts.some((prompt) => prompt !== currentPrompt)) return currentPrompt;
   const seen = seenPromptsMap.get(getSeenKey(contactId)) || new Set();
 
