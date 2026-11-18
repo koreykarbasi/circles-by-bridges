@@ -113,10 +113,6 @@ export default function CirclesScreen() {
                 router.push({ pathname: "/edit-contact", params: { id: contact.id } })
               }
               onMarkContacted={() => markContacted(contact.id)}
-              onPlanHangout={() => {
-                markContacted(contact.id);
-                router.push({ pathname: "/create-hangout", params: { contactName: contact.name } });
-              }}
               onLongPress={canDrag ? drag : undefined}
               showCircleLabel={activeFilter === "yellow-dot"}
               isProfileIncomplete={incompleteContactIds.has(contact.id)}
