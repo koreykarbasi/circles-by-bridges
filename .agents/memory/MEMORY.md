@@ -19,3 +19,4 @@
 - [Live release compatibility](live-release-compatibility.md) — v1 and later apps share the backend/database; preserve old clients with additive, nullable schema changes.
 - [Publishing startup checks](publishing-startup-checks.md) — early health-check 500s can precede a successful publish; correlate with server readiness before changing code.
 - [Portable npm lockfiles](portable-npm-lockfiles.md) — package installs can record private registry URLs; external EAS builders need public tarball URLs.
+- [Onboarding circle scope](onboarding-circle-scope.md) — keep the original three-circle onboarding on both platforms; Acquaintances remains available elsewhere.
