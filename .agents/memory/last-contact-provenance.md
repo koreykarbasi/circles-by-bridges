@@ -14,3 +14,9 @@ For newly added contacts without a supplied date, the user explicitly requested 
 **Why:** The user wants fewer Circle 1 check-in prompts, no initial missing-date question for new contacts, and spread-out check-ins for contacts added on the same day.
 
 **How to apply:** Generate and persist the date once at creation, including imports. Preserve supplied dates and existing contacts; do not change check-in thresholds or resample on edits and moves. This intentionally sampled starting value must not be mistaken for proven user-entered history.
+
+Circle 4 explicit last-contacted selections must differ from creation defaults: Recently samples 30–120 days ago, Past Year 121–300, and Years ago 350–450, inclusive. The contact-card display should still say Past Year in the 301–349-day gap.
+
+**Why:** The user wants choosing Past Year to sample a date below the check-in threshold, while keeping a broader human-readable status band.
+
+**How to apply:** Keep display bands separate from sampling ranges. Do not change the 60–120-day creation default or the existing check-in threshold to implement these choices.
